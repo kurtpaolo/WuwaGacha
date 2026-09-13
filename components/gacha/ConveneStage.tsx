@@ -135,7 +135,7 @@ export const ConveneStage: React.FC = () => {
     }
     switchTimerRef.current = setTimeout(() => {
       setIsSwitchingBanner(false);
-    }, 450);
+    }, 1500);
   };
 
   // Perform Convene Pull (1 or 10) completely client-side
