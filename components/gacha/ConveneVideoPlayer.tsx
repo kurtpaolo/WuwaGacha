@@ -114,6 +114,20 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     [availableCutscenes]
   );
 
+  // Preload any upcoming character cutscenes in results so they buffer in background during meteor launch
+  useEffect(() => {
+    if (!results || results.length === 0 || Object.keys(availableCutscenes).length === 0) return;
+    results.forEach((res) => {
+      const url = getCutsceneUrlForItem(res);
+      if (url) {
+        const v = document.createElement("video");
+        v.preload = "auto";
+        v.crossOrigin = "anonymous";
+        v.src = url;
+      }
+    });
+  }, [results, availableCutscenes, getCutsceneUrlForItem]);
+
   // Trigger audio stinger chord for card reveal
   const playItemSound = useCallback((item: RollResultItem) => {
     soundEngine.playCardReveal(item.rarity);
@@ -321,6 +335,8 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
             src={videoSrc}
             autoPlay
             playsInline
+            preload="auto"
+            crossOrigin="anonymous"
             muted={isMuted}
             onEnded={handleInitialVideoEnded}
             onError={handleInitialVideoEnded}
@@ -357,6 +373,8 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
             src={cutsceneUrl}
             autoPlay
             playsInline
+            preload="auto"
+            crossOrigin="anonymous"
             muted={isMuted}
             onEnded={handleCutsceneEnded}
             onError={handleCutsceneEnded}
@@ -380,6 +398,8 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
             src={cutsceneUrl}
             autoPlay
             playsInline
+            preload="auto"
+            crossOrigin="anonymous"
             muted={isMuted}
             onEnded={handleCutsceneEnded}
             onError={handleCutsceneEnded}
