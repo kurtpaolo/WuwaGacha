@@ -11,11 +11,6 @@ interface ReplenishModalProps {
   currencyType?: string;
   currentBalances: {
     astrite: number;
-    radiantTide?: number;
-    forgingTide?: number;
-    lustrousTide?: number;
-    afterglowCoral?: number;
-    oscillatedCoral?: number;
   };
   onUpdateCurrency: (currency: string, newAmount: number) => Promise<void>;
 }

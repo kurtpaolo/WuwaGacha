@@ -8,7 +8,6 @@ import { X, BookOpen, Shield, Sparkles } from "lucide-react";
 interface DetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  bannerType?: string;
 }
 
 export const DetailsModal: React.FC<DetailsModalProps> = ({ isOpen, onClose }) => {

@@ -57,7 +57,6 @@ export const ConveneStage: React.FC = () => {
   const [isDetailsOpen, setIsDetailsOpen] = useState<boolean>(false);
   const [isDevOpen, setIsDevOpen] = useState<boolean>(false);
   const [isReplenishOpen, setIsReplenishOpen] = useState<boolean>(false);
-  const [replenishTarget, setReplenishTarget] = useState<any>("astrite");
   const [isMuted, setIsMuted] = useState<boolean>(soundEngine.getIsMuted());
   const [showOrientationScreen, setShowOrientationScreen] = useState<boolean>(true);
   const [comingSoonNotice, setComingSoonNotice] = useState<boolean>(false);
@@ -298,7 +297,6 @@ export const ConveneStage: React.FC = () => {
             </span>
             <button
               onClick={() => {
-                setReplenishTarget("astrite");
                 setIsReplenishOpen(true);
               }}
               className="p-0.5 rounded hover:bg-yellow-400/20 text-yellow-400 transition-colors"
@@ -685,13 +683,11 @@ export const ConveneStage: React.FC = () => {
       <HistoryModal
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
-        currentBannerType={bannerMode}
       />
 
       <DetailsModal
         isOpen={isDetailsOpen}
         onClose={() => setIsDetailsOpen(false)}
-        bannerType={bannerMode}
       />
 
       <DevSettingsModal

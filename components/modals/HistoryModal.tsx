@@ -22,7 +22,6 @@ interface HistoryItem {
 interface HistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  currentBannerType?: string;
 }
 
 export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose }) => {
