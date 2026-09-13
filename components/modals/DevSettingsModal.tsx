@@ -2,8 +2,8 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Wrench, Infinity, PlusCircle, RotateCcw, ShieldAlert, Check } from "lucide-react";
-import { AstriteIcon, RadiantTideIcon, ForgingTideIcon, LustrousTideIcon } from "@/components/ui/GameIcons";
+import { X, Wrench, Infinity, PlusCircle, RotateCcw } from "lucide-react";
+import { AstriteIcon } from "@/components/ui/GameIcons";
 
 interface DevSettingsModalProps {
   isOpen: boolean;

@@ -5,12 +5,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { soundEngine } from "@/lib/audio/soundEngine";
 import {
   RESONATORS,
-  WEAPONS,
   LIMITED_BANNER_PRESETS,
   LIMITED_CHARACTERS_LIST,
-  ItemData,
 } from "@/lib/data/items";
-import { RollResultItem, ConveneResponse } from "@/lib/gacha/engine";
+import { ConveneResponse } from "@/lib/gacha/engine";
 import {
   executeClientConvene,
   getClientStateData,

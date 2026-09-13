@@ -3,15 +3,15 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { soundEngine } from "@/lib/audio/soundEngine";
-import { X, BookOpen, Shield, Sparkles, Percent, Database } from "lucide-react";
+import { X, BookOpen, Shield, Sparkles } from "lucide-react";
 
 interface DetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  bannerType: string;
+  bannerType?: string;
 }
 
-export const DetailsModal: React.FC<DetailsModalProps> = ({ isOpen, onClose, bannerType }) => {
+export const DetailsModal: React.FC<DetailsModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (

@@ -3,26 +3,17 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { soundEngine } from "@/lib/audio/soundEngine";
-import { ItemRarity, ItemData } from "@/lib/data/items";
+import { ItemRarity } from "@/lib/data/items";
 import { RollResultItem } from "@/lib/gacha/engine";
-import {
-  ElementBadge,
-  RarityStars,
-  AstriteIcon,
-  RadiantTideIcon,
-  ForgingTideIcon,
-  LustrousTideIcon,
-  AfterglowCoralIcon,
-  OscillatedCoralIcon,
-} from "@/components/ui/GameIcons";
-import { FastForward, RotateCcw, Check, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { ElementBadge, RarityStars } from "@/components/ui/GameIcons";
+import { FastForward, RotateCcw, Check, Sparkles } from "lucide-react";
 
 interface ConveneVideoPlayerProps {
   results: RollResultItem[];
   highestRarity: ItemRarity;
   goldIndices: number[];
   purpleIndices: number[];
-  bannerType: string;
+  bannerType?: string;
   onFinish: () => void;
   onConveneAgain?: (count: 1 | 10) => void;
 }
@@ -34,7 +25,6 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
   highestRarity,
   goldIndices,
   purpleIndices,
-  bannerType,
   onFinish,
   onConveneAgain,
 }) => {

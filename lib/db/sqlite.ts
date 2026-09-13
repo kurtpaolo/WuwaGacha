@@ -1,6 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
-import fs from "node:fs";
 
 // Initialize the SQLite database
 const DB_PATH = path.join(process.cwd(), "wuwa_convene.db");

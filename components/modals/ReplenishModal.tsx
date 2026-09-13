@@ -2,15 +2,8 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Plus, Sparkles, RefreshCw, Check } from "lucide-react";
-import {
-  AstriteIcon,
-  RadiantTideIcon,
-  ForgingTideIcon,
-  LustrousTideIcon,
-  AfterglowCoralIcon,
-  OscillatedCoralIcon,
-} from "@/components/ui/GameIcons";
+import { X, Plus } from "lucide-react";
+import { AstriteIcon } from "@/components/ui/GameIcons";
 
 interface ReplenishModalProps {
   isOpen: boolean;
@@ -25,7 +18,7 @@ interface ReplenishModalProps {
     oscillatedCoral?: number;
   };
   onUpdateCurrency: (currency: string, newAmount: number) => Promise<void>;
-  onAddCurrency: (astrite: number, tides: number) => Promise<void>;
+  onAddCurrency?: (astrite: number, tides: number) => Promise<void>;
 }
 
 export const ReplenishModal: React.FC<ReplenishModalProps> = ({
@@ -34,7 +27,6 @@ export const ReplenishModal: React.FC<ReplenishModalProps> = ({
   currencyType = "astrite",
   currentBalances,
   onUpdateCurrency,
-  onAddCurrency,
 }) => {
   const [customAmount, setCustomAmount] = useState<string>("");
   const [submitting, setSubmitting] = useState<boolean>(false);

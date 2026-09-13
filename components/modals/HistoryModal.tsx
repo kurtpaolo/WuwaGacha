@@ -4,7 +4,6 @@ import React, { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { soundEngine } from "@/lib/audio/soundEngine";
 import { X, ChevronLeft, ChevronRight, Clock, ShieldCheck } from "lucide-react";
-import { RarityStars } from "@/components/ui/GameIcons";
 import { getClientHistory } from "@/lib/gacha/clientSim";
 
 interface HistoryItem {
