@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Wuthering Waves Convene System | 1:1 Replica",
-  description: "Production-grade, pixel-perfect 1:1 web replica of the Wuthering Waves Convene System by Kuro Games.",
+  title: "Wuthering Waves Gacha Simulator",
+  description: "This is for them folks who are so addicted into gacha, here's a wuwa gacha simulator for you!",
 };
 
 export default function RootLayout({

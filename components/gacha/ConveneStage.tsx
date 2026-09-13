@@ -91,6 +91,24 @@ export const ConveneStage: React.FC = () => {
     fetchState();
   }, [fetchState]);
 
+  // Preload all resonator splash and portrait arts in background on mount to eliminate image fetch/decode lag
+  useEffect(() => {
+    LIMITED_CHARACTERS_LIST.forEach((charId) => {
+      const char = RESONATORS[charId];
+      if (!char) return;
+      [char.splashUrl, char.drawUrl, char.stillUrl, char.portraitUrl].forEach((url) => {
+        if (url) {
+          const img = new Image();
+          img.src = url;
+        }
+      });
+    });
+    const verinaImg = new Image();
+    verinaImg.src = "/assets/characters/verina_splash.png";
+    const changliImg = new Image();
+    changliImg.src = "/assets/characters/changli_splash.png";
+  }, []);
+
   // Handle selecting a limited character from the rail
   const handleSelectCharacter = (charId: string) => {
     setSelectedCharId(charId);
@@ -394,13 +412,12 @@ export const ConveneStage: React.FC = () => {
         <section className="relative flex-1 m-2 sm:m-3 md:m-3.5 rounded-2xl border border-white/10 bg-[#07090e] shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col justify-between p-6 md:p-8">
           {/* Banner Meta Info (Top Left of Stage) */}
           <div className="relative z-20 max-w-xl space-y-3 pointer-events-auto">
-            <AnimatePresence mode="wait">
+            <AnimatePresence initial={false}>
               <motion.div
                 key={`${bannerMode}-${selectedCharId}`}
-                initial={{ opacity: 0, y: -12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 12 }}
-                transition={{ duration: 0.3 }}
+                initial={{ opacity: 0.3 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.1 }}
                 className="space-y-2.5"
               >
                 {/* 1. Header category (Featured Resonator Convene / Featured Weapon Convene) */}
@@ -482,13 +499,12 @@ export const ConveneStage: React.FC = () => {
           <div className={`splash-art-container absolute inset-0 w-full h-full pointer-events-none overflow-hidden flex items-center ${
             isV2 ? "justify-start" : "justify-end pr-0 md:pr-12"
           }`}>
-            <AnimatePresence mode="wait">
+            <AnimatePresence initial={false}>
               <motion.div
                 key={`art-${bannerMode}-${selectedCharId}`}
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 1.02 }}
-                transition={{ duration: 0.35, ease: "easeOut" }}
+                initial={{ opacity: 0.4 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.12, ease: "easeOut" }}
                 className={`relative w-full h-full flex items-center ${
                   isV2 ? "justify-start" : "justify-end"
                 }`}
@@ -503,7 +519,8 @@ export const ConveneStage: React.FC = () => {
                       "/assets/characters/changli_splash.png"
                     }
                     alt={currentChar.name}
-                    className={`splash-art-img h-full w-full select-none pointer-events-none transition-all duration-300 ${
+                    decoding="async"
+                    className={`splash-art-img h-full w-full select-none pointer-events-none ${
                       isV2
                         ? "object-cover object-center drop-shadow-[0_15px_35px_rgba(0,0,0,0.85)]"
                         : "object-contain object-right pr-4 md:pr-12 drop-shadow-[0_20px_45px_rgba(0,0,0,0.95)]"
@@ -521,7 +538,8 @@ export const ConveneStage: React.FC = () => {
                   <img
                     src="/assets/characters/verina_splash.png"
                     alt="Tidal Cadence"
-                    className="splash-art-img h-full w-full object-contain object-right pr-4 md:pr-12 opacity-90 drop-shadow-[0_20px_45px_rgba(0,0,0,0.95)] select-none pointer-events-none transition-all duration-300"
+                    decoding="async"
+                    className="splash-art-img h-full w-full object-contain object-right pr-4 md:pr-12 opacity-90 drop-shadow-[0_20px_45px_rgba(0,0,0,0.95)] select-none pointer-events-none"
                   />
                 )}
               </motion.div>
