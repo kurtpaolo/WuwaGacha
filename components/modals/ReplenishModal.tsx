@@ -18,7 +18,6 @@ interface ReplenishModalProps {
     oscillatedCoral?: number;
   };
   onUpdateCurrency: (currency: string, newAmount: number) => Promise<void>;
-  onAddCurrency?: (astrite: number, tides: number) => Promise<void>;
 }
 
 export const ReplenishModal: React.FC<ReplenishModalProps> = ({

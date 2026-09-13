@@ -13,7 +13,6 @@ import {
   executeClientConvene,
   getClientStateData,
   updateClientCurrency,
-  grantClientCurrency,
   toggleClientSandbox,
   setClientSelectedChar,
   resetClientSimState,
@@ -158,11 +157,6 @@ export const ConveneStage: React.FC = () => {
   // Currency updates from ReplenishModal (Client-Side)
   const handleUpdateCurrency = async (currencyCol: string, amount: number) => {
     updateClientCurrency(currencyCol, amount);
-    fetchState();
-  };
-
-  const handleGrantCurrency = async (astrite: number, _tides?: number) => {
-    grantClientCurrency(astrite);
     fetchState();
   };
 
@@ -687,7 +681,6 @@ export const ConveneStage: React.FC = () => {
         onClose={() => setIsDevOpen(false)}
         isSandbox={Boolean(userState?.isSandbox)}
         onToggleSandbox={handleToggleSandbox}
-        onGrantCurrency={handleGrantCurrency}
         onResetState={handleResetState}
       />
 
@@ -699,7 +692,6 @@ export const ConveneStage: React.FC = () => {
           astrite: userState?.astrite || 0,
         }}
         onUpdateCurrency={handleUpdateCurrency}
-        onAddCurrency={handleGrantCurrency}
       />
 
       {/* Coming Soon Notice Modal */}

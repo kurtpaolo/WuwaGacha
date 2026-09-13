@@ -2,15 +2,13 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Wrench, Infinity, PlusCircle, RotateCcw } from "lucide-react";
-import { AstriteIcon } from "@/components/ui/GameIcons";
+import { X, Wrench, Infinity, RotateCcw } from "lucide-react";
 
 interface DevSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   isSandbox: boolean;
   onToggleSandbox: (enabled: boolean) => void;
-  onGrantCurrency: (astrite: number, tides: number) => void;
   onResetState: () => void;
 }
 
@@ -19,7 +17,6 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
   onClose,
   isSandbox,
   onToggleSandbox,
-  onGrantCurrency,
   onResetState,
 }) => {
   const [confirmReset, setConfirmReset] = useState<boolean>(false);
@@ -46,7 +43,7 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
                   Developer & Sandbox Controls
                 </h2>
                 <p className="text-xs text-gray-400 tracking-wider font-mono">
-                  Modify Balances, Infinite Tides & State Reset
+                  Infinite Tides & State Reset
                 </p>
               </div>
             </div>
@@ -89,39 +86,7 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
               </button>
             </div>
 
-            {/* 2. Quick Grant Currency */}
-            <div className="space-y-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
-                Grant Player Resources
-              </span>
-              <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  onClick={() => onGrantCurrency(16000, 0)}
-                  className="flex items-center justify-center space-x-2 py-2 px-3 rounded bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-mono text-gray-200 transition-all hover:scale-102"
-                >
-                  <AstriteIcon className="w-4 h-4" />
-                  <span>+16,000 Astrite</span>
-                </button>
-
-                <button
-                  onClick={() => onGrantCurrency(80000, 0)}
-                  className="flex items-center justify-center space-x-2 py-2 px-3 rounded bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-mono text-gray-200 transition-all hover:scale-102"
-                >
-                  <AstriteIcon className="w-4 h-4" />
-                  <span>+80,000 Astrite</span>
-                </button>
-
-                <button
-                  onClick={() => onGrantCurrency(160000, 0)}
-                  className="col-span-2 flex items-center justify-center space-x-2 py-2.5 px-3 rounded bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-400/40 text-xs font-bold font-mono text-yellow-300 transition-all"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  <span>Mega Pack: +160,000 Astrite (1,000 Pulls)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 3. Reset State */}
+            {/* 2. Reset State */}
             <div className="pt-2 border-t border-white/10 space-y-3">
               <span className="text-xs font-bold uppercase tracking-wider text-red-400/90 font-mono">
                 System Reset
