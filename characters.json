@@ -1,0 +1,1348 @@
+{
+  "limitedResonators": [
+    {
+      "id": "jiyan",
+      "name": "Jiyan",
+      "title": "General of the Midnight Rangers",
+      "patch": "1.0",
+      "rarity": 5,
+      "element": "Aero",
+      "weaponType": "Broadblade",
+      "quote": "bro got jiyan, who tf uses him 😭",
+      "signatureWeapon": {
+        "id": "verdant_summit",
+        "name": "Verdant Summit",
+        "title": "Qingloong Ascendant",
+        "rarity": 5,
+        "weaponType": "Broadblade"
+      },
+      "featured4StarIds": [
+        "danjin",
+        "chixia",
+        "mortefi"
+      ],
+      "bannerTitle": "Prevail the Lasting Night",
+      "bannerSubtitle": "General of the Midnight Rangers",
+      "accentColor": "#2dd4bf",
+      "portraitUrl": "/assets/characters/jiyan_portrait.png",
+      "splashUrl": "/assets/characters/jiyan_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/jiyan_still.png",
+      "drawUrl": "/assets/characters/jiyan_draw.png"
+    },
+    {
+      "id": "yinlin",
+      "name": "Yinlin",
+      "title": "Secret Investigator",
+      "patch": "1.0",
+      "rarity": 5,
+      "element": "Electro",
+      "weaponType": "Rectifier",
+      "quote": "Secrets are threads woven in shadows. Step carefully, or you will be caught.",
+      "signatureWeapon": {
+        "id": "stringmaster",
+        "name": "Stringmaster",
+        "title": "Puppet Strings of Lightning",
+        "rarity": 5,
+        "weaponType": "Rectifier"
+      },
+      "featured4StarIds": [
+        "taoqi",
+        "aalto",
+        "yuanwu"
+      ],
+      "bannerTitle": "When Thunder Pours",
+      "bannerSubtitle": "Investigator in the Fog",
+      "accentColor": "#818cf8",
+      "portraitUrl": "/assets/characters/yinlin_portrait.png",
+      "splashUrl": "/assets/characters/yinlin_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/yinlin_still.png",
+      "drawUrl": "/assets/characters/yinlin_draw.png"
+    },
+    {
+      "id": "jinhsi",
+      "name": "Jinhsi",
+      "title": "Magistrate of Jinzhou",
+      "patch": "1.1",
+      "rarity": 5,
+      "element": "Spectro",
+      "weaponType": "Broadblade",
+      "quote": "By the mandate of the Sentinel, Jinzhou shall endure through frost and storm.",
+      "signatureWeapon": {
+        "id": "ages_of_harvest",
+        "name": "Ages of Harvest",
+        "title": "Sentinel's Blessing of Temporal Light",
+        "rarity": 5,
+        "weaponType": "Broadblade"
+      },
+      "featured4StarIds": [
+        "sanhua",
+        "danjin",
+        "yangyang"
+      ],
+      "bannerTitle": "Thawborn Renewal",
+      "bannerSubtitle": "Magistrate of Jinzhou",
+      "accentColor": "#facc15",
+      "portraitUrl": "/assets/characters/jinhsi_portrait.png",
+      "splashUrl": "/assets/characters/jinhsi_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/jinhsi_still.png",
+      "drawUrl": "/assets/characters/jinhsi_draw.png"
+    },
+    {
+      "id": "changli",
+      "name": "Changli",
+      "title": "Counselor to the Jinzhou Magistrate",
+      "patch": "1.1",
+      "rarity": 5,
+      "element": "Fusion",
+      "weaponType": "Sword",
+      "quote": "The flame burns unceasingly; the board of destiny awaits our next move.",
+      "signatureWeapon": {
+        "id": "blazing_brilliance",
+        "name": "Blazing Brilliance",
+        "title": "Absolute Focus & Incandescent Flame",
+        "rarity": 5,
+        "weaponType": "Sword"
+      },
+      "featured4StarIds": [
+        "baizhi",
+        "taoqi",
+        "mortefi"
+      ],
+      "bannerTitle": "Vermillion's Ploy",
+      "bannerSubtitle": "Counselor to the Magistrate",
+      "accentColor": "#f97316",
+      "portraitUrl": "/assets/characters/changli_portrait.png",
+      "splashUrl": "/assets/characters/changli_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/changli_still.png",
+      "drawUrl": "/assets/characters/changli_draw.png"
+    },
+    {
+      "id": "zhezhi",
+      "name": "Zhezhi",
+      "title": "Commission Painter of Jinzhou",
+      "patch": "1.2",
+      "rarity": 5,
+      "element": "Glacio",
+      "weaponType": "Rectifier",
+      "quote": "A single brushstroke captures the fluttering snow of memories.",
+      "signatureWeapon": {
+        "id": "rime_draped_sprouts",
+        "name": "Rime-Draped Sprouts",
+        "title": "Crystalline Pigments of Frost",
+        "rarity": 5,
+        "weaponType": "Rectifier"
+      },
+      "featured4StarIds": [
+        "chixia",
+        "baizhi",
+        "sanhua"
+      ],
+      "bannerTitle": "Chromatic Prose",
+      "bannerSubtitle": "Painter in Stillness",
+      "accentColor": "#67e8f9",
+      "portraitUrl": "/assets/characters/zhezhi_portrait.png",
+      "splashUrl": "/assets/characters/zhezhi_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/zhezhi_portrait.png",
+      "drawUrl": "/assets/characters/zhezhi_portrait.png"
+    },
+    {
+      "id": "xiangli_yao",
+      "name": "Xiangli Yao",
+      "title": "Principal Investigator of Huaxu Academy",
+      "patch": "1.2",
+      "rarity": 5,
+      "element": "Electro",
+      "weaponType": "Gauntlets",
+      "quote": "Calculation reveals the trajectory of all stars. Innovation is our defiance of destiny.",
+      "signatureWeapon": {
+        "id": "veritys_fall",
+        "name": "Verity's Fall",
+        "title": "Calculation Beyond Horizons",
+        "rarity": 5,
+        "weaponType": "Gauntlets"
+      },
+      "featured4StarIds": [
+        "danjin",
+        "yuanwu",
+        "aalto"
+      ],
+      "bannerTitle": "Celestial Revelation",
+      "bannerSubtitle": "Huaxu Principal Investigator",
+      "accentColor": "#6366f1",
+      "portraitUrl": "/assets/characters/xiangli_yao_portrait.png",
+      "splashUrl": "/assets/characters/xiangli_yao_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/xiangli_yao_still.png",
+      "drawUrl": "/assets/characters/xiangli_yao_draw.png"
+    },
+    {
+      "id": "shorekeeper",
+      "name": "The Shorekeeper",
+      "title": "Guardian of the Black Shores",
+      "patch": "1.3",
+      "rarity": 5,
+      "element": "Spectro",
+      "weaponType": "Rectifier",
+      "quote": "I am the guide of the lost shore, waiting for the beacon to illuminate our world.",
+      "signatureWeapon": {
+        "id": "stellar_symphony",
+        "name": "Stellar Symphony",
+        "title": "Resonance of the Deepest Void",
+        "rarity": 5,
+        "weaponType": "Rectifier"
+      },
+      "featured4StarIds": [
+        "yangyang",
+        "chixia",
+        "danjin"
+      ],
+      "bannerTitle": "Till the Sea Turns Clear",
+      "bannerSubtitle": "Beacon of the Black Shores",
+      "accentColor": "#38bdf8",
+      "portraitUrl": "/assets/characters/shorekeeper_portrait.png",
+      "splashUrl": "/assets/characters/shorekeeper_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/shorekeeper_still.png",
+      "drawUrl": "/assets/characters/shorekeeper_draw.png"
+    },
+    {
+      "id": "camellya",
+      "name": "Camellya",
+      "title": "Bloom of the Black Shores",
+      "patch": "1.4",
+      "rarity": 5,
+      "element": "Havoc",
+      "weaponType": "Sword",
+      "quote": "Entangled vines, fragrant crimson petals... will you blossom with me, or wither away?",
+      "signatureWeapon": {
+        "id": "red_spring",
+        "name": "Red Spring",
+        "title": "Crimson Vine of Everlasting Desire",
+        "rarity": 5,
+        "weaponType": "Sword"
+      },
+      "featured4StarIds": [
+        "sanhua",
+        "taoqi",
+        "danjin"
+      ],
+      "bannerTitle": "End of Lost Trail",
+      "bannerSubtitle": "Blooming Madness",
+      "accentColor": "#e879f9",
+      "portraitUrl": "/assets/characters/camellya_portrait.png",
+      "splashUrl": "/assets/characters/camellya_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/camellya_still.png",
+      "drawUrl": "/assets/characters/camellya_draw.png"
+    },
+    {
+      "id": "carlotta",
+      "name": "Carlotta",
+      "title": "Frostveil Virtuoso",
+      "patch": "2.0",
+      "rarity": 5,
+      "element": "Glacio",
+      "weaponType": "Pistols",
+      "quote": "A crystal overture plays upon the frozen strings.",
+      "signatureWeapon": {
+        "id": "cryo_concerto",
+        "name": "Cryo Concerto",
+        "title": "Glacial Aria of Winter",
+        "rarity": 5,
+        "weaponType": "Pistols"
+      },
+      "featured4StarIds": [
+        "sanhua",
+        "baizhi",
+        "youhu"
+      ],
+      "bannerTitle": "When Silence Tolls",
+      "bannerSubtitle": "Crystal Echoes",
+      "accentColor": "#38bdf8",
+      "portraitUrl": "/assets/characters/carlotta_portrait.png",
+      "splashUrl": "/assets/characters/carlotta_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/carlotta_still.png",
+      "drawUrl": "/assets/characters/carlotta_draw.png"
+    },
+    {
+      "id": "roccia",
+      "name": "Roccia",
+      "title": "Shadow of Twilight",
+      "patch": "2.0",
+      "rarity": 5,
+      "element": "Havoc",
+      "weaponType": "Gauntlets",
+      "quote": "From the eclipse we rise, silent as twilight.",
+      "signatureWeapon": {
+        "id": "eclipse_crest",
+        "name": "Eclipse Crest",
+        "title": "Dark Horizon of Calamity",
+        "rarity": 5,
+        "weaponType": "Gauntlets"
+      },
+      "featured4StarIds": [
+        "danjin",
+        "taoqi",
+        "lumi"
+      ],
+      "bannerTitle": "Stage in the Box",
+      "bannerSubtitle": "Eclipse Sovereign",
+      "accentColor": "#a855f7",
+      "portraitUrl": "/assets/characters/roccia_portrait.png",
+      "splashUrl": "/assets/characters/roccia_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/roccia_still.png",
+      "drawUrl": "/assets/characters/roccia_draw.png"
+    },
+    {
+      "id": "phoebe",
+      "name": "Phoebe",
+      "title": "Radiant Dawn Oracle",
+      "patch": "2.1",
+      "rarity": 5,
+      "element": "Spectro",
+      "weaponType": "Rectifier",
+      "quote": "Let the light of dawn cleanse the discordance of the lament.",
+      "signatureWeapon": {
+        "id": "sunlit_hymn",
+        "name": "Sunlit Hymn",
+        "title": "Chant of the Awakening Dawn",
+        "rarity": 5,
+        "weaponType": "Rectifier"
+      },
+      "featured4StarIds": [
+        "yangyang",
+        "baizhi",
+        "chixia"
+      ],
+      "bannerTitle": "With Hushed Whispers",
+      "bannerSubtitle": "Oracle of the Sunlit Horizon",
+      "accentColor": "#facc15",
+      "portraitUrl": "/assets/characters/phoebe_portrait.png",
+      "splashUrl": "/assets/characters/phoebe_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/phoebe_still.png",
+      "drawUrl": "/assets/characters/phoebe_draw.png"
+    },
+    {
+      "id": "brant",
+      "name": "Brant",
+      "title": "Solar Vanguard",
+      "patch": "2.1",
+      "rarity": 5,
+      "element": "Fusion",
+      "weaponType": "Sword",
+      "quote": "The sun rises not by chance, but by the will to burn bright.",
+      "signatureWeapon": {
+        "id": "blazing_justice",
+        "name": "Blazing Justice",
+        "title": "Sword of the Horizon",
+        "rarity": 5,
+        "weaponType": "Sword"
+      },
+      "featured4StarIds": [
+        "mortefi",
+        "yuanwu",
+        "aalto"
+      ],
+      "bannerTitle": "Blaze Across the Deep",
+      "bannerSubtitle": "Vanguard of the Red Star",
+      "accentColor": "#ea580c",
+      "portraitUrl": "/assets/characters/brant_portrait.png",
+      "splashUrl": "/assets/characters/brant_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/brant_portrait.png",
+      "drawUrl": "/assets/characters/brant_portrait.png"
+    },
+    {
+      "id": "cantarella",
+      "name": "Cantarella",
+      "title": "Abyssal Enchantress",
+      "patch": "2.3",
+      "rarity": 5,
+      "element": "Havoc",
+      "weaponType": "Rectifier",
+      "quote": "Diving deeper into the abyss, only the fearless uncover truth.",
+      "signatureWeapon": {
+        "id": "whispers_of_sirens",
+        "name": "Whispers of Sirens",
+        "title": "Tidal Requiem",
+        "rarity": 5,
+        "weaponType": "Rectifier"
+      },
+      "featured4StarIds": [
+        "danjin",
+        "taoqi",
+        "mortefi"
+      ],
+      "bannerTitle": "Neptune's Lullaby",
+      "bannerSubtitle": "Enchantress of the Void",
+      "accentColor": "#9333ea",
+      "portraitUrl": "/assets/characters/cantarella_portrait.png",
+      "splashUrl": "/assets/characters/cantarella_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/cantarella_portrait.png",
+      "drawUrl": "/assets/characters/cantarella_portrait.png"
+    },
+    {
+      "id": "ciaccona",
+      "name": "Ciaccona",
+      "title": "Glacial Aria",
+      "patch": "2.2",
+      "rarity": 5,
+      "element": "Aero",
+      "weaponType": "Pistols",
+      "quote": "Every melody freezes in time, waiting for the listener who remembers.",
+      "signatureWeapon": {
+        "id": "waltz_in_masquerade",
+        "name": "Waltz in Masquerade",
+        "title": "Frostbound Sonata",
+        "rarity": 5,
+        "weaponType": "Pistols"
+      },
+      "featured4StarIds": [
+        "baizhi",
+        "chixia",
+        "lumi"
+      ],
+      "bannerTitle": "Through Verses and Rhythms",
+      "bannerSubtitle": "Melody of the Northern Star",
+      "accentColor": "#06b6d4",
+      "portraitUrl": "/assets/characters/ciaccona_portrait.png",
+      "splashUrl": "/assets/characters/ciaccona_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/ciaccona_portrait.png",
+      "drawUrl": "/assets/characters/ciaccona_portrait.png"
+    },
+    {
+      "id": "zani",
+      "name": "Zani",
+      "title": "Radiant Fist of Solaris",
+      "patch": "2.3",
+      "rarity": 5,
+      "element": "Spectro",
+      "weaponType": "Gauntlets",
+      "quote": "Through light and unwavering discipline, we carve the path ahead.",
+      "signatureWeapon": {
+        "id": "abyss_surges",
+        "name": "Abyss Surges",
+        "title": "Standard 5-Star Gauntlets",
+        "rarity": 5,
+        "weaponType": "Gauntlets"
+      },
+      "featured4StarIds": [
+        "sanhua",
+        "yangyang",
+        "chixia"
+      ],
+      "bannerTitle": "Between Light and Shadow",
+      "bannerSubtitle": "Spectro Champion",
+      "accentColor": "#eab308",
+      "portraitUrl": "/assets/characters/zani_portrait.png",
+      "splashUrl": "/assets/characters/zani_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/zani_portrait.png",
+      "drawUrl": "/assets/characters/zani_portrait.png"
+    },
+    {
+      "id": "cartethyia",
+      "name": "Cartethyia",
+      "title": "Whispering Zephyr",
+      "patch": "2.2",
+      "rarity": 5,
+      "element": "Aero",
+      "weaponType": "Broadblade",
+      "quote": "Listen closely: the gale tells of worlds beyond our reach.",
+      "signatureWeapon": {
+        "id": "glint_of_clouds",
+        "name": "Glint of Clouds",
+        "title": "Windcarver's Legacy",
+        "rarity": 5,
+        "weaponType": "Broadblade"
+      },
+      "featured4StarIds": [
+        "sanhua",
+        "yangyang",
+        "youhu"
+      ],
+      "bannerTitle": "Dance in The Storm's Wake",
+      "bannerSubtitle": "Song of the Western Wind",
+      "accentColor": "#14b8a6",
+      "portraitUrl": "/assets/characters/cartethyia_portrait.png",
+      "splashUrl": "/assets/characters/cartethyia_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/cartethyia_portrait.png",
+      "drawUrl": "/assets/characters/cartethyia_portrait.png"
+    },
+    {
+      "id": "lupa",
+      "name": "Lupa",
+      "title": "Crimson Howler",
+      "patch": "2.4",
+      "rarity": 5,
+      "element": "Fusion",
+      "weaponType": "Broadblade",
+      "quote": "When the pack runs, fire paves the path.",
+      "signatureWeapon": {
+        "id": "wildfire_mark",
+        "name": "Wildfire Mark",
+        "title": "Fang of the Scorched Earth",
+        "rarity": 5,
+        "weaponType": "Broadblade"
+      },
+      "featured4StarIds": [
+        "chixia",
+        "mortefi",
+        "aalto"
+      ],
+      "bannerTitle": "Roar of Triumph",
+      "bannerSubtitle": "Sovereign of the Wild Pack",
+      "accentColor": "#dc2626",
+      "portraitUrl": "/assets/characters/lupa_portrait.png",
+      "splashUrl": "/assets/characters/lupa_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/lupa_portrait.png",
+      "drawUrl": "/assets/characters/lupa_portrait.png"
+    },
+    {
+      "id": "phrolova",
+      "name": "Phrolova",
+      "title": "Calamity Conductor",
+      "patch": "2.4",
+      "rarity": 5,
+      "element": "Havoc",
+      "weaponType": "Rectifier",
+      "quote": "The score is written; let the world dance to the rhythm of discord.",
+      "signatureWeapon": {
+        "id": "tragicomedy",
+        "name": "Tragicomedy",
+        "title": "Discordance Unleashed",
+        "rarity": 5,
+        "weaponType": "Rectifier"
+      },
+      "featured4StarIds": [
+        "sanhua",
+        "yuanwu",
+        "danjin"
+      ],
+      "bannerTitle": "Requiem Without End",
+      "bannerSubtitle": "Maestro of the Lament",
+      "accentColor": "#c026d3",
+      "portraitUrl": "/assets/characters/phrolova_portrait.png",
+      "splashUrl": "/assets/characters/phrolova_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/phrolova_portrait.png",
+      "drawUrl": "/assets/characters/phrolova_portrait.png"
+    },
+    {
+      "id": "augusta",
+      "name": "Augusta",
+      "title": "Gilded Thunder Sovereign",
+      "patch": "2.6",
+      "rarity": 5,
+      "element": "Electro",
+      "weaponType": "Gauntlets",
+      "quote": "Rule with golden resolve; shatter opposition with the storm.",
+      "signatureWeapon": {
+        "id": "aureate_zenith",
+        "name": "Aureate Zenith",
+        "title": "Gilded Crown of Lightning",
+        "rarity": 5,
+        "weaponType": "Gauntlets"
+      },
+      "featured4StarIds": [
+        "danjin",
+        "baizhi",
+        "mortefi"
+      ],
+      "bannerTitle": "Eternal Radiance on the Crown",
+      "bannerSubtitle": "Sovereign of the Imperial Storm",
+      "accentColor": "#7c3aed",
+      "portraitUrl": "/assets/characters/augusta_portrait.png",
+      "splashUrl": "/assets/characters/augusta_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/augusta_portrait.png",
+      "drawUrl": "/assets/characters/augusta_portrait.png"
+    },
+    {
+      "id": "iuno",
+      "name": "Iuno",
+      "title": "Celestial Maiden of Dawn",
+      "patch": "3.0",
+      "rarity": 5,
+      "element": "Aero",
+      "weaponType": "Sword",
+      "quote": "Awaken to the new epoch. Solaris-3 welcomes the light.",
+      "signatureWeapon": {
+        "id": "radiant_dawn",
+        "name": "Radiant Dawn",
+        "title": "Firstlight of the New Era",
+        "rarity": 5,
+        "weaponType": "Sword"
+      },
+      "featured4StarIds": [
+        "sanhua",
+        "yangyang",
+        "baizhi"
+      ],
+      "bannerTitle": "Across Time's Waxes and Wanes",
+      "bannerSubtitle": "New Epoch Inauguration",
+      "accentColor": "#fde047",
+      "portraitUrl": "/assets/characters/iuno_portrait.png",
+      "splashUrl": "/assets/characters/iuno_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/iuno_portrait.png",
+      "drawUrl": "/assets/characters/iuno_portrait.png"
+    },
+    {
+      "id": "qiuyuan",
+      "name": "Qiuyuan",
+      "title": "Autumn Tempest",
+      "patch": "3.2",
+      "rarity": 5,
+      "element": "Aero",
+      "weaponType": "Sword",
+      "quote": "Autumn leaves fall silently, yet herald the coming frost.",
+      "signatureWeapon": {
+        "id": "feather_edge",
+        "name": "Feather Edge",
+        "title": "Blade of Falling Leaves",
+        "rarity": 5,
+        "weaponType": "Sword"
+      },
+      "featured4StarIds": [
+        "mortefi",
+        "yuanwu",
+        "yangyang"
+      ],
+      "bannerTitle": "Wanderer Knows No Far and Near",
+      "bannerSubtitle": "Wandering Sword of Autumn",
+      "accentColor": "#059669",
+      "portraitUrl": "/assets/characters/qiuyuan_portrait.png",
+      "splashUrl": "/assets/characters/qiuyuan_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/qiuyuan_portrait.png",
+      "drawUrl": "/assets/characters/qiuyuan_portrait.png"
+    },
+    {
+      "id": "chisa",
+      "name": "Chisa",
+      "title": "Emerald Zephyr",
+      "patch": "3.0",
+      "rarity": 5,
+      "element": "Havoc",
+      "weaponType": "Rectifier",
+      "quote": "The spring breeze disperses all sorrow.",
+      "signatureWeapon": {
+        "id": "woodland_aria",
+        "name": "Woodland Aria",
+        "title": "Harmonics of Spring",
+        "rarity": 5,
+        "weaponType": "Rectifier"
+      },
+      "featured4StarIds": [
+        "chixia",
+        "taoqi",
+        "youhu"
+      ],
+      "bannerTitle": "Horizon of Dawnbreak",
+      "bannerSubtitle": "Whispers of the Forest",
+      "accentColor": "#10b981",
+      "portraitUrl": "/assets/characters/chisa_portrait.png",
+      "splashUrl": "/assets/characters/chisa_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/chisa_portrait.png",
+      "drawUrl": "/assets/characters/chisa_portrait.png"
+    },
+    {
+      "id": "lynae",
+      "name": "Lynae",
+      "title": "Northern Blizzard",
+      "patch": "3.6",
+      "rarity": 5,
+      "element": "Spectro",
+      "weaponType": "Broadblade",
+      "quote": "When the northern frost descends, even sound is frozen.",
+      "signatureWeapon": {
+        "id": "frostburn",
+        "name": "Frostburn",
+        "title": "Greatblade of Absolute Zero",
+        "rarity": 5,
+        "weaponType": "Broadblade"
+      },
+      "featured4StarIds": [
+        "lumi",
+        "yangyang",
+        "danjin"
+      ],
+      "bannerTitle": "Undefined Spectrum",
+      "bannerSubtitle": "Queen of the Frozen Expanse",
+      "accentColor": "#0284c7",
+      "portraitUrl": "/assets/characters/lynae_portrait.png",
+      "splashUrl": "/assets/characters/lynae_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/lynae_portrait.png",
+      "drawUrl": "/assets/characters/lynae_portrait.png"
+    },
+    {
+      "id": "mornye",
+      "name": "Mornye",
+      "title": "Permafrost Maestro",
+      "patch": "3.1",
+      "rarity": 5,
+      "element": "Fusion",
+      "weaponType": "Pistols",
+      "quote": "True beauty is carved from eternal glaciers.",
+      "signatureWeapon": {
+        "id": "freeze_frame",
+        "name": "Freeze Frame",
+        "title": "Glacial Shutter",
+        "rarity": 5,
+        "weaponType": "Pistols"
+      },
+      "featured4StarIds": [
+        "lumi",
+        "danjin",
+        "sanhua"
+      ],
+      "bannerTitle": "Distant May the Starlights Be",
+      "bannerSubtitle": "Maestro of the Frost Peak",
+      "accentColor": "#38bdf8",
+      "portraitUrl": "/assets/characters/mornye_portrait.png",
+      "splashUrl": "/assets/characters/mornye_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/mornye_portrait.png",
+      "drawUrl": "/assets/characters/mornye_portrait.png"
+    },
+    {
+      "id": "luuk_herssen",
+      "name": "Luuk Herssen",
+      "title": "Fulminant Arbiter",
+      "patch": "2.5",
+      "rarity": 5,
+      "element": "Spectro",
+      "weaponType": "Sword",
+      "quote": "Justice falls like thunder—instant and unequivocal.",
+      "signatureWeapon": {
+        "id": "thunderflare_dominion",
+        "name": "Thunderflare Dominion",
+        "title": "Arbiter's Verdict",
+        "rarity": 5,
+        "weaponType": "Sword"
+      },
+      "featured4StarIds": [
+        "taoqi",
+        "lumi",
+        "youhu"
+      ],
+      "bannerTitle": "When Winter Thaws",
+      "bannerSubtitle": "Arbiter of the High Council",
+      "accentColor": "#4f46e5",
+      "portraitUrl": "/assets/characters/luuk_herssen_portrait.png",
+      "splashUrl": "/assets/characters/luuk_herssen_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/luuk_herssen_portrait.png",
+      "drawUrl": "/assets/characters/luuk_herssen_portrait.png"
+    },
+    {
+      "id": "aemeath",
+      "name": "Aemeath",
+      "title": "Nether Blossom",
+      "patch": "3.5",
+      "rarity": 5,
+      "element": "Fusion",
+      "weaponType": "Sword",
+      "quote": "Roots deep in the abyss drink the elixir of timelessness.",
+      "signatureWeapon": {
+        "id": "defiers_thorn",
+        "name": "Defier's Thorn",
+        "title": "Bramble of Nether Bloom",
+        "rarity": 5,
+        "weaponType": "Sword"
+      },
+      "featured4StarIds": [
+        "taoqi",
+        "baizhi",
+        "sanhua"
+      ],
+      "bannerTitle": "Take Flight in Spring",
+      "bannerSubtitle": "Bloom of the Deepest Night",
+      "accentColor": "#a21caf",
+      "portraitUrl": "/assets/characters/aemeath_portrait.png",
+      "splashUrl": "/assets/characters/aemeath_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/aemeath_portrait.png",
+      "drawUrl": "/assets/characters/aemeath_portrait.png"
+    },
+    {
+      "id": "sigrika",
+      "name": "Sigrika",
+      "title": "Tempest Weaver",
+      "patch": "3.3",
+      "rarity": 5,
+      "element": "Electro",
+      "weaponType": "Rectifier",
+      "quote": "Weave the currents of lightning, binding destiny together.",
+      "signatureWeapon": {
+        "id": "boson_astrolabe",
+        "name": "Boson Astrolabe",
+        "title": "Celestial Storm Engine",
+        "rarity": 5,
+        "weaponType": "Rectifier"
+      },
+      "featured4StarIds": [
+        "taoqi",
+        "aalto",
+        "lumi"
+      ],
+      "bannerTitle": "When the Runes Glitter",
+      "bannerSubtitle": "Weaver of the Electric Veil",
+      "accentColor": "#6366f1",
+      "portraitUrl": "/assets/characters/sigrika_portrait.png",
+      "splashUrl": "/assets/characters/sigrika_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/sigrika_portrait.png",
+      "drawUrl": "/assets/characters/sigrika_portrait.png"
+    },
+    {
+      "id": "denia",
+      "name": "Denia",
+      "title": "Astral Sentinel",
+      "patch": "2.6",
+      "rarity": 5,
+      "element": "Aero",
+      "weaponType": "Pistols",
+      "quote": "Stars do not falter, and neither shall my aim.",
+      "signatureWeapon": {
+        "id": "stellar_trigger",
+        "name": "Stellar Trigger",
+        "title": "Constellation's Piercer",
+        "rarity": 5,
+        "weaponType": "Pistols"
+      },
+      "featured4StarIds": [
+        "yangyang",
+        "sanhua",
+        "chixia"
+      ],
+      "bannerTitle": "False Promise For Tomorrow",
+      "bannerSubtitle": "Sentinel of Astral Orbits",
+      "accentColor": "#eab308",
+      "portraitUrl": "/assets/characters/denia_portrait.png",
+      "splashUrl": "/assets/characters/denia_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/denia_portrait.png",
+      "drawUrl": "/assets/characters/denia_portrait.png"
+    },
+    {
+      "id": "hiyuki",
+      "name": "Hiyuki",
+      "title": "Frost Blade of the North",
+      "patch": "3.3",
+      "rarity": 5,
+      "element": "Glacio",
+      "weaponType": "Sword",
+      "quote": "Cold steel cuts through silence, leaving only crystalline stillness.",
+      "signatureWeapon": {
+        "id": "emerald_of_genesis",
+        "name": "Emerald of Genesis",
+        "title": "Standard 5-Star Sword",
+        "rarity": 5,
+        "weaponType": "Sword"
+      },
+      "featured4StarIds": [
+        "mortefi",
+        "danjin",
+        "baizhi"
+      ],
+      "bannerTitle": "Thousand Futures Mirrored In Snow",
+      "bannerSubtitle": "Blade of Frozen Frost",
+      "accentColor": "#38bdf8",
+      "portraitUrl": "/assets/characters/hiyuki_portrait.png",
+      "splashUrl": "/assets/characters/hiyuki_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/hiyuki_portrait.png",
+      "drawUrl": "/assets/characters/hiyuki_portrait.png"
+    },
+    {
+      "id": "lucilla",
+      "name": "Lucilla",
+      "title": "Resplendent Aegis",
+      "patch": "3.2",
+      "rarity": 5,
+      "element": "Glacio",
+      "weaponType": "Broadblade",
+      "quote": "No darkness shall bypass this shield of pure radiance.",
+      "signatureWeapon": {
+        "id": "unflickering_valor",
+        "name": "Unflickering Valor",
+        "title": "Bastion of Light",
+        "rarity": 5,
+        "weaponType": "Broadblade"
+      },
+      "featured4StarIds": [
+        "baizhi",
+        "chixia",
+        "danjin"
+      ],
+      "bannerTitle": "Tomorrow in the Frame",
+      "bannerSubtitle": "Shield of the Solar Vanguard",
+      "accentColor": "#eab308",
+      "portraitUrl": "/assets/characters/lucilla_portrait.png",
+      "splashUrl": "/assets/characters/lucilla_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/lucilla_portrait.png",
+      "drawUrl": "/assets/characters/lucilla_portrait.png"
+    },
+    {
+      "id": "lucy",
+      "name": "Lucy",
+      "title": "Solar Flare Striker",
+      "patch": "3.6",
+      "rarity": 5,
+      "element": "Fusion",
+      "weaponType": "Pistols",
+      "quote": "Catch up if you can! The sparks of speed never fade.",
+      "signatureWeapon": {
+        "id": "spectrum_blaster",
+        "name": "Spectrum Blaster",
+        "title": "Twin Pistols of the Solar Flare",
+        "rarity": 5,
+        "weaponType": "Pistols"
+      },
+      "featured4StarIds": [
+        "chixia",
+        "mortefi",
+        "aalto"
+      ],
+      "bannerTitle": "Dreaming Upon the Moon",
+      "bannerSubtitle": "Striker of the Solar Arc",
+      "accentColor": "#f97316",
+      "portraitUrl": "/assets/characters/lucy_portrait.png",
+      "splashUrl": "/assets/characters/lucy_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/lucy_portrait.png",
+      "drawUrl": "/assets/characters/lucy_portrait.png"
+    },
+    {
+      "id": "rebecca",
+      "name": "Rebecca",
+      "title": "Prismatic Virtuoso",
+      "patch": "3.4",
+      "rarity": 5,
+      "element": "Spectro",
+      "weaponType": "Rectifier",
+      "quote": "Let the symphony of light resonate across the starry expanse.",
+      "signatureWeapon": {
+        "id": "cosmic_ripples",
+        "name": "Cosmic Ripples",
+        "title": "Standard 5-Star Rectifier",
+        "rarity": 5,
+        "weaponType": "Rectifier"
+      },
+      "featured4StarIds": [
+        "aalto",
+        "yuanwu",
+        "sanhua"
+      ],
+      "bannerTitle": "Rekindled Embers of Rage",
+      "bannerSubtitle": "Prismatic Virtuoso",
+      "accentColor": "#facc15",
+      "portraitUrl": "/assets/characters/rebecca_portrait.png",
+      "splashUrl": "/assets/characters/rebecca_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/rebecca_portrait.png",
+      "drawUrl": "/assets/characters/rebecca_portrait.png",
+      "isUnavailable": false,
+      "isComingSoon": false
+    },
+    {
+      "id": "suisui",
+      "name": "Suisui",
+      "title": "Frost Blossom",
+      "patch": "3.8",
+      "rarity": 5,
+      "element": "Glacio",
+      "weaponType": "Pistols",
+      "quote": "Frost settles gently upon the petals before the dawn.",
+      "signatureWeapon": {
+        "id": "frost_bloom",
+        "name": "Glacial Petal",
+        "title": "Pistols of Absolute Zero",
+        "rarity": 5,
+        "weaponType": "Pistols"
+      },
+      "featured4StarIds": [
+        "chixia",
+        "yuanwu",
+        "sanhua"
+      ],
+      "bannerTitle": "Blessings From Dewy Wings",
+      "bannerSubtitle": "Dancer of the Glacial Bloom",
+      "accentColor": "#38bdf8",
+      "portraitUrl": "/assets/characters/suisui_portrait.png",
+      "splashUrl": "/assets/characters/suisui_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/suisui_portrait.png",
+      "drawUrl": "/assets/characters/suisui_portrait.png",
+      "isComingSoon": false
+    },
+    {
+      "id": "yangyang_xuanling",
+      "name": "Yangyang: XL",
+      "title": "Feather of the Gale",
+      "patch": "3.8",
+      "rarity": 5,
+      "element": "Aero",
+      "weaponType": "Sword",
+      "quote": "May the winds guide our path toward peace.",
+      "signatureWeapon": {
+        "id": "feather_gale",
+        "name": "Gale of Xuanling",
+        "title": "Breeze of Awakening",
+        "rarity": 5,
+        "weaponType": "Sword"
+      },
+      "featured4StarIds": [
+        "mortefi",
+        "baizhi",
+        "taoqi"
+      ],
+      "bannerTitle": "Voices on Azure Feathers",
+      "bannerSubtitle": "Feather of the Gale",
+      "accentColor": "#2dd4bf",
+      "portraitUrl": "/assets/characters/yangyang_xuanling_portrait.png",
+      "splashUrl": "/assets/characters/yangyang_xuanling_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/yangyang_portrait.png",
+      "drawUrl": "/assets/characters/yangyang_draw.png",
+      "isComingSoon": false
+    },
+    {
+      "id": "qingxiao",
+      "name": "Qingxiao",
+      "title": "Crimson Sky Lotus",
+      "patch": "3.4",
+      "rarity": 5,
+      "element": "Aero",
+      "weaponType": "Gauntlets",
+      "quote": "From ashes blooms the crimson lotus of supreme clarity.",
+      "signatureWeapon": {
+        "id": "fusion_accretion",
+        "name": "Fusion Accretion",
+        "title": "Fists of the Crimson Lotus",
+        "rarity": 5,
+        "weaponType": "Gauntlets"
+      },
+      "featured4StarIds": [
+        "mortefi",
+        "sanhua",
+        "chixia"
+      ],
+      "bannerTitle": "Wind of Transcendence",
+      "bannerSubtitle": "Monk of the Blazing Meridian",
+      "accentColor": "#ea580c",
+      "portraitUrl": "/assets/characters/qingxiao_portrait.png",
+      "splashUrl": "/assets/characters/qingxiao_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/qingxiao_portrait.png",
+      "drawUrl": "/assets/characters/qingxiao_portrait.png"
+    },
+    {
+      "id": "jingran",
+      "name": "Jingran",
+      "title": "Eclipse Reaper",
+      "patch": "3.4",
+      "rarity": 5,
+      "element": "Fusion",
+      "weaponType": "Broadblade",
+      "quote": "The night is not an end, but the mantle in which destiny awakens.",
+      "signatureWeapon": {
+        "id": "endless_collapse",
+        "name": "Endless Collapse",
+        "title": "Blade of the Event Horizon",
+        "rarity": 5,
+        "weaponType": "Broadblade"
+      },
+      "featured4StarIds": [
+        "danjin",
+        "yuanwu",
+        "youhu"
+      ],
+      "bannerTitle": "Where Santu Beckons",
+      "bannerSubtitle": "Scythe of the Dark Tide",
+      "accentColor": "#7e22ce",
+      "portraitUrl": "/assets/characters/jingran_portrait.png",
+      "splashUrl": "/assets/characters/jingran_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/jingran_portrait.png",
+      "drawUrl": "/assets/characters/jingran_portrait.png"
+    },
+    {
+      "id": "suoming",
+      "name": "Souming",
+      "title": "Fated Thunder",
+      "patch": "3.7",
+      "rarity": 5,
+      "element": "Electro",
+      "weaponType": "Rectifier",
+      "quote": "The cords of destiny are woven in lightning; none can sever them.",
+      "signatureWeapon": {
+        "id": "thousandfold_deliverance",
+        "name": "Thousandfold Deliverance",
+        "title": "Tide of Supreme Resonance",
+        "rarity": 5,
+        "weaponType": "Rectifier"
+      },
+      "featured4StarIds": [
+        "sanhua",
+        "yuanwu",
+        "baizhi"
+      ],
+      "bannerTitle": "Coming Soon",
+      "bannerSubtitle": "Yet to come",
+      "accentColor": "#9333ea",
+      "portraitUrl": "/assets/characters/suoming_portrait.png",
+      "splashUrl": "/assets/characters/suoming_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/suoming_portrait.png",
+      "drawUrl": "/assets/characters/suoming_portrait.png",
+      "isComingSoon": true
+    },
+    {
+      "id": "hsin",
+      "name": "Hsin",
+      "title": "Electro Resonator",
+      "patch": "3.8",
+      "rarity": 5,
+      "element": "Electro",
+      "weaponType": "Gauntlets",
+      "quote": "Lightning cleaves through the storm with unwavering focus.",
+      "signatureWeapon": {
+        "id": "thunder_gauntlets",
+        "name": "Fists of Fulmination",
+        "title": "Thunderous Fist",
+        "rarity": 5,
+        "weaponType": "Gauntlets"
+      },
+      "featured4StarIds": [
+        "danjin",
+        "sanhua",
+        "chixia"
+      ],
+      "bannerTitle": "Coming Soon",
+      "bannerSubtitle": "Yet to come",
+      "accentColor": "#818cf8",
+      "portraitUrl": "/assets/characters/hsin_portrait.png",
+      "splashUrl": "/assets/characters/hsin_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/hsin_portrait.png",
+      "drawUrl": "/assets/characters/hsin_portrait.png",
+      "isComingSoon": true
+    }
+  ],
+  "standard5StarResonators": [
+    {
+      "id": "verina",
+      "name": "Verina",
+      "title": "Botanist of the Pioneer Association",
+      "rarity": 5,
+      "element": "Spectro",
+      "weaponType": "Rectifier",
+      "quote": "Every sprout carries hope, blossoming even in barren soil.",
+      "portraitUrl": "/assets/characters/verina_portrait.png",
+      "splashUrl": "/assets/characters/verina_splash.png",
+      "stillUrl": "/assets/characters/verina_still.png",
+      "drawUrl": "/assets/characters/verina_draw.png"
+    },
+    {
+      "id": "calcharo",
+      "name": "Calcharo",
+      "title": "Leader of the Ghost Hounds",
+      "rarity": 5,
+      "element": "Electro",
+      "weaponType": "Broadblade",
+      "quote": "The pack hunts without hesitation. Prepare yourself.",
+      "portraitUrl": "/assets/characters/calcharo_portrait.png",
+      "splashUrl": "/assets/characters/calcharo_splash.png",
+      "stillUrl": "/assets/characters/calcharo_still.png",
+      "drawUrl": "/assets/characters/calcharo_draw.png"
+    },
+    {
+      "id": "encore",
+      "name": "Encore",
+      "title": "Storyteller of the Black Shores",
+      "rarity": 5,
+      "element": "Fusion",
+      "weaponType": "Rectifier",
+      "quote": "Wooly and Cosmos are ready! Let's write the best adventure story ever!",
+      "portraitUrl": "/assets/characters/encore_portrait.png",
+      "splashUrl": "/assets/characters/encore_splash.png",
+      "stillUrl": "/assets/characters/encore_still.png",
+      "drawUrl": "/assets/characters/encore_draw.png"
+    },
+    {
+      "id": "jianxin",
+      "name": "Jianxin",
+      "title": "Taoist Monk of Fengyidu",
+      "rarity": 5,
+      "element": "Aero",
+      "weaponType": "Gauntlets",
+      "quote": "Calm the mind like still water; channel the breath of the ten thousand things.",
+      "portraitUrl": "/assets/characters/jianxin_portrait.png",
+      "splashUrl": "/assets/characters/jianxin_splash.png",
+      "stillUrl": "/assets/characters/jianxin_still.png",
+      "drawUrl": "/assets/characters/jianxin_draw.png"
+    },
+    {
+      "id": "lingyang",
+      "name": "Lingyang",
+      "title": "Lion Dancer of Jinzhou",
+      "rarity": 5,
+      "element": "Glacio",
+      "weaponType": "Gauntlets",
+      "quote": "Listen to the drumbeat! When the lion leaps, spirits soar high!",
+      "portraitUrl": "/assets/characters/lingyang_portrait.png",
+      "splashUrl": "/assets/characters/lingyang_splash.png",
+      "stillUrl": "/assets/characters/lingyang_still.png",
+      "drawUrl": "/assets/characters/lingyang_draw.png"
+    }
+  ],
+  "featured4StarResonators": [
+    {
+      "id": "danjin",
+      "name": "Danjin",
+      "rarity": 4,
+      "element": "Havoc",
+      "weaponType": "Sword",
+      "portraitUrl": "/assets/characters/danjin_portrait.png"
+    },
+    {
+      "id": "sanhua",
+      "name": "Sanhua",
+      "rarity": 4,
+      "element": "Glacio",
+      "weaponType": "Sword",
+      "portraitUrl": "/assets/characters/sanhua_portrait.png"
+    },
+    {
+      "id": "mortefi",
+      "name": "Mortefi",
+      "rarity": 4,
+      "element": "Fusion",
+      "weaponType": "Pistols",
+      "portraitUrl": "/assets/characters/mortefi_portrait.png"
+    },
+    {
+      "id": "chixia",
+      "name": "Chixia",
+      "rarity": 4,
+      "element": "Fusion",
+      "weaponType": "Pistols",
+      "portraitUrl": "/assets/characters/chixia_portrait.png"
+    },
+    {
+      "id": "yangyang",
+      "name": "Yangyang",
+      "rarity": 4,
+      "element": "Aero",
+      "weaponType": "Sword",
+      "portraitUrl": "/assets/characters/yangyang_portrait.png"
+    },
+    {
+      "id": "baizhi",
+      "name": "Baizhi",
+      "rarity": 4,
+      "element": "Glacio",
+      "weaponType": "Rectifier",
+      "portraitUrl": "/assets/characters/baizhi_portrait.png"
+    },
+    {
+      "id": "taoqi",
+      "name": "Taoqi",
+      "rarity": 4,
+      "element": "Havoc",
+      "weaponType": "Broadblade",
+      "portraitUrl": "/assets/characters/taoqi_portrait.png"
+    },
+    {
+      "id": "aalto",
+      "name": "Aalto",
+      "rarity": 4,
+      "element": "Aero",
+      "weaponType": "Pistols",
+      "portraitUrl": "/assets/characters/aalto_portrait.png"
+    },
+    {
+      "id": "yuanwu",
+      "name": "Yuanwu",
+      "rarity": 4,
+      "element": "Electro",
+      "weaponType": "Gauntlets",
+      "portraitUrl": "/assets/characters/yuanwu_portrait.png"
+    },
+    {
+      "id": "youhu",
+      "name": "Youhu",
+      "rarity": 4,
+      "element": "Glacio",
+      "weaponType": "Gauntlets",
+      "portraitUrl": "/assets/characters/youhu_portrait.png"
+    },
+    {
+      "id": "lumi",
+      "name": "Lumi",
+      "rarity": 4,
+      "element": "Electro",
+      "weaponType": "Broadblade",
+      "portraitUrl": "/assets/characters/lumi_portrait.png"
+    },
+    {
+      "id": "zani",
+      "name": "Zani",
+      "rarity": 4,
+      "element": "Spectro",
+      "weaponType": "Gauntlets",
+      "portraitUrl": "/assets/characters/zani_portrait.png"
+    },
+    {
+      "id": "buling",
+      "name": "Buling",
+      "rarity": 4,
+      "element": "Aero",
+      "weaponType": "Rectifier",
+      "portraitUrl": "/assets/characters/buling_portrait.png"
+    },
+    {
+      "id": "hiyuki",
+      "name": "Hiyuki",
+      "rarity": 4,
+      "element": "Glacio",
+      "weaponType": "Sword",
+      "portraitUrl": "/assets/characters/hiyuki_portrait.png"
+    },
+    {
+      "id": "hsin",
+      "name": "Hsin",
+      "rarity": 4,
+      "element": "Havoc",
+      "weaponType": "Gauntlets",
+      "portraitUrl": "/assets/characters/hsin_portrait.png"
+    },
+    {
+      "id": "suisui",
+      "name": "Suisui",
+      "rarity": 4,
+      "element": "Glacio",
+      "weaponType": "Pistols",
+      "portraitUrl": "/assets/characters/suisui_portrait.png"
+    },
+    {
+      "id": "rebecca",
+      "name": "Rebecca",
+      "rarity": 4,
+      "element": "Spectro",
+      "weaponType": "Rectifier",
+      "portraitUrl": "/assets/characters/rebecca_portrait.png"
+    }
+  ],
+  "fallbackResonators": [
+    {
+      "id": "galbrena",
+      "name": "Galbrena",
+      "title": "Ignis Archon",
+      "patch": "2.7",
+      "rarity": 5,
+      "element": "Fusion",
+      "weaponType": "Broadblade",
+      "quote": "From fire we were forged, and into the blaze we march.",
+      "signatureWeapon": {
+        "id": "solar_flame",
+        "name": "Solar Flame",
+        "title": "Brand of the Archon",
+        "rarity": 5,
+        "weaponType": "Broadblade"
+      },
+      "featured4StarIds": [
+        "mortefi",
+        "aalto",
+        "yuanwu"
+      ],
+      "bannerTitle": "From Ashes",
+      "bannerSubtitle": "Blaze of the Eternal Sun",
+      "accentColor": "#f97316",
+      "portraitUrl": "/assets/characters/galbrena_portrait.png",
+      "splashUrl": "/assets/characters/galbrena_splash_v2.jpeg",
+      "stillUrl": "/assets/characters/galbrena_portrait.png",
+      "drawUrl": "/assets/characters/galbrena_portrait.png"
+    }
+  ]
+}
