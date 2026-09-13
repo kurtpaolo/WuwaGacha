@@ -34,7 +34,7 @@ export async function GET(request: Request) {
         afterglowCoral: user.afterglow_coral,
         oscillatedCoral: user.oscillated_coral,
         isSandbox: Boolean(user.is_sandbox),
-        selectedLimitedChar: user.selected_limited_char || "changli",
+        selectedLimitedChar: user.selected_limited_char || "shorekeeper",
       },
       pity: pityMap,
     });

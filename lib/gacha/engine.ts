@@ -95,8 +95,8 @@ export function executeConvene(
     }
 
     const isSandbox = Boolean(user.is_sandbox);
-    const selectedCharId = user.selected_limited_char || "changli";
-    const bannerPreset = LIMITED_BANNER_PRESETS[selectedCharId] || LIMITED_BANNER_PRESETS["changli"];
+    const selectedCharId = user.selected_limited_char || "shorekeeper";
+    const bannerPreset = LIMITED_BANNER_PRESETS[selectedCharId] || LIMITED_BANNER_PRESETS["shorekeeper"];
 
     if (bannerType === "character_limited" && (bannerPreset?.isComingSoon || bannerPreset?.isUnavailable)) {
       throw new Error(bannerPreset?.isUnavailable ? "This banner is currently unavailable!" : "This character is yet to come!");
@@ -168,7 +168,7 @@ export function executeConvene(
           // 50/50 check or guaranteed
           if (guaranteedLimited || secureRandom() < 0.5) {
             // Won limited character!
-            pulledItem = RESONATORS[selectedCharId] || RESONATORS["changli"];
+            pulledItem = RESONATORS[selectedCharId] || RESONATORS["shorekeeper"];
             isGuaranteedRoll = guaranteedLimited;
             guaranteedLimited = false;
           } else {

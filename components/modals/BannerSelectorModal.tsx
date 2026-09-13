@@ -24,7 +24,7 @@ export const BannerSelectorModal: React.FC<BannerSelectorModalProps> = ({
 
   const characters = Object.keys(LIMITED_BANNER_PRESETS).map((key) => ({
     id: key,
-    data: RESONATORS[key] || RESONATORS["changli"],
+    data: RESONATORS[key] || RESONATORS["shorekeeper"],
     preset: LIMITED_BANNER_PRESETS[key],
   }));
 
@@ -139,7 +139,7 @@ export const BannerSelectorModal: React.FC<BannerSelectorModalProps> = ({
           {/* Footer */}
           <div className="px-8 py-4 border-t border-white/10 bg-white/[0.01] flex items-center justify-between">
             <span className="text-xs text-gray-400 font-mono">
-              Currently Active: <strong className="text-yellow-400 uppercase">{RESONATORS[selectedCharId]?.name || "Changli"}</strong>
+              Currently Active: <strong className="text-yellow-400 uppercase">{RESONATORS[selectedCharId]?.name || "The Shorekeeper"}</strong>
             </span>
 
             <button

@@ -45,7 +45,7 @@ export type BannerMode = "character_limited" | "weapon_limited" | "character_sta
 export const ConveneStage: React.FC = () => {
   // Active states
   const [bannerMode, setBannerMode] = useState<BannerMode>("character_limited");
-  const [selectedCharId, setSelectedCharId] = useState<string>("jiyan");
+  const [selectedCharId, setSelectedCharId] = useState<string>("shorekeeper");
   const [userState, setUserState] = useState<any>(null);
   const [pityMap, setPityMap] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState<boolean>(true);
@@ -171,8 +171,8 @@ export const ConveneStage: React.FC = () => {
   };
 
   // Current banner character & weapon presets
-  const currentChar = RESONATORS[selectedCharId] || RESONATORS["changli"];
-  const currentPreset = LIMITED_BANNER_PRESETS[selectedCharId] || LIMITED_BANNER_PRESETS["changli"];
+  const currentChar = RESONATORS[selectedCharId] || RESONATORS["shorekeeper"];
+  const currentPreset = LIMITED_BANNER_PRESETS[selectedCharId] || LIMITED_BANNER_PRESETS["shorekeeper"];
   const currentPity = pityMap[bannerMode] || { pity5Star: 0, pity4Star: 0, guaranteedLimited: false };
 
   const isV2 = Boolean(

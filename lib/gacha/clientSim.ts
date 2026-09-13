@@ -95,7 +95,7 @@ const DEFAULT_STATE: ClientSimState = {
   afterglowCoral: 0,
   oscillatedCoral: 0,
   isSandbox: false,
-  selectedLimitedChar: "jiyan",
+  selectedLimitedChar: "shorekeeper",
   pity: {
     character_limited: {
       pity5Star: 0,
@@ -197,9 +197,15 @@ export function loadClientState(): ClientSimState {
       return DEFAULT_STATE;
     }
     const parsed = JSON.parse(raw);
+    const selectedLimitedChar =
+      parsed.selectedLimitedChar && parsed.selectedLimitedChar !== "jiyan"
+        ? parsed.selectedLimitedChar
+        : "shorekeeper";
+
     return {
       ...DEFAULT_STATE,
       ...parsed,
+      selectedLimitedChar,
       pity: {
         ...DEFAULT_STATE.pity,
         ...(parsed.pity || {}),
@@ -227,8 +233,8 @@ export function executeClientConvene(
   selectedCharId: string
 ): ClientConveneResponse {
   const state = loadClientState();
-  const currentChar = RESONATORS[selectedCharId] || RESONATORS["jiyan"];
-  const currentPreset = LIMITED_BANNER_PRESETS[selectedCharId] || LIMITED_BANNER_PRESETS["jiyan"];
+  const currentChar = RESONATORS[selectedCharId] || RESONATORS["shorekeeper"];
+  const currentPreset = LIMITED_BANNER_PRESETS[selectedCharId] || LIMITED_BANNER_PRESETS["shorekeeper"];
 
   if (bannerMode === "character_limited" && (currentChar?.isComingSoon || currentPreset?.isComingSoon || currentChar?.isUnavailable || currentPreset?.isUnavailable)) {
     throw new Error(currentChar?.isUnavailable ? "This banner is currently unavailable!" : "This character is yet to come!");

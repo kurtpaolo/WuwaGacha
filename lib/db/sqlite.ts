@@ -26,7 +26,7 @@ export function getDatabase(): DatabaseSync {
       afterglow_coral INTEGER NOT NULL DEFAULT 45,
       oscillated_coral INTEGER NOT NULL DEFAULT 320,
       is_sandbox INTEGER NOT NULL DEFAULT 0,
-      selected_limited_char TEXT NOT NULL DEFAULT 'changli'
+      selected_limited_char TEXT NOT NULL DEFAULT 'shorekeeper'
     );
 
     CREATE TABLE IF NOT EXISTS pity_state (
@@ -70,7 +70,7 @@ export function getDatabase(): DatabaseSync {
   if (!existingUser) {
     dbInstance.prepare(`
       INSERT INTO users (id, astrite, radiant_tide, forging_tide, lustrous_tide, afterglow_coral, oscillated_coral, is_sandbox, selected_limited_char)
-      VALUES (?, 16000, 20, 20, 20, 45, 320, 0, 'changli')
+      VALUES (?, 16000, 20, 20, 20, 45, 320, 0, 'shorekeeper')
     `).run("default_rover");
 
     const banners = ["character_limited", "weapon_limited", "character_standard", "weapon_standard", "beginner"];
