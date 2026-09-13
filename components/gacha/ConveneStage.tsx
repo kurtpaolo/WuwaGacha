@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { soundEngine } from "@/lib/audio/soundEngine";
 import {
@@ -59,6 +59,9 @@ export const ConveneStage: React.FC = () => {
   const [isReplenishOpen, setIsReplenishOpen] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(soundEngine.getIsMuted());
   const [showOrientationScreen, setShowOrientationScreen] = useState<boolean>(true);
+  const [isSwitchingBanner, setIsSwitchingBanner] = useState<boolean>(false);
+  const [switchingCharName, setSwitchingCharName] = useState<string>("");
+  const switchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [comingSoonNotice, setComingSoonNotice] = useState<boolean>(false);
   const [showInsufficientModal, setShowInsufficientModal] = useState<boolean>(false);
   const [insufficientAstriteData, setInsufficientAstriteData] = useState<{
@@ -108,12 +111,31 @@ export const ConveneStage: React.FC = () => {
     changliImg.src = "/assets/characters/changli_splash.png";
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (switchTimerRef.current) clearTimeout(switchTimerRef.current);
+    };
+  }, []);
+
   // Handle selecting a limited character from the rail
   const handleSelectCharacter = (charId: string) => {
+    if (charId === selectedCharId && bannerMode === "character_limited") return;
+    soundEngine.playClick();
+
+    const charName = RESONATORS[charId]?.name || "Resonator";
+    setSwitchingCharName(charName);
+    setIsSwitchingBanner(true);
+
     setSelectedCharId(charId);
     setBannerMode("character_limited");
     setClientSelectedChar(charId);
-    soundEngine.playClick();
+
+    if (switchTimerRef.current) {
+      clearTimeout(switchTimerRef.current);
+    }
+    switchTimerRef.current = setTimeout(() => {
+      setIsSwitchingBanner(false);
+    }, 450);
   };
 
   // Perform Convene Pull (1 or 10) completely client-side
@@ -249,6 +271,62 @@ export const ConveneStage: React.FC = () => {
                 </span>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* 0B. SWITCHING BANNER TRANSITION OVERLAY */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {isSwitchingBanner && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-[95] bg-black/95 flex flex-col items-center justify-center p-6 text-center select-none pointer-events-none backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0, y: 8 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 1.02, opacity: 0, y: -6 }}
+              transition={{ duration: 0.18 }}
+              className="flex flex-col items-center space-y-5 max-w-md"
+            >
+              {/* Animated Resonance Reticle */}
+              <div className="relative flex items-center justify-center w-20 h-20">
+                <div className="absolute inset-0 rounded-full bg-yellow-400/15 animate-ping pointer-events-none" />
+                <div className="relative p-4 rounded-2xl bg-[#10141d] border border-yellow-400/40 text-yellow-400 shadow-[0_0_35px_rgba(250,204,21,0.25)] flex items-center justify-center">
+                  <Sparkles className="w-9 h-9 animate-spin [animation-duration:3s]" />
+                </div>
+              </div>
+
+              {/* Title & Subtext */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-mono tracking-[0.25em] text-yellow-400/80 uppercase font-bold">
+                  Resonance Frequency Tuning
+                </span>
+                <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-wider text-white drop-shadow-[0_2px_15px_rgba(255,255,255,0.2)]">
+                  Switching Banner
+                </h2>
+                {switchingCharName && (
+                  <p className="text-xs font-mono text-gray-400">
+                    Target: <span className="text-yellow-400 font-bold uppercase">{switchingCharName}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Sleek Animated Tech Progress Beam */}
+              <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden relative shadow-inner">
+                <motion.div
+                  initial={{ x: "-100%" }}
+                  animate={{ x: "100%" }}
+                  transition={{ repeat: Infinity, duration: 0.75, ease: "easeInOut" }}
+                  className="w-1/2 h-full bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-500 rounded-full shadow-[0_0_12px_rgba(250,204,21,0.8)]"
+                />
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
