@@ -261,13 +261,14 @@ export const ConveneStage: React.FC = () => {
 
               <div className="space-y-3">
                 <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-wider text-white">
-                  Be on landscape mode for full experience
+                  Switch to landscape mode for full experience
                 </h2>
+                <p>Click Anywhere to Continue</p>
               </div>
 
               <div className="pt-4">
                 <span className="inline-block px-8 py-3 rounded-full bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 text-black font-black uppercase tracking-widest text-xs sm:text-sm shadow-[0_0_25px_rgba(250,204,21,0.6)] animate-pulse">
-                  Tap Anywhere to Continue
+                  This project is still in beta so expect some bugs, and delays along the way
                 </span>
               </div>
             </div>
