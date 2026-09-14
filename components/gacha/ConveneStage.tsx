@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { soundEngine } from "@/lib/audio/soundEngine";
 import {
@@ -8,20 +8,24 @@ import {
   LIMITED_BANNER_PRESETS,
   LIMITED_CHARACTERS_LIST,
 } from "@/lib/data/items";
-import { ConveneResponse } from "@/lib/gacha/engine";
 import {
+  ConveneResponse,
   executeClientConvene,
   getClientStateData,
   updateClientCurrency,
   toggleClientSandbox,
   setClientSelectedChar,
   resetClientSimState,
+  get5050Stats,
+  WinRateStats,
 } from "@/lib/gacha/clientSim";
 import {
   AstriteIcon,
   RarityStars,
 } from "@/components/ui/GameIcons";
+import { preloadSummoningVideos } from "@/lib/video/videoPreloader";
 import { ConveneVideoPlayer } from "@/components/gacha/ConveneVideoPlayer";
+import { CharacterRailItem } from "@/components/gacha/CharacterRailItem";
 import { HistoryModal } from "@/components/modals/HistoryModal";
 import { DetailsModal } from "@/components/modals/DetailsModal";
 import { DevSettingsModal } from "@/components/modals/DevSettingsModal";
@@ -33,14 +37,22 @@ import {
   SlidersHorizontal,
   History as HistoryIcon,
   HelpCircle,
-  Volume2,
-  VolumeX,
   Plus,
   Sword,
   Globe,
 } from "lucide-react";
 
 export type BannerMode = "character_limited" | "weapon_limited" | "character_standard";
+
+const DEFAULT_WIN_RATE: WinRateStats = {
+  total5050: 0,
+  wins5050: 0,
+  losses5050: 0,
+  winRate: null,
+  winRateFormatted: "N/A",
+  total5Stars: 0,
+  avgPity5Star: 0,
+};
 
 export const ConveneStage: React.FC = () => {
   // Active states
@@ -52,15 +64,17 @@ export const ConveneStage: React.FC = () => {
   const [isPulling, setIsPulling] = useState<boolean>(false);
   const [conveneResult, setConveneResult] = useState<ConveneResponse | null>(null);
 
-  // Modals
+  // Modals & Client-side Mount Flag
+  const [mounted, setMounted] = useState<boolean>(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState<boolean>(false);
   const [isDevOpen, setIsDevOpen] = useState<boolean>(false);
   const [isReplenishOpen, setIsReplenishOpen] = useState<boolean>(false);
-  const [isMuted, setIsMuted] = useState<boolean>(soundEngine.getIsMuted());
+  const [winRateStats, setWinRateStats] = useState<WinRateStats>(DEFAULT_WIN_RATE);
   const [showOrientationScreen, setShowOrientationScreen] = useState<boolean>(true);
   const [isSwitchingBanner, setIsSwitchingBanner] = useState<boolean>(false);
   const [switchingCharName, setSwitchingCharName] = useState<string>("");
+  const [switchingBannerTitle, setSwitchingBannerTitle] = useState<string>("");
   const switchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [comingSoonNotice, setComingSoonNotice] = useState<boolean>(false);
   const [showInsufficientModal, setShowInsufficientModal] = useState<boolean>(false);
@@ -69,7 +83,7 @@ export const ConveneStage: React.FC = () => {
     current: number;
   }>({ needed: 160, current: 0 });
 
-  // Fetch initial user and pity state from client-side simulator
+  // Fetch initial user, pity and winrate state from client-side simulator
   const fetchState = useCallback(() => {
     try {
       const data = getClientStateData();
@@ -82,6 +96,7 @@ export const ConveneStage: React.FC = () => {
       if (data.pity) {
         setPityMap(data.pity as any);
       }
+      setWinRateStats(get5050Stats());
     } catch (e) {
       console.error("Failed to load client state:", e);
     } finally {
@@ -90,26 +105,48 @@ export const ConveneStage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    setMounted(true);
     fetchState();
+    soundEngine.startBGM();
   }, [fetchState]);
 
-  // Preload all resonator splash and portrait arts in background on mount to eliminate image fetch/decode lag
+  // Preload queue: 3 critical summoning videos FIRST upon entering website, then deferred images
   useEffect(() => {
-    LIMITED_CHARACTERS_LIST.forEach((charId) => {
-      const char = RESONATORS[charId];
-      if (!char) return;
-      [char.splashUrl, char.drawUrl, char.stillUrl, char.portraitUrl].forEach((url) => {
+    // 1. HIGHEST PRIORITY: Preload the 3 summoning animation videos immediately upon website entry
+    preloadSummoningVideos();
+
+    // 2. Preload active limited character art and standard fallbacks
+    const activeChar = RESONATORS[selectedCharId];
+    if (activeChar) {
+      [activeChar.splashUrl, activeChar.drawUrl, activeChar.stillUrl, activeChar.portraitUrl].forEach((url) => {
         if (url) {
           const img = new Image();
           img.src = url;
         }
       });
-    });
+    }
     const verinaImg = new Image();
     verinaImg.src = "/assets/characters/verina_splash.png";
     const changliImg = new Image();
     changliImg.src = "/assets/characters/changli_splash.png";
-  }, []);
+
+    // 3. Defer secondary resonator images to idle time so video preloading has unobstructed network priority
+    const timer = setTimeout(() => {
+      LIMITED_CHARACTERS_LIST.forEach((charId) => {
+        if (charId === selectedCharId) return;
+        const char = RESONATORS[charId];
+        if (!char) return;
+        [char.splashUrl, char.drawUrl, char.stillUrl, char.portraitUrl].forEach((url) => {
+          if (url) {
+            const img = new Image();
+            img.src = url;
+          }
+        });
+      });
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [selectedCharId]);
 
   useEffect(() => {
     return () => {
@@ -117,13 +154,38 @@ export const ConveneStage: React.FC = () => {
     };
   }, []);
 
+  // Current banner character & weapon presets (memoized to avoid re-computations on unrelated state updates)
+  const currentChar = useMemo(
+    () => RESONATORS[selectedCharId] || RESONATORS["shorekeeper"],
+    [selectedCharId]
+  );
+  const currentPreset = useMemo(
+    () => LIMITED_BANNER_PRESETS[selectedCharId] || LIMITED_BANNER_PRESETS["shorekeeper"],
+    [selectedCharId]
+  );
+  const currentPity = useMemo(
+    () => pityMap[bannerMode] || { pity5Star: 0, pity4Star: 0, guaranteedLimited: false },
+    [pityMap, bannerMode]
+  );
+
+  const isV2 = useMemo(
+    () => Boolean(
+      currentChar?.splashUrl?.includes("_v2") ||
+      currentChar?.drawUrl?.includes("_v2") ||
+      currentChar?.stillUrl?.includes("_v2")
+    ),
+    [currentChar]
+  );
+
   // Handle selecting a limited character from the rail
-  const handleSelectCharacter = (charId: string) => {
+  const handleSelectCharacter = useCallback((charId: string) => {
     if (charId === selectedCharId && bannerMode === "character_limited") return;
     soundEngine.playClick();
 
     const charName = RESONATORS[charId]?.name || "Resonator";
+    const bannerTitle = LIMITED_BANNER_PRESETS[charId]?.title || "Featured Convene";
     setSwitchingCharName(charName);
+    setSwitchingBannerTitle(bannerTitle);
     setIsSwitchingBanner(true);
 
     setSelectedCharId(charId);
@@ -136,10 +198,10 @@ export const ConveneStage: React.FC = () => {
     switchTimerRef.current = setTimeout(() => {
       setIsSwitchingBanner(false);
     }, 1500);
-  };
+  }, [selectedCharId, bannerMode]);
 
   // Perform Convene Pull (1 or 10) completely client-side
-  const handlePull = async (count: 1 | 10) => {
+  const handlePull = useCallback(async (count: 1 | 10) => {
     if (isPulling) return;
 
     if (
@@ -180,6 +242,7 @@ export const ConveneStage: React.FC = () => {
           guaranteedLimited: data.guaranteedLimited,
         },
       }));
+      setWinRateStats(get5050Stats());
     } catch (err: any) {
       const errStr = (err.message || "").toLowerCase();
       if (errStr.includes("astrite") || errStr.includes("insufficient")) {
@@ -191,34 +254,24 @@ export const ConveneStage: React.FC = () => {
       setIsPulling(false);
       return;
     }
-  };
+  }, [isPulling, bannerMode, currentChar, currentPreset, userState, selectedCharId]);
 
   // Currency updates from ReplenishModal (Client-Side)
-  const handleUpdateCurrency = async (currencyCol: string, amount: number) => {
+  const handleUpdateCurrency = useCallback(async (currencyCol: string, amount: number) => {
     updateClientCurrency(currencyCol, amount);
     fetchState();
-  };
+  }, [fetchState]);
 
-  const handleToggleSandbox = async (enabled: boolean) => {
+  const handleToggleSandbox = useCallback(async (enabled: boolean) => {
     toggleClientSandbox(enabled);
     fetchState();
-  };
+  }, [fetchState]);
 
-  const handleResetState = async () => {
+  const handleResetState = useCallback(async () => {
     resetClientSimState();
     fetchState();
-  };
-
-  // Current banner character & weapon presets
-  const currentChar = RESONATORS[selectedCharId] || RESONATORS["shorekeeper"];
-  const currentPreset = LIMITED_BANNER_PRESETS[selectedCharId] || LIMITED_BANNER_PRESETS["shorekeeper"];
-  const currentPity = pityMap[bannerMode] || { pity5Star: 0, pity4Star: 0, guaranteedLimited: false };
-
-  const isV2 = Boolean(
-    currentChar?.splashUrl?.includes("_v2") ||
-    currentChar?.drawUrl?.includes("_v2") ||
-    currentChar?.stillUrl?.includes("_v2")
-  );
+    setWinRateStats(get5050Stats());
+  }, [fetchState]);
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-[#06080e] text-white flex flex-col justify-between font-sans select-none">
@@ -233,6 +286,7 @@ export const ConveneStage: React.FC = () => {
             transition={{ duration: 0.35 }}
             onClick={() => {
               soundEngine.playClick();
+              soundEngine.startBGM();
               setShowOrientationScreen(false);
             }}
             className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-6 text-center select-none cursor-pointer backdrop-blur-md"
@@ -282,11 +336,12 @@ export const ConveneStage: React.FC = () => {
       <AnimatePresence>
         {isSwitchingBanner && (
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-[95] bg-black/95 flex flex-col items-center justify-center p-6 text-center select-none pointer-events-none backdrop-blur-md"
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-6 text-center select-none pointer-events-auto"
+            style={{ backgroundColor: "#000000" }}
           >
             <motion.div
               initial={{ scale: 0.96, opacity: 0, y: 8 }}
@@ -305,15 +360,15 @@ export const ConveneStage: React.FC = () => {
 
               {/* Title & Subtext */}
               <div className="space-y-1.5">
-                <span className="text-[10px] font-mono tracking-[0.25em] text-yellow-400/80 uppercase font-bold">
-                  Resonance Frequency Tuning
+                <span className="text-xs sm:text-sm font-mono tracking-widest text-yellow-400 font-bold drop-shadow-[0_0_10px_rgba(250,204,21,0.3)]">
+                  {switchingBannerTitle || "Featured Convene"}
                 </span>
                 <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-wider text-white drop-shadow-[0_2px_15px_rgba(255,255,255,0.2)]">
                   Switching Banner
                 </h2>
                 {switchingCharName && (
-                  <p className="text-xs font-mono text-gray-400">
-                    Target: <span className="text-yellow-400 font-bold uppercase">{switchingCharName}</span>
+                  <p className="text-xs sm:text-sm font-mono tracking-wider text-yellow-400 font-bold uppercase">
+                    {switchingCharName}
                   </p>
                 )}
               </div>
@@ -352,27 +407,58 @@ export const ConveneStage: React.FC = () => {
       {/* ========================================================================= */}
       {/* 1. TOP HEADER HUD */}
       {/* ========================================================================= */}
-      <header className="relative z-20 flex items-center justify-between px-6 py-3 border-b border-white/10 bg-black/40 backdrop-blur-md">
+      <header className="relative z-20 flex items-center justify-between px-3 sm:px-6 py-2 sm:py-3 border-b border-white/10 bg-black/40 backdrop-blur-md">
         {/* Top Left: Title "you a gacha addict" (ESC removed) */}
-        <div className="flex items-center space-x-3">
-          <h1 className="font-black tracking-wider text-base md:text-lg uppercase text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          <h1 className="font-black tracking-wider text-sm sm:text-base md:text-lg uppercase text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">
             you a gacha addict
           </h1>
 
           {userState?.isSandbox && (
-            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-mono text-[11px] font-bold uppercase">
+            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-mono text-[10px] sm:text-[11px] font-bold uppercase">
               Sandbox Mode
             </span>
           )}
         </div>
 
-        {/* Top Right: Clean Astrite Counter with "+" to Replenish, Mute & Settings */}
-        <div className="flex items-center space-x-3 sm:space-x-4">
+        {/* Top Right: 50/50 Win Rate Badge, Clean Astrite Counter & Settings */}
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          {/* 50/50 Win Rate Badge (wuwatracker.com style) */}
+          <button
+            onClick={() => {
+              soundEngine.playClick();
+              setIsHistoryOpen(true);
+            }}
+            className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-yellow-400/40 rounded-lg backdrop-blur-sm shadow-inner transition-all group"
+            title="View 50/50 History & Convenes"
+          >
+            <span className="text-[10px] sm:text-xs font-mono uppercase text-gray-400 group-hover:text-gray-300 font-bold">
+              50/50:
+            </span>
+            <span
+              suppressHydrationWarning
+              className={`font-mono text-xs sm:text-sm font-bold ${
+                mounted && winRateStats.winRate !== null
+                  ? winRateStats.winRate >= 50
+                    ? "text-emerald-400"
+                    : "text-amber-400"
+                  : "text-gray-400"
+              }`}
+            >
+              {mounted ? winRateStats.winRateFormatted : "N/A"}
+            </span>
+            {mounted && winRateStats.total5050 > 0 && (
+              <span className="text-[10px] font-mono text-gray-400 hidden sm:inline" suppressHydrationWarning>
+                ({winRateStats.wins5050}/{winRateStats.total5050})
+              </span>
+            )}
+          </button>
+
           {/* Astrite Counter */}
-          <div className="flex items-center space-x-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg backdrop-blur-sm shadow-inner">
-            <AstriteIcon className="w-5 h-5" />
-            <span className="font-mono text-xs md:text-sm font-bold text-gray-100">
-              {userState?.astrite?.toLocaleString() || "0"}
+          <div className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-white/5 border border-white/10 rounded-lg backdrop-blur-sm shadow-inner">
+            <AstriteIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="font-mono text-xs md:text-sm font-bold text-gray-100" suppressHydrationWarning>
+              {mounted && userState?.astrite !== undefined ? userState.astrite.toLocaleString() : "0"}
             </span>
             <button
               onClick={() => {
@@ -381,28 +467,18 @@ export const ConveneStage: React.FC = () => {
               className="p-0.5 rounded hover:bg-yellow-400/20 text-yellow-400 transition-colors"
               title="Replenish Astrite"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
           </div>
 
-          {/* Mute Toggle */}
+          {/* Settings Trigger */}
           <button
             onClick={() => {
-              const next = !isMuted;
-              setIsMuted(next);
-              soundEngine.setMuted(next);
+              soundEngine.playClick();
+              setIsDevOpen(true);
             }}
-            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white transition-all"
-            title={isMuted ? "Unmute Summon Audio" : "Mute Summon Audio"}
-          >
-            {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-          </button>
-
-          {/* Dev Modal Trigger */}
-          <button
-            onClick={() => setIsDevOpen(true)}
-            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white transition-all"
-            title="Sandbox & Pity Settings"
+            className="p-1.5 sm:p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white transition-all"
+            title="Settings"
           >
             <SlidersHorizontal className="w-4 h-4" />
           </button>
@@ -430,56 +506,22 @@ export const ConveneStage: React.FC = () => {
               const isSelected = bannerMode === "character_limited" && selectedCharId === charId;
 
               return (
-                <button
+                <CharacterRailItem
                   key={charId}
-                  onClick={() => handleSelectCharacter(charId)}
-                  className={`group relative w-full flex items-center space-x-2.5 p-1.5 rounded-lg border text-left transition-all ${
-                    isSelected
-                      ? "bg-gradient-to-r from-yellow-500/20 to-yellow-500/5 border-yellow-400/80 shadow-[0_0_15px_rgba(250,204,21,0.25)]"
-                      : "bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/[0.05]"
-                  }`}
-                >
-                  {/* Active Indicator Bar */}
-                  {isSelected && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-7 bg-yellow-400 rounded-r shadow-[0_0_8px_#ffd15c]" />
-                  )}
-
-                  {/* Character Avatar Thumbnail */}
-                  <div className="relative w-9 h-9 md:w-11 md:h-11 rounded-md overflow-hidden bg-black/40 border border-white/10 flex-shrink-0 flex items-center justify-center">
-                    <img
-                      src={
-                        char.portraitUrl ||
-                        char.stillUrl ||
-                        char.drawUrl ||
-                        "/assets/characters/changli_portrait.png"
-                      }
-                      alt={char.name}
-                      className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-200"
-                    />
-                  </div>
-
-                  {/* Name details (Desktop) */}
-                  <div className="hidden md:flex flex-col flex-1 min-w-0">
-                    <span
-                      className={`text-xs font-bold truncate ${
-                        isSelected ? "text-yellow-300 font-display" : "text-gray-200 group-hover:text-white"
-                      }`}
-                    >
-                      {char.name}
-                    </span>
-                    <span
-                      className={`text-[10px] font-mono truncate ${
-                        preset?.isUnavailable
-                          ? "text-rose-400 font-bold"
-                          : preset?.isComingSoon
-                          ? "text-amber-400 font-bold"
-                          : "text-gray-400"
-                      }`}
-                    >
-                      {preset?.isUnavailable ? "Unavailable" : preset?.isComingSoon ? "Coming Soon" : preset?.title}
-                    </span>
-                  </div>
-                </button>
+                  charId={charId}
+                  name={char.name}
+                  portraitUrl={
+                    char.portraitUrl ||
+                    char.stillUrl ||
+                    char.drawUrl ||
+                    "/assets/characters/changli_portrait.png"
+                  }
+                  title={preset.title}
+                  isSelected={isSelected}
+                  isUnavailable={preset.isUnavailable}
+                  isComingSoon={preset.isComingSoon}
+                  onSelect={handleSelectCharacter}
+                />
               );
             })}
           </div>
@@ -670,14 +712,14 @@ export const ConveneStage: React.FC = () => {
       {/* ========================================================================= */}
       {/* 3. BOTTOM FOOTER HUD (DETAILS, HISTORY & DUAL CONVENE BUTTONS) */}
       {/* ========================================================================= */}
-      <footer className="relative z-20 flex flex-col sm:flex-row items-center justify-between px-8 py-4 border-t border-white/10 bg-black/60 backdrop-blur-md gap-4">
+      <footer className="relative z-20 flex flex-col sm:flex-row items-center justify-between px-3 sm:px-8 py-2.5 sm:py-4 border-t border-white/10 bg-black/60 backdrop-blur-md gap-3 sm:gap-4">
         {/* Left: schmuckey, Details & History Buttons */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3">
           <a
             href="https://portfolio-ni-schmuckey.vercel.app"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center space-x-2 px-4 py-2 rounded bg-white/5 hover:bg-white/15 border border-white/15 text-xs font-display font-bold tracking-wider text-gray-300 hover:text-white transition-all hover:scale-105"
+            className="flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded bg-white/5 hover:bg-white/15 border border-white/15 text-xs font-display font-bold tracking-wider text-gray-300 hover:text-white transition-all hover:scale-105"
           >
             <Globe className="w-4 h-4 text-yellow-400" />
             <span>schmuckey</span>
@@ -685,7 +727,7 @@ export const ConveneStage: React.FC = () => {
 
           <button
             onClick={() => setIsDetailsOpen(true)}
-            className="flex items-center space-x-2 px-4 py-2 rounded bg-white/5 hover:bg-white/15 border border-white/15 text-xs font-display font-bold uppercase tracking-wider text-gray-300 hover:text-white transition-all hover:scale-105"
+            className="flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded bg-white/5 hover:bg-white/15 border border-white/15 text-xs font-display font-bold uppercase tracking-wider text-gray-300 hover:text-white transition-all hover:scale-105"
           >
             <HelpCircle className="w-4 h-4 text-yellow-400" />
             <span>Notice</span>
@@ -693,7 +735,7 @@ export const ConveneStage: React.FC = () => {
 
           <button
             onClick={() => setIsHistoryOpen(true)}
-            className="flex items-center space-x-2 px-4 py-2 rounded bg-white/5 hover:bg-white/15 border border-white/15 text-xs font-display font-bold uppercase tracking-wider text-gray-300 hover:text-white transition-all hover:scale-105"
+            className="flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded bg-white/5 hover:bg-white/15 border border-white/15 text-xs font-display font-bold uppercase tracking-wider text-gray-300 hover:text-white transition-all hover:scale-105"
           >
             <HistoryIcon className="w-4 h-4 text-yellow-400" />
             <span>History</span>
@@ -701,19 +743,19 @@ export const ConveneStage: React.FC = () => {
         </div>
 
         {/* Right: Exact Dual Pill-shaped Convene Buttons with Astrite */}
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2.5 sm:space-x-4">
           {/* Convene 1 */}
           <button
             disabled={isPulling}
             onClick={() => handlePull(1)}
-            className="group relative flex flex-col items-center justify-center px-7 py-2.5 rounded-full bg-[#171d2b] hover:bg-[#202738] border border-white/25 hover:border-yellow-400/60 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none min-w-[150px] shadow-md"
+            className="group relative flex flex-col items-center justify-center px-4 sm:px-7 py-2 sm:py-2.5 rounded-full bg-[#171d2b] hover:bg-[#202738] border border-white/25 hover:border-yellow-400/60 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none min-w-[125px] sm:min-w-[150px] shadow-md"
           >
-            <span className="font-display text-xs font-black uppercase tracking-widest text-white group-hover:text-yellow-400 transition-colors">
+            <span className="font-display text-[11px] sm:text-xs font-black uppercase tracking-widest text-white group-hover:text-yellow-400 transition-colors">
               {currentPreset?.isUnavailable ? "Unavailable" : currentPreset?.isComingSoon ? "Coming Soon" : "Convene 1"}
             </span>
-            <div className="flex items-center space-x-1.5 mt-0.5">
-              <AstriteIcon className="w-4 h-4" />
-              <span className="font-mono text-xs font-bold text-gray-200">160</span>
+            <div className="flex items-center space-x-1 sm:space-x-1.5 mt-0.5">
+              <AstriteIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="font-mono text-[11px] sm:text-xs font-bold text-gray-200">160</span>
             </div>
           </button>
 
@@ -721,14 +763,14 @@ export const ConveneStage: React.FC = () => {
           <button
             disabled={isPulling}
             onClick={() => handlePull(10)}
-            className="group relative flex flex-col items-center justify-center px-9 py-2.5 rounded-full bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 hover:from-yellow-300 hover:via-amber-300 hover:to-yellow-400 text-black border border-yellow-300 font-bold transition-all hover:scale-105 active:scale-95 shadow-[0_0_22px_rgba(250,204,21,0.55)] disabled:opacity-50 disabled:pointer-events-none min-w-[175px]"
+            className="group relative flex flex-col items-center justify-center px-5 sm:px-9 py-2 sm:py-2.5 rounded-full bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 hover:from-yellow-300 hover:via-amber-300 hover:to-yellow-400 text-black border border-yellow-300 font-bold transition-all hover:scale-105 active:scale-95 shadow-[0_0_22px_rgba(250,204,21,0.55)] disabled:opacity-50 disabled:pointer-events-none min-w-[145px] sm:min-w-[175px]"
           >
-            <span className="font-display text-xs font-black uppercase tracking-widest text-black">
+            <span className="font-display text-[11px] sm:text-xs font-black uppercase tracking-widest text-black">
               {currentPreset?.isUnavailable ? "Unavailable" : currentPreset?.isComingSoon ? "Coming Soon" : "Convene 10"}
             </span>
-            <div className="flex items-center space-x-1.5 mt-0.5">
-              <AstriteIcon className="w-4 h-4" />
-              <span className="font-mono text-xs font-black text-black">1,600</span>
+            <div className="flex items-center space-x-1 sm:space-x-1.5 mt-0.5">
+              <AstriteIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="font-mono text-[11px] sm:text-xs font-black text-black">1,600</span>
             </div>
           </button>
         </div>

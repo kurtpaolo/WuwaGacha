@@ -202,7 +202,7 @@ export const WEAPONS: Record<string, ItemData> = {
   blazing_brilliance: { id: "blazing_brilliance", name: "Blazing Brilliance", title: "Changli's Signature Sword", rarity: 5, type: "weapon", weaponType: "Sword", isLimited: true },
   rime_draped_sprouts: { id: "rime_draped_sprouts", name: "Rime-Draped Sprouts", title: "Zhezhi's Signature Rectifier", rarity: 5, type: "weapon", weaponType: "Rectifier", isLimited: true },
   veritys_fall: { id: "veritys_fall", name: "Verity's Fall", title: "Xiangli Yao's Signature Gauntlets", rarity: 5, type: "weapon", weaponType: "Gauntlets", isLimited: true },
-  stellar_symphony: { id: "stellar_symphony", name: "Stellar Symphony", title: "The Shorekeeper's Signature Rectifier", rarity: 5, type: "weapon", weaponType: "Rectifier", isLimited: true },
+  stellar_symphony: { id: "stellar_symphony", name: "Stellar Symphony", title: "Shorekeeper's Signature Rectifier", rarity: 5, type: "weapon", weaponType: "Rectifier", isLimited: true },
   red_spring: { id: "red_spring", name: "Red Spring", title: "Camellya's Signature Sword", rarity: 5, type: "weapon", weaponType: "Sword", isLimited: true },
   cryo_concerto: { id: "cryo_concerto", name: "Cryo Concerto", title: "Carlotta's Signature Pistols", rarity: 5, type: "weapon", weaponType: "Pistols", isLimited: true },
   eclipse_crest: { id: "eclipse_crest", name: "Eclipse Crest", title: "Roccia's Signature Gauntlets", rarity: 5, type: "weapon", weaponType: "Gauntlets", isLimited: true },

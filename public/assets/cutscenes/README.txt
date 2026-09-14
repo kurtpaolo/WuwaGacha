@@ -17,7 +17,7 @@ LIMITED 5-STAR RESONATORS (Patches 1.0 - 3.7)
 4.  Changli            -> changli.mp4
 5.  Zhezhi             -> zhezhi.mp4
 6.  Xiangli Yao        -> xiangli_yao.mp4
-7.  The Shorekeeper    -> shorekeeper.mp4
+7.  Shorekeeper        -> shorekeeper.mp4
 8.  Camellya           -> camellya.mp4
 9.  Carlotta           -> carlotta.mp4
 10. Roccia             -> roccia.mp4

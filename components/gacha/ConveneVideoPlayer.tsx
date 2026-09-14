@@ -4,9 +4,16 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { soundEngine } from "@/lib/audio/soundEngine";
 import { ItemRarity } from "@/lib/data/items";
-import { RollResultItem } from "@/lib/gacha/engine";
+import { RollResultItem } from "@/lib/gacha/clientSim";
 import { ElementBadge, RarityStars } from "@/components/ui/GameIcons";
-import { FastForward, RotateCcw, Check, Sparkles } from "lucide-react";
+import { FastForward } from "lucide-react";
+import {
+  getPreloadedVideoUrl,
+  preloadSingleVideo,
+  getCutsceneUrlForResonator,
+  getCachedCutscenesManifest,
+  fetchCutscenesManifest,
+} from "@/lib/video/videoPreloader";
 
 interface ConveneVideoPlayerProps {
   results: RollResultItem[];
@@ -28,14 +35,56 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
   onFinish,
   onConveneAgain,
 }) => {
-  const [phase, setPhase] = useState<Phase>("video");
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
-  const [isMuted, setIsMuted] = useState<boolean>(soundEngine.getIsMuted());
+  const isOnePull = results.length === 1;
 
-  // 5-Star Character Cutscene state
-  const [availableCutscenes, setAvailableCutscenes] = useState<Record<string, string>>({});
-  const [cutsceneUrl, setCutsceneUrl] = useState<string | null>(null);
-  const [playedCutsceneIndices, setPlayedCutsceneIndices] = useState<Set<number>>(new Set());
+  // Initialize availableCutscenes from preloader cache if available
+  const [availableCutscenes, setAvailableCutscenes] = useState<Record<string, string>>(
+    () => getCachedCutscenesManifest()
+  );
+
+  // Helper to query cutscene for a character (5-star or 4-star resonator)
+  const getCutsceneUrlForItem = useCallback(
+    (res: RollResultItem): string | null => {
+      if (res.item.type !== "resonator" || !res.item.id) return null;
+      return getCutsceneUrlForResonator(res.item.id, availableCutscenes);
+    },
+    [availableCutscenes]
+  );
+
+  // Initial phase determination:
+  // For 1-pulls: no summoning animation!
+  // - 3-star: straight to summary
+  // - 4-star: play cutscene if resonator, or reveal card if weapon
+  // - 5-star: play cutscene if resonator, or reveal card if weapon
+  // For 10-pulls: play initial meteor video
+  const [initialSetup] = useState(() => {
+    if (!isOnePull) {
+      return { phase: "video" as Phase, cutscene: null as string | null };
+    }
+    const single = results[0];
+    if (!single || single.rarity === 3) {
+      return { phase: "summary" as Phase, cutscene: null as string | null };
+    }
+    if (single.item.type === "resonator") {
+      const cutscene = getCutsceneUrlForResonator(single.item.id, getCachedCutscenesManifest());
+      if (cutscene) {
+        return {
+          phase: (single.rarity === 5 ? "cutscene_5star" : "cutscene_4star") as Phase,
+          cutscene,
+        };
+      }
+    }
+    return { phase: "reveal_step" as Phase, cutscene: null as string | null };
+  });
+
+  const [phase, setPhase] = useState<Phase>(initialSetup.phase);
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
+
+  // Character Cutscene state
+  const [cutsceneUrl, setCutsceneUrl] = useState<string | null>(initialSetup.cutscene);
+  const [playedCutsceneIndices, setPlayedCutsceneIndices] = useState<Set<number>>(() => {
+    return initialSetup.cutscene ? new Set([0]) : new Set();
+  });
 
   const currentIndexRef = useRef<number>(0);
   const isSkippingRef = useRef<boolean>(false);
@@ -43,23 +92,47 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cutsceneVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Fetch available cutscenes on mount
+  // Sync background music state with summon phase
   useEffect(() => {
-    fetch("/api/cutscenes")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.available) {
-          setAvailableCutscenes(d.available);
-        }
-      })
-      .catch((e) => console.error("Error loading cutscenes index:", e));
-  }, []);
+    if (phase === "video" || phase === "cutscene_5star" || phase === "cutscene_4star") {
+      soundEngine.pauseBGM();
+    } else {
+      soundEngine.resumeBGM();
+    }
+    return () => {
+      soundEngine.resumeBGM();
+    };
+  }, [phase]);
 
-  // Determine initial meteor cutscene video
-  const videoSrc =
+  const effectiveSummonVol = soundEngine.getEffectiveSummonVolume();
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.volume = effectiveSummonVol;
+    }
+  }, [effectiveSummonVol, phase]);
+
+  useEffect(() => {
+    if (cutsceneVideoRef.current) {
+      cutsceneVideoRef.current.volume = effectiveSummonVol;
+    }
+  }, [effectiveSummonVol, cutsceneUrl]);
+
+  // Fetch available cutscenes on mount if not already cached
+  useEffect(() => {
+    if (Object.keys(availableCutscenes).length === 0) {
+      fetchCutscenesManifest().then((manifest) => {
+        setAvailableCutscenes(manifest);
+      });
+    }
+  }, [availableCutscenes]);
+
+  // Determine initial meteor cutscene video (instantly plays from preloaded cache if available)
+  const rawVideoSrc =
     highestRarity === 5
       ? "/api/video?path=assets/videos/gacha_gold_5star.mp4"
-      : "/api/video?path=assets/videos/gacha_purple_4star.webm";
+      : "/api/video?path=assets/videos/gacha_purple_4star.mp4";
+  const videoSrc = getPreloadedVideoUrl(rawVideoSrc);
 
   const isBlueRarity = highestRarity === 3;
 
@@ -96,42 +169,28 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     );
   };
 
-  // Helper to query cutscene for a character (5-star or 4-star resonator)
-  const getCutsceneUrlForItem = useCallback(
-    (res: RollResultItem): string | null => {
-      if (res.item.type !== "resonator") return null;
-      const charId = res.item.id;
-      if (!charId) return null;
-
-      const normalized = charId.toLowerCase().replace(/[\s_-]+/g, "");
-      const exact = charId.toLowerCase();
-
-      if (availableCutscenes[normalized]) return availableCutscenes[normalized];
-      if (availableCutscenes[exact]) return availableCutscenes[exact];
-
-      return null;
-    },
-    [availableCutscenes]
-  );
-
-  // Preload any upcoming character cutscenes in results so they buffer in background during meteor launch
+  // Preload any upcoming character cutscenes in results so they buffer in background and cache permanently
   useEffect(() => {
-    if (!results || results.length === 0 || Object.keys(availableCutscenes).length === 0) return;
+    if (!results || results.length === 0) return;
     results.forEach((res) => {
       const url = getCutsceneUrlForItem(res);
       if (url) {
-        const v = document.createElement("video");
-        v.preload = "auto";
-        v.crossOrigin = "anonymous";
-        v.src = url;
+        preloadSingleVideo(url);
       }
     });
-  }, [results, availableCutscenes, getCutsceneUrlForItem]);
+  }, [results, getCutsceneUrlForItem]);
 
   // Trigger audio stinger chord for card reveal
   const playItemSound = useCallback((item: RollResultItem) => {
     soundEngine.playCardReveal(item.rarity);
   }, []);
+
+  // For 1-pulls starting directly in card reveal (e.g. 4-star/5-star weapon)
+  useEffect(() => {
+    if (isOnePull && initialSetup.phase === "reveal_step" && results[0]) {
+      playItemSound(results[0]);
+    }
+  }, [isOnePull, initialSetup.phase, playItemSound, results]);
 
   // Reveal handler: plays cutscene if available for 5-star, otherwise shows card
   const startRevealForIndex = useCallback(
@@ -263,10 +322,17 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
       handleSkipToSummary();
       return;
     }
+
+    if (phase === "summary") {
+      soundEngine.playClick();
+      onFinish();
+      return;
+    }
   }, [
     phase,
     startRevealForIndex,
     handleSkipToSummary,
+    onFinish,
   ]);
 
   // Step-through advance
@@ -295,8 +361,15 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
       } else {
         setPhase("summary");
       }
+      return;
     }
-  }, [phase, results.length, startRevealForIndex, handleSkip4StarCutscene]);
+
+    if (phase === "summary") {
+      soundEngine.playClick();
+      onFinish();
+      return;
+    }
+  }, [phase, results.length, startRevealForIndex, handleSkip4StarCutscene, onFinish]);
 
   // Keyboard controls
   useEffect(() => {
@@ -337,7 +410,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
             playsInline
             preload="auto"
             crossOrigin="anonymous"
-            muted={isMuted}
+            muted={effectiveSummonVol === 0}
             onEnded={handleInitialVideoEnded}
             onError={handleInitialVideoEnded}
             className={`w-full h-full object-cover transition-all duration-300 ${
@@ -370,12 +443,12 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
           <video
             key={cutsceneUrl}
             ref={cutsceneVideoRef}
-            src={cutsceneUrl}
+            src={getPreloadedVideoUrl(cutsceneUrl)}
             autoPlay
             playsInline
             preload="auto"
             crossOrigin="anonymous"
-            muted={isMuted}
+            muted={effectiveSummonVol === 0}
             onEnded={handleCutsceneEnded}
             onError={handleCutsceneEnded}
             className="w-full h-full object-cover"
@@ -395,12 +468,12 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
           <video
             key={cutsceneUrl}
             ref={cutsceneVideoRef}
-            src={cutsceneUrl}
+            src={getPreloadedVideoUrl(cutsceneUrl)}
             autoPlay
             playsInline
             preload="auto"
             crossOrigin="anonymous"
-            muted={isMuted}
+            muted={effectiveSummonVol === 0}
             onEnded={handleCutsceneEnded}
             onError={handleCutsceneEnded}
             className="w-full h-full object-cover"
@@ -504,6 +577,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
                 <img
                   src={getItemIllustration(currentResult)}
                   alt={getItemName(currentResult)}
+                  decoding="async"
                   className="max-w-full max-h-full object-contain drop-shadow-[0_20px_35px_rgba(0,0,0,0.95)] z-10"
                 />
 
@@ -590,8 +664,11 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
       {/* ========================================================================= */}
       {phase === "summary" && (
         <div
-          className="relative w-full h-full flex flex-col justify-between p-6 md:p-10 bg-[#07090e]"
-          onClick={(e) => e.stopPropagation()}
+          className="relative w-full h-full flex flex-col justify-between p-6 md:p-10 bg-[#07090e] cursor-pointer select-none"
+          onClick={() => {
+            soundEngine.playClick();
+            onFinish();
+          }}
         >
           {/* Header Title */}
           <div className="flex items-center justify-between pb-4 border-b border-white/10">
@@ -636,6 +713,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
                     initial={{ opacity: 0, scale: 0.8, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     transition={{ delay: idx * 0.04, duration: 0.25 }}
+                    style={{ willChange: "transform, opacity" }}
                     className={`group relative flex flex-col items-center rounded-xl p-2.5 border transition-all duration-200 hover:scale-105 ${
                       isGold
                         ? "bg-gradient-to-b from-yellow-500/25 via-yellow-950/20 to-black/80 border-yellow-400/80 shadow-[0_0_20px_rgba(250,204,21,0.35)]"
@@ -664,6 +742,11 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
                       <img
                         src={getItemThumbnail(res)}
                         alt={getItemName(res)}
+                        width={96}
+                        height={112}
+                        loading="lazy"
+                        decoding="async"
+                        draggable={false}
                         className="max-w-full max-h-full object-contain drop-shadow-md group-hover:scale-110 transition-transform duration-300"
                       />
                     </div>
@@ -685,35 +768,11 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
             </div>
           </div>
 
-          {/* Bottom Action Footer */}
-          <div className="flex flex-col sm:flex-row items-center justify-between pt-4 border-t border-white/10 gap-3">
-            <button
-              onClick={onFinish}
-              className="flex items-center space-x-2 px-6 py-2.5 rounded-sm bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-display font-bold uppercase tracking-wider text-white transition-all hover:scale-105"
-            >
-              <Check className="w-4 h-4 text-yellow-400" />
-              <span>Confirm & Return</span>
-            </button>
-
-            {onConveneAgain && (
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={() => onConveneAgain(1)}
-                  className="flex items-center space-x-2 px-5 py-2.5 rounded-sm bg-[#1a2130] hover:bg-[#252f45] border border-white/20 text-xs font-display font-black uppercase tracking-wider text-white transition-all hover:scale-105"
-                >
-                  <RotateCcw className="w-3.5 h-3.5 text-yellow-400" />
-                  <span>Convene 1 Again</span>
-                </button>
-
-                <button
-                  onClick={() => onConveneAgain(10)}
-                  className="flex items-center space-x-2 px-7 py-2.5 rounded-sm bg-gradient-to-r from-yellow-400 to-amber-400 hover:from-yellow-300 hover:to-amber-300 text-black border border-yellow-300 text-xs font-display font-black uppercase tracking-wider transition-all hover:scale-105 shadow-[0_0_15px_rgba(250,204,21,0.5)]"
-                >
-                  <Sparkles className="w-4 h-4 text-black" />
-                  <span>Convene 10 Again</span>
-                </button>
-              </div>
-            )}
+          {/* Bottom Tap Anywhere to Close Footer */}
+          <div className="flex items-center justify-center pt-4 pb-1 border-t border-white/10">
+            <span className="text-xs sm:text-sm font-mono tracking-widest text-gray-400 uppercase animate-pulse select-none">
+              Tap Anywhere to Close
+            </span>
           </div>
         </div>
       )}

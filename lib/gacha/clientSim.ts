@@ -39,6 +39,9 @@ export interface ClientConveneResponse {
   };
 }
 
+export type RollResultItem = ClientRollResultItem;
+export type ConveneResponse = ClientConveneResponse;
+
 export interface ClientHistoryItem {
   id: string;
   banner_type: string;
@@ -49,6 +52,7 @@ export interface ClientHistoryItem {
   rarity: number;
   pity_count: number;
   is_guaranteed: number;
+  is_5050_win?: boolean | null;
   created_at: string;
 }
 
@@ -88,7 +92,7 @@ export interface ClientSimState {
 const STORAGE_KEY = "wuwa_convene_client_sim_v1";
 
 const DEFAULT_STATE: ClientSimState = {
-  astrite: 160000,
+  astrite: 16000,
   radiantTide: 0,
   forgingTide: 0,
   lustrousTide: 0,
@@ -281,6 +285,7 @@ export function executeClientConvene(
     let pulledItem: ItemData;
     let rarity: ItemRarity;
     let isGuaranteedRoll = false;
+    let is5050Win: boolean | null = null;
 
     if (roll5 < p5Rate) {
       // 5-STAR
@@ -288,23 +293,33 @@ export function executeClientConvene(
       goldIndices.push(i);
 
       if (bannerMode === "character_limited") {
-        if (guaranteedLimited || secureRandom() < 0.5) {
+        if (guaranteedLimited) {
           pulledItem = currentChar;
-          isGuaranteedRoll = guaranteedLimited;
+          isGuaranteedRoll = true;
           guaranteedLimited = false;
+          is5050Win = null; // Guaranteed pull from prior loss
+        } else if (secureRandom() < 0.5) {
+          pulledItem = currentChar;
+          isGuaranteedRoll = false;
+          guaranteedLimited = false;
+          is5050Win = true; // Won 50/50
         } else {
           // Lost 50/50 to standard
           const stdId = getRandomItem(STANDARD_5_STAR_RESONATORS);
           pulledItem = RESONATORS[stdId] || RESONATORS["verina"];
+          isGuaranteedRoll = false;
           guaranteedLimited = true;
+          is5050Win = false; // Lost 50/50
         }
       } else if (bannerMode === "weapon_limited") {
         const weaponId = currentPreset?.signatureWeaponId || "blazing_brilliance";
         pulledItem = WEAPONS[weaponId] || WEAPONS["verdant_summit"];
         isGuaranteedRoll = true;
+        is5050Win = null;
       } else {
         const stdId = getRandomItem(STANDARD_5_STAR_RESONATORS);
         pulledItem = RESONATORS[stdId] || RESONATORS["verina"];
+        is5050Win = null;
       }
 
       const pullAtPity = pity5;
@@ -335,6 +350,7 @@ export function executeClientConvene(
         rarity: 5,
         pity_count: pullAtPity,
         is_guaranteed: isGuaranteedRoll ? 1 : 0,
+        is_5050_win: is5050Win,
         created_at: nowStr,
       });
     } else {
@@ -431,6 +447,21 @@ export function executeClientConvene(
           isNew,
           afterglowCoralAwarded: 0,
           oscillatedCoralAwarded: 15,
+        });
+
+        // Record 3-star pull to history so ALL pulls are logged
+        state.history.unshift({
+          id: `h_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 7)}`,
+          banner_type: bannerMode,
+          banner_id: selectedCharId,
+          item_id: pulledItem.id,
+          item_name: pulledItem.name,
+          item_type: pulledItem.type,
+          rarity: 3,
+          pity_count: pity5,
+          is_guaranteed: 0,
+          is_5050_win: null,
+          created_at: nowStr,
         });
       }
     }
@@ -529,4 +560,64 @@ export function getClientHistory(page: number = 1, limit: number = 5) {
   const offset = (validPage - 1) * limit;
   const logs = s.history.slice(offset, offset + limit);
   return { logs, total, totalPages, page: validPage };
+}
+
+export function get5StarHistory(): ClientHistoryItem[] {
+  const s = loadClientState();
+  return s.history.filter((item) => item.rarity === 5);
+}
+
+export interface WinRateStats {
+  total5050: number;
+  wins5050: number;
+  losses5050: number;
+  winRate: number | null;
+  winRateFormatted: string;
+  total5Stars: number;
+  avgPity5Star: number;
+}
+
+export function get5050Stats(): WinRateStats {
+  const s = loadClientState();
+  const fiveStars = s.history.filter((item) => item.rarity === 5);
+  let total5050 = 0;
+  let wins5050 = 0;
+  let losses5050 = 0;
+  let totalPitySum = 0;
+
+  fiveStars.forEach((item) => {
+    totalPitySum += item.pity_count;
+    if (item.banner_type === "character_limited") {
+      if (item.is_5050_win === true) {
+        wins5050++;
+        total5050++;
+      } else if (item.is_5050_win === false) {
+        losses5050++;
+        total5050++;
+      } else if (item.is_guaranteed === 0) {
+        // Fallback detection for records created before is_5050_win flag
+        const isStandard = STANDARD_5_STAR_RESONATORS.includes(item.item_id);
+        if (isStandard) {
+          losses5050++;
+          total5050++;
+        } else {
+          wins5050++;
+          total5050++;
+        }
+      }
+    }
+  });
+
+  const winRate = total5050 > 0 ? (wins5050 / total5050) * 100 : null;
+  const avgPity = fiveStars.length > 0 ? Math.round((totalPitySum / fiveStars.length) * 10) / 10 : 0;
+
+  return {
+    total5050,
+    wins5050,
+    losses5050,
+    winRate,
+    winRateFormatted: winRate !== null ? `${winRate.toFixed(1)}%` : "N/A",
+    total5Stars: fiveStars.length,
+    avgPity5Star: avgPity,
+  };
 }

@@ -31,7 +31,7 @@ export const ReplenishModal: React.FC<ReplenishModalProps> = ({
     name: "Astrite",
     icon: <AstriteIcon className="w-6 h-6" />,
     current: currentBalances.astrite || 0,
-    presets: [67, 670, 6700, 67000, 676767],
+    presets: [67, 670, 6700, 67000, 670000, 6700000],
     color: "text-yellow-400",
     borderColor: "border-yellow-400/40",
   };
@@ -129,7 +129,7 @@ export const ReplenishModal: React.FC<ReplenishModalProps> = ({
                 <input
                   type="number"
                   min="0"
-                  placeholder={`e.g. 50000`}
+                  placeholder={`e.g. 676767`}
                   value={customAmount}
                   onChange={(e) => setCustomAmount(e.target.value)}
                   className="flex-1 px-3 py-2 rounded bg-black/60 border border-white/15 text-sm font-mono text-white placeholder-gray-600 focus:outline-none focus:border-yellow-400"
