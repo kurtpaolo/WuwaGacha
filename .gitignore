@@ -421,3 +421,9 @@ build/
 # Nested folder from previous GitHub Desktop attempt
 WuwaGacha/
 
+# Cutscene & Summoning video assets (hosted on Cloudflare R2 to minimize Vercel storage & git repo size)
+public/cutscenes/*.mp4
+public/cutscenes/*.webm
+public/assets/videos/*.mp4
+public/assets/videos/*.webm
+

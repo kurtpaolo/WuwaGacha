@@ -14,6 +14,10 @@ import {
   getCachedCutscenesManifest,
   fetchCutscenesManifest,
 } from "@/lib/video/videoPreloader";
+import {
+  getSummoningVideoUrl,
+  getLocalSummoningVideoFallback,
+} from "@/lib/video/cutscenesConfig";
 
 interface ConveneVideoPlayerProps {
   results: RollResultItem[];
@@ -127,12 +131,16 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     }
   }, [availableCutscenes]);
 
-  // Determine initial meteor cutscene video (instantly plays from preloaded cache if available)
-  const rawVideoSrc =
-    highestRarity === 5
-      ? "/api/video?path=assets/videos/gacha_gold_5star.mp4"
-      : "/api/video?path=assets/videos/gacha_purple_4star.mp4";
-  const videoSrc = getPreloadedVideoUrl(rawVideoSrc);
+  // Determine initial meteor cutscene video (R2 endpoint with automatic fallback)
+  const [meteorVideoUrl, setMeteorVideoUrl] = useState<string>(() =>
+    getSummoningVideoUrl(highestRarity)
+  );
+
+  useEffect(() => {
+    setMeteorVideoUrl(getSummoningVideoUrl(highestRarity));
+  }, [highestRarity]);
+
+  const videoSrc = getPreloadedVideoUrl(meteorVideoUrl);
 
   const isBlueRarity = highestRarity === 3;
 
@@ -270,6 +278,36 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     handleCutsceneEnded();
   }, [handleCutsceneEnded]);
 
+  // Handle cutscene playback errors (e.g. DNS or CORS issues with external CDN)
+  // Automatically falls back to the local video file before advancing
+  const handleCutsceneError = useCallback(
+    (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+      const mediaErr = (e.target as HTMLVideoElement)?.error;
+      console.warn("Cutscene playback failed for:", cutsceneUrl, {
+        code: mediaErr?.code,
+        message: mediaErr?.message,
+      });
+
+      if (
+        cutsceneUrl &&
+        (cutsceneUrl.startsWith("http://") || cutsceneUrl.startsWith("https://"))
+      ) {
+        const lastPart = cutsceneUrl.split("/").pop();
+        if (lastPart) {
+          const localUrl = `/api/video?path=${encodeURIComponent(`cutscenes/${lastPart}`)}`;
+          if (cutsceneUrl !== localUrl) {
+            console.info("Switching to local cutscene fallback:", localUrl);
+            setCutsceneUrl(localUrl);
+            return;
+          }
+        }
+      }
+
+      handleCutsceneEnded();
+    },
+    [cutsceneUrl, handleCutsceneEnded]
+  );
+
   // Skip straight to summary (stopping ONLY if an unplayed 5-star cutscene is ahead)
   const handleSkipToSummary = useCallback(() => {
     setCutsceneUrl(null);
@@ -299,6 +337,20 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
   const handleInitialVideoEnded = () => {
     startRevealForIndex(0);
   };
+
+  // Fallback to local meteor video if CDN load fails
+  const handleInitialVideoError = useCallback(() => {
+    console.warn("Initial meteor animation video failed to load:", meteorVideoUrl);
+    if (meteorVideoUrl.startsWith("http://") || meteorVideoUrl.startsWith("https://")) {
+      const localFallback = getLocalSummoningVideoFallback(highestRarity);
+      if (meteorVideoUrl !== localFallback) {
+        console.info("Switching to local meteor video fallback:", localFallback);
+        setMeteorVideoUrl(localFallback);
+        return;
+      }
+    }
+    startRevealForIndex(0);
+  }, [meteorVideoUrl, highestRarity, startRevealForIndex]);
 
   // Skip logic
   const handleSkip = useCallback(() => {
@@ -409,10 +461,9 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
             autoPlay
             playsInline
             preload="auto"
-            crossOrigin="anonymous"
             muted={effectiveSummonVol === 0}
             onEnded={handleInitialVideoEnded}
-            onError={handleInitialVideoEnded}
+            onError={handleInitialVideoError}
             className={`w-full h-full object-cover transition-all duration-300 ${
               isBlueRarity ? "hue-rotate-[65deg] saturate-150 brightness-110" : ""
             }`}
@@ -447,10 +498,9 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
             autoPlay
             playsInline
             preload="auto"
-            crossOrigin="anonymous"
             muted={effectiveSummonVol === 0}
             onEnded={handleCutsceneEnded}
-            onError={handleCutsceneEnded}
+            onError={handleCutsceneError}
             className="w-full h-full object-cover"
           />
           {/* Note: Skip button is explicitly HIDDEN during 5-star cutscene */}
@@ -472,10 +522,9 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
             autoPlay
             playsInline
             preload="auto"
-            crossOrigin="anonymous"
             muted={effectiveSummonVol === 0}
             onEnded={handleCutsceneEnded}
-            onError={handleCutsceneEnded}
+            onError={handleCutsceneError}
             className="w-full h-full object-cover"
           />
 

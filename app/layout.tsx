@@ -14,6 +14,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { getSummoningVideoUrl } from "@/lib/video/cutscenesConfig";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -24,13 +26,13 @@ export default function RootLayout({
       <head>
         <link
           rel="preload"
-          href="/api/video?path=assets/videos/gacha_gold_5star.mp4"
+          href={getSummoningVideoUrl(5)}
           as="video"
           type="video/mp4"
         />
         <link
           rel="preload"
-          href="/api/video?path=assets/videos/gacha_purple_4star.mp4"
+          href={getSummoningVideoUrl(4)}
           as="video"
           type="video/mp4"
         />

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 import { streamVideoFile } from "@/lib/video/streamResponse";
+import { buildCutscenesManifest, getR2CutsceneUrl } from "@/lib/video/cutscenesConfig";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
       path.join(process.cwd(), "public", "assets", "cutscenes"),
     ];
 
-    // If a specific cutscene is requested, stream it directly with full HTTP 206 support
+    // If a specific cutscene is requested, check local files first then redirect to R2
     if (cutsceneParam) {
       let clean = cutsceneParam.replace(/^\/+/, "").replace(/\\+/g, "/").replace(/\.\./g, "");
       if (clean.startsWith("public/")) {
@@ -44,12 +45,21 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // Fallback: Redirect to Cloudflare R2 edge CDN
+      const r2Url = getR2CutsceneUrl(targetBase || clean);
+      if (r2Url) {
+        return NextResponse.redirect(r2Url, 307);
+      }
+
       return new NextResponse(`Cutscene not found: ${cutsceneParam}`, { status: 404 });
     }
 
-    // Default: scan cutscene directories and return manifest JSON
-    const available: Record<string, string> = {};
+    // Default: Return Cloudflare R2 manifest, overlaid with any local files if present
+    const available: Record<string, string> = {
+      ...buildCutscenesManifest(),
+    };
 
+    // If local cutscene directory has files, allow local overrides if desired
     for (const dir of cutsceneDirs) {
       if (fs.existsSync(dir)) {
         const files = fs.readdirSync(dir);
@@ -62,8 +72,9 @@ export async function GET(request: NextRequest) {
               ? `assets/cutscenes/${file}`
               : `cutscenes/${file}`;
             const urlPath = `/api/video?path=${encodeURIComponent(relPath)}`;
-            available[rawName] = urlPath;
-            available[exactBase] = urlPath;
+            // Optional: Uncomment next line if local files should strictly override R2:
+            // available[rawName] = urlPath;
+            // available[exactBase] = urlPath;
           }
         }
       }
@@ -72,6 +83,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ available });
   } catch (error) {
     console.error("Error in cutscenes route:", error);
-    return NextResponse.json({ available: {} }, { status: 500 });
+    return NextResponse.json({ available: buildCutscenesManifest() });
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 import { streamVideoFile } from "@/lib/video/streamResponse";
+import { getR2BaseUrl } from "@/lib/video/cutscenesConfig";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,11 @@ export async function GET(request: NextRequest) {
 
     // Verify target path is within public directory and exists
     if (!fullPath.startsWith(publicDir) || !fs.existsSync(fullPath)) {
+      const fileName = path.basename(cleanPath);
+      const r2Base = getR2BaseUrl();
+      if (r2Base) {
+        return NextResponse.redirect(`${r2Base}/${fileName}`, 307);
+      }
       return new NextResponse(`File not found: ${cleanPath}`, { status: 404 });
     }
 

@@ -3,11 +3,18 @@
  * Uses browser CacheStorage (persistent across reloads) and in-memory Blob URLs for instant 0ms playback.
  */
 
+import {
+  buildCutscenesManifest,
+  getR2CutsceneUrl,
+  getR2BaseUrl,
+  getSummoningVideoUrl,
+  getSummoningVideosToPreload,
+} from "./cutscenesConfig";
+
 export const SUMMONING_VIDEOS = [
-  "/api/video?path=assets/videos/gacha_gold_5star.mp4",
-  "/api/video?path=assets/videos/gacha_purple_4star.mp4",
-  "/api/video?path=assets/videos/gacha_purple_4star.webm",
-] as const;
+  getSummoningVideoUrl(5),
+  getSummoningVideoUrl(4),
+];
 
 const CACHE_NAME = "wuwa-video-cache-v1";
 
@@ -15,8 +22,8 @@ const CACHE_NAME = "wuwa-video-cache-v1";
 const blobUrlCache = new Map<string, string>();
 // Retained HTMLVideoElements so browser media buffer stays active and GC does not abort buffering
 const preloadedElements = new Map<string, HTMLVideoElement>();
-// In-memory cutscenes manifest cache
-let cutscenesManifest: Record<string, string> = {};
+// In-memory cutscenes manifest cache pre-populated with Cloudflare R2 endpoints
+let cutscenesManifest: Record<string, string> = buildCutscenesManifest();
 
 let isPreloadingStarted = false;
 
@@ -102,7 +109,6 @@ export function preloadSingleVideo(url: string) {
       video.preload = "auto";
       video.muted = true;
       video.playsInline = true;
-      video.crossOrigin = "anonymous";
       video.src = url;
       video.load();
       preloadedElements.set(url, video);
@@ -125,20 +131,17 @@ export function preloadSingleVideo(url: string) {
  * Fetches and caches the cutscenes index manifest from /api/cutscenes.
  */
 export async function fetchCutscenesManifest(): Promise<Record<string, string>> {
-  if (Object.keys(cutscenesManifest).length > 0) {
-    return cutscenesManifest;
-  }
   try {
     const res = await fetch("/api/cutscenes");
     const data = await res.json();
     if (data.available) {
-      cutscenesManifest = data.available;
+      cutscenesManifest = { ...cutscenesManifest, ...data.available };
       return cutscenesManifest;
     }
   } catch (e) {
-    console.error("Error fetching cutscenes manifest:", e);
+    console.debug("Using preloaded Cloudflare R2 cutscenes manifest:", e);
   }
-  return {};
+  return cutscenesManifest;
 }
 
 /**
@@ -158,6 +161,11 @@ export function getCutsceneUrlForResonator(charId: string, manifest?: Record<str
   const exact = charId.toLowerCase();
   if (dict[normalized]) return dict[normalized];
   if (dict[exact]) return dict[exact];
+
+  // Direct Cloudflare R2 resolution
+  const r2Url = getR2CutsceneUrl(charId);
+  if (r2Url) return r2Url;
+
   return `/api/video?path=${encodeURIComponent(`cutscenes/${exact}.mp4`)}`;
 }
 
