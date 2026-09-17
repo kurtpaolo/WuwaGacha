@@ -9,12 +9,11 @@
 export const DEFAULT_R2_BASE_URL = "https://pub-abcdd91baa4c4547bd65f9408d7b541e.r2.dev";
 
 export function getR2BaseUrl(): string {
-  const envUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
+  const envUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || DEFAULT_R2_BASE_URL;
   if (
     !envUrl ||
     envUrl.trim() === "local" ||
-    envUrl.trim() === "" ||
-    envUrl.includes("abcdd91baa4c4547bd65f9408d7b541e")
+    envUrl.trim() === ""
   ) {
     return "";
   }
