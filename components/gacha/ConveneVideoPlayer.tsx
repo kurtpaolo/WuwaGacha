@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { soundEngine } from "@/lib/audio/soundEngine";
 import { ItemRarity } from "@/lib/data/items";
 import { RollResultItem } from "@/lib/gacha/clientSim";
-import { ElementBadge, RarityStars } from "@/components/ui/GameIcons";
+import { ElementBadge, RarityStars, AstriteIcon } from "@/components/ui/GameIcons";
 import { FastForward } from "lucide-react";
 import {
   getPreloadedVideoUrl,
@@ -26,7 +26,6 @@ interface ConveneVideoPlayerProps {
   purpleIndices: number[];
   bannerType?: string;
   onFinish: () => void;
-  onConveneAgain?: (count: 1 | 10) => void;
 }
 
 type Phase = "video" | "reveal_step" | "cutscene_5star" | "cutscene_4star" | "summary";
@@ -37,7 +36,6 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
   goldIndices,
   purpleIndices,
   onFinish,
-  onConveneAgain,
 }) => {
   const isOnePull = results.length === 1;
 
@@ -140,7 +138,15 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     setMeteorVideoUrl(getSummoningVideoUrl(highestRarity));
   }, [highestRarity]);
 
-  const videoSrc = getPreloadedVideoUrl(meteorVideoUrl);
+  const videoSrc = useMemo(
+    () => getPreloadedVideoUrl(meteorVideoUrl),
+    [meteorVideoUrl]
+  );
+
+  const activeCutsceneSrc = useMemo(
+    () => (cutsceneUrl ? getPreloadedVideoUrl(cutsceneUrl) : null),
+    [cutsceneUrl]
+  );
 
   const isBlueRarity = highestRarity === 3;
 
@@ -162,7 +168,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
       res.item.stillUrl ||
       res.item.portraitUrl ||
       res.item.drawUrl ||
-      "/assets/characters/changli_splash.png"
+      "/assets/characters/changli_splash_v2.jpeg"
     );
   };
 
@@ -178,13 +184,21 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
   };
 
   // Preload any upcoming character cutscenes in results so they buffer in background and cache permanently
+  const preloadedCutscenesRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     if (!results || results.length === 0) return;
+    const uniqueUrls = new Set<string>();
     results.forEach((res) => {
       const url = getCutsceneUrlForItem(res);
-      if (url) {
-        preloadSingleVideo(url);
+      if (url && !preloadedCutscenesRef.current.has(url)) {
+        uniqueUrls.add(url);
+        preloadedCutscenesRef.current.add(url);
       }
+    });
+
+    uniqueUrls.forEach((url) => {
+      preloadSingleVideo(url);
     });
   }, [results, getCutsceneUrlForItem]);
 
@@ -494,7 +508,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
           <video
             key={cutsceneUrl}
             ref={cutsceneVideoRef}
-            src={getPreloadedVideoUrl(cutsceneUrl)}
+            src={activeCutsceneSrc || cutsceneUrl}
             autoPlay
             playsInline
             preload="auto"
@@ -518,7 +532,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
           <video
             key={cutsceneUrl}
             ref={cutsceneVideoRef}
-            src={getPreloadedVideoUrl(cutsceneUrl)}
+            src={activeCutsceneSrc || cutsceneUrl}
             autoPlay
             playsInline
             preload="auto"
@@ -811,6 +825,16 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
                     >
                       {getItemName(res)}
                     </span>
+
+                    {/* Cash Back badge for featured 5-star */}
+                    {isGold && res.isFeaturedWon && (
+                      <div className="mt-1.5 px-2 py-0.5 rounded-full bg-yellow-400/20 border border-yellow-400/40 flex items-center space-x-1 shadow-[0_0_10px_rgba(250,204,21,0.2)]">
+                        <AstriteIcon className="w-3 h-3" />
+                        <span className="text-[10px] font-mono font-black text-yellow-300">
+                          +800 Astrites
+                        </span>
+                      </div>
+                    )}
                   </motion.div>
                 );
               })}

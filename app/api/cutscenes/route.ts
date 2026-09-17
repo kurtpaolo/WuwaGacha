@@ -72,9 +72,9 @@ export async function GET(request: NextRequest) {
               ? `assets/cutscenes/${file}`
               : `cutscenes/${file}`;
             const urlPath = `/api/video?path=${encodeURIComponent(relPath)}`;
-            // Optional: Uncomment next line if local files should strictly override R2:
-            // available[rawName] = urlPath;
-            // available[exactBase] = urlPath;
+            available[rawName] = urlPath;
+            available[exactBase] = urlPath;
+            available[file.toLowerCase()] = urlPath;
           }
         }
       }

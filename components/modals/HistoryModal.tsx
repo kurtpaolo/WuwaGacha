@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   XCircle,
   Sparkles,
-  TrendingUp,
 } from "lucide-react";
 import {
   ClientHistoryItem,
@@ -26,11 +25,18 @@ import { RESONATORS, WEAPONS } from "@/lib/data/items";
 interface HistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
+  userId?: string | null;
+  isSandbox?: boolean;
 }
 
 type HistoryTab = "all" | "five_star";
 
-export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose }) => {
+export const HistoryModal: React.FC<HistoryModalProps> = ({
+  isOpen,
+  onClose,
+  userId,
+  isSandbox,
+}) => {
   const [activeTab, setActiveTab] = useState<HistoryTab>("all");
   const [logs, setLogs] = useState<ClientHistoryItem[]>([]);
   const [fiveStars, setFiveStars] = useState<ClientHistoryItem[]>([]);
@@ -51,22 +57,22 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose }) =
   const fetchHistory = useCallback((p: number) => {
     setLoading(true);
     try {
-      const data = getClientHistory(p, 5);
+      const data = getClientHistory(p, 5, userId, isSandbox);
       setLogs(data.logs || []);
       setTotalPages(data.totalPages || 1);
       setTotalCount(data.total || 0);
 
-      const fStars = get5StarHistory();
+      const fStars = get5StarHistory(userId, isSandbox);
       setFiveStars(fStars);
 
-      const st = get5050Stats();
+      const st = get5050Stats(userId, isSandbox);
       setStats(st);
     } catch (e) {
       console.error("Failed to fetch history:", e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId, isSandbox]);
 
   useEffect(() => {
     if (isOpen) {
@@ -98,17 +104,17 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose }) =
       );
     }
     const wep = WEAPONS[item.item_id];
-    return wep?.iconUrl || "/assets/weapons/verdant_summit.png";
+    return wep?.portraitUrl || (item.rarity === 4 ? "/assets/4starcat.png" : "/assets/3starcat.png");
   };
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-8 bg-black/85 backdrop-blur-md select-none">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-8 bg-black/95 select-none">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="relative w-full max-w-4xl bg-[#0c0f16]/95 border border-white/15 rounded-2xl shadow-[0_0_60px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col max-h-[90vh]"
+          className="relative w-full max-w-4xl bg-[#0c0f16] border border-white/15 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         >
           {/* Header */}
           <div className="flex items-center justify-between px-4 sm:px-8 py-3.5 sm:py-4 border-b border-white/10 bg-white/[0.02]">
@@ -369,7 +375,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose }) =
                       No 5-Star Convenes Recorded Yet
                     </h4>
                     <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                      Perform convenes on any banner to pull 5-star resonators and weapons. Your history and pity stats will appear right here!
+                      Perform convenes to pull 5-star resonators. Your history and pity stats will appear right here!
                     </p>
                   </div>
                 ) : (
@@ -377,8 +383,6 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose }) =
                     <div className="flex flex-wrap items-center gap-4 sm:gap-6">
                       {fiveStars.map((item, idx) => {
                         const avatarSrc = getAvatarUrl(item);
-                        const isWon = item.is_5050_win === true;
-                        const isLost = item.is_5050_win === false;
                         const cleanName =
                           item.item_name === "The Shorekeeper" || item.item_name === "Shorekeeper"
                             ? "Shorekeeper"
@@ -387,7 +391,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose }) =
                         return (
                           <div
                             key={item.id || idx}
-                            className="group relative flex flex-col items-center space-y-2"
+                            className="group relative flex flex-col items-center"
                           >
                             {/* Circular Profile Avatar with Bottom-Right Pity Badge */}
                             <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full p-0.5 bg-gradient-to-tr from-yellow-500 via-amber-300 to-yellow-600 shadow-[0_0_15px_rgba(250,204,21,0.3)] transition-transform duration-200 group-hover:scale-105">
@@ -405,29 +409,10 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose }) =
                                 className={`absolute -bottom-1 -right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-mono font-black ${getPityBadgeColor(
                                   item.pity_count
                                 )}`}
-                                title={`${item.pity_count} pulls`}
+                                title={`${cleanName} pulled at pity ${item.pity_count}`}
                               >
                                 {item.pity_count}
                               </div>
-                            </div>
-
-                            {/* Name & 50/50 Tag (Only WON and LOST shown; GUAR and 5-star removed) */}
-                            <div className="flex flex-col items-center text-center max-w-[80px] sm:max-w-[90px]">
-                              <span className="text-xs font-bold text-gray-200 truncate w-full group-hover:text-yellow-400 transition-colors">
-                                {cleanName}
-                              </span>
-
-                              {item.banner_type === "character_limited" && (isWon || isLost) && (
-                                <span
-                                  className={`text-[9px] font-mono font-black uppercase px-1.5 py-0.2 rounded mt-0.5 ${
-                                    isWon
-                                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
-                                      : "bg-red-500/20 text-red-300 border border-red-400/30"
-                                  }`}
-                                >
-                                  {isWon ? "WON" : "LOST"}
-                                </span>
-                              )}
                             </div>
                           </div>
                         );

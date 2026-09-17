@@ -49,24 +49,21 @@ body {
     align-items: center !important;
     left: 0 !important;
     right: 0 !important;
+    top: 0 !important;
+    bottom: 0 !important;
     width: 100% !important;
+    height: 100% !important;
     padding-right: 0 !important;
   }
   .splash-art-img {
     transform: none !important;
     margin: 0 auto !important;
-    max-height: 70vh !important;
-    width: auto !important;
-    object-position: center !important;
-    opacity: 0.9 !important;
-  }
-  .banner-text-hud {
-    background: rgba(6, 8, 14, 0.65);
-    backdrop-filter: blur(8px);
-    border-radius: 0.75rem;
-    padding: 0.85rem 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    max-width: 90vw !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    width: 100% !important;
+    object-fit: cover !important;
+    object-position: center top !important;
+    opacity: 0.95 !important;
   }
 }
 
@@ -124,4 +121,25 @@ body {
 
 .glow-gold-pulse {
   animation: goldPulseGlow 2.5s infinite ease-in-out;
+}
+
+/* Clean Dark Dropdowns: Hide native OS select arrows, borders, and white focus rectangles */
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: none !important;
+}
+
+select::-ms-expand {
+  display: none;
+}
+
+select:focus {
+  outline: none;
+}
+
+select option {
+  background-color: #0e121b;
+  color: #ffffff;
 }

@@ -26,7 +26,7 @@
       "accentColor": "#38bdf8",
       "portraitUrl": "/assets/characters/shorekeeper_portrait.png",
       "splashUrl": "/assets/characters/shorekeeper_splash_v2.jpeg",
-      "stillUrl": "/assets/characters/shorekeeper_still.png",
+      "stillUrl": "/assets/characters/shorekeeper_portrait.png",
       "drawUrl": "/assets/characters/shorekeeper_draw.png"
     },
     {
@@ -55,7 +55,7 @@
       "accentColor": "#2dd4bf",
       "portraitUrl": "/assets/characters/jiyan_portrait.png",
       "splashUrl": "/assets/characters/jiyan_splash_v2.jpeg",
-      "stillUrl": "/assets/characters/jiyan_still.png",
+      "stillUrl": "/assets/characters/jiyan_portrait.png",
       "drawUrl": "/assets/characters/jiyan_draw.png"
     },
     {
@@ -84,7 +84,7 @@
       "accentColor": "#818cf8",
       "portraitUrl": "/assets/characters/yinlin_portrait.png",
       "splashUrl": "/assets/characters/yinlin_splash_v2.jpeg",
-      "stillUrl": "/assets/characters/yinlin_still.png",
+      "stillUrl": "/assets/characters/yinlin_portrait.png",
       "drawUrl": "/assets/characters/yinlin_draw.png"
     },
     {
@@ -113,7 +113,7 @@
       "accentColor": "#facc15",
       "portraitUrl": "/assets/characters/jinhsi_portrait.png",
       "splashUrl": "/assets/characters/jinhsi_splash_v2.jpeg",
-      "stillUrl": "/assets/characters/jinhsi_still.png",
+      "stillUrl": "/assets/characters/jinhsi_portrait.png",
       "drawUrl": "/assets/characters/jinhsi_draw.png"
     },
     {
@@ -142,7 +142,7 @@
       "accentColor": "#f97316",
       "portraitUrl": "/assets/characters/changli_portrait.png",
       "splashUrl": "/assets/characters/changli_splash_v2.jpeg",
-      "stillUrl": "/assets/characters/changli_still.png",
+      "stillUrl": "/assets/characters/changli_portrait.png",
       "drawUrl": "/assets/characters/changli_draw.png"
     },
     {
@@ -200,7 +200,7 @@
       "accentColor": "#6366f1",
       "portraitUrl": "/assets/characters/xiangli_yao_portrait.png",
       "splashUrl": "/assets/characters/xiangli_yao_splash_v2.jpeg",
-      "stillUrl": "/assets/characters/xiangli_yao_still.png",
+      "stillUrl": "/assets/characters/xiangli_yao_portrait.png",
       "drawUrl": "/assets/characters/xiangli_yao_draw.png"
     },
     {
@@ -229,8 +229,8 @@
       "accentColor": "#e879f9",
       "portraitUrl": "/assets/characters/camellya_portrait.png",
       "splashUrl": "/assets/characters/camellya_splash_v2.jpeg",
-      "stillUrl": "/assets/characters/camellya_still.png",
-      "drawUrl": "/assets/characters/camellya_draw.png"
+      "stillUrl": "/assets/characters/camellya_portrait.png",
+      "drawUrl": "/assets/characters/camellya_portrait.png"
     },
     {
       "id": "carlotta",
@@ -258,8 +258,8 @@
       "accentColor": "#38bdf8",
       "portraitUrl": "/assets/characters/carlotta_portrait.png",
       "splashUrl": "/assets/characters/carlotta_splash_v2.jpeg",
-      "stillUrl": "/assets/characters/carlotta_still.png",
-      "drawUrl": "/assets/characters/carlotta_draw.png"
+      "stillUrl": "/assets/characters/carlotta_portrait.png",
+      "drawUrl": "/assets/characters/carlotta_portrait.png"
     },
     {
       "id": "roccia",
@@ -287,7 +287,7 @@
       "accentColor": "#a855f7",
       "portraitUrl": "/assets/characters/roccia_portrait.png",
       "splashUrl": "/assets/characters/roccia_splash_v2.jpeg",
-      "stillUrl": "/assets/characters/roccia_still.png",
+      "stillUrl": "/assets/characters/roccia_portrait.png",
       "drawUrl": "/assets/characters/roccia_draw.png"
     },
     {
@@ -316,7 +316,7 @@
       "accentColor": "#facc15",
       "portraitUrl": "/assets/characters/phoebe_portrait.png",
       "splashUrl": "/assets/characters/phoebe_splash_v2.jpeg",
-      "stillUrl": "/assets/characters/phoebe_still.png",
+      "stillUrl": "/assets/characters/phoebe_portrait.png",
       "drawUrl": "/assets/characters/phoebe_draw.png"
     },
     {
@@ -433,7 +433,9 @@
       "portraitUrl": "/assets/characters/zani_portrait.png",
       "splashUrl": "/assets/characters/zani_splash_v2.jpeg",
       "stillUrl": "/assets/characters/zani_portrait.png",
-      "drawUrl": "/assets/characters/zani_portrait.png"
+      "drawUrl": "/assets/characters/zani_portrait.png",
+      "artist": "ichigo_amo",
+      "artistUrl": "https://x.com/ichigo_amo"
     },
     {
       "id": "cartethyia",
@@ -1119,8 +1121,8 @@
       "weaponType": "Rectifier",
       "quote": "Every sprout carries hope, blossoming even in barren soil.",
       "portraitUrl": "/assets/characters/verina_portrait.png",
-      "splashUrl": "/assets/characters/verina_splash.png",
-      "stillUrl": "/assets/characters/verina_still.png",
+      "splashUrl": "/assets/characters/verina_draw.png",
+      "stillUrl": "/assets/characters/verina_portrait.png",
       "drawUrl": "/assets/characters/verina_draw.png"
     },
     {
@@ -1132,9 +1134,9 @@
       "weaponType": "Broadblade",
       "quote": "The pack hunts without hesitation. Prepare yourself.",
       "portraitUrl": "/assets/characters/calcharo_portrait.png",
-      "splashUrl": "/assets/characters/calcharo_splash.png",
-      "stillUrl": "/assets/characters/calcharo_still.png",
-      "drawUrl": "/assets/characters/calcharo_draw.png"
+      "splashUrl": "/assets/characters/calcharo_portrait.png",
+      "stillUrl": "/assets/characters/calcharo_portrait.png",
+      "drawUrl": "/assets/characters/calcharo_portrait.png"
     },
     {
       "id": "encore",
@@ -1145,8 +1147,8 @@
       "weaponType": "Rectifier",
       "quote": "Wooly and Cosmos are ready! Let's write the best adventure story ever!",
       "portraitUrl": "/assets/characters/encore_portrait.png",
-      "splashUrl": "/assets/characters/encore_splash.png",
-      "stillUrl": "/assets/characters/encore_still.png",
+      "splashUrl": "/assets/characters/encore_draw.png",
+      "stillUrl": "/assets/characters/encore_portrait.png",
       "drawUrl": "/assets/characters/encore_draw.png"
     },
     {
@@ -1158,8 +1160,8 @@
       "weaponType": "Gauntlets",
       "quote": "Calm the mind like still water; channel the breath of the ten thousand things.",
       "portraitUrl": "/assets/characters/jianxin_portrait.png",
-      "splashUrl": "/assets/characters/jianxin_splash.png",
-      "stillUrl": "/assets/characters/jianxin_still.png",
+      "splashUrl": "/assets/characters/jianxin_draw.png",
+      "stillUrl": "/assets/characters/jianxin_portrait.png",
       "drawUrl": "/assets/characters/jianxin_draw.png"
     },
     {
@@ -1171,8 +1173,8 @@
       "weaponType": "Gauntlets",
       "quote": "Listen to the drumbeat! When the lion leaps, spirits soar high!",
       "portraitUrl": "/assets/characters/lingyang_portrait.png",
-      "splashUrl": "/assets/characters/lingyang_splash.png",
-      "stillUrl": "/assets/characters/lingyang_still.png",
+      "splashUrl": "/assets/characters/lingyang_draw.png",
+      "stillUrl": "/assets/characters/lingyang_portrait.png",
       "drawUrl": "/assets/characters/lingyang_draw.png"
     }
   ],

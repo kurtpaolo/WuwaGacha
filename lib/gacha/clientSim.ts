@@ -9,6 +9,8 @@ import {
   ItemData,
   ItemRarity,
 } from "@/lib/data/items";
+import { MAX_ASTRITE_LIMIT } from "@/lib/supabase/profile";
+import { getHourlyRotatedCharacters } from "@/lib/gacha/bannerRotation";
 
 export interface ClientRollResultItem {
   item: ItemData;
@@ -16,8 +18,7 @@ export interface ClientRollResultItem {
   pityAtPull: number;
   isGuaranteed: boolean;
   isNew: boolean;
-  afterglowCoralAwarded: number;
-  oscillatedCoralAwarded: number;
+  isFeaturedWon?: boolean;
 }
 
 export interface ClientConveneResponse {
@@ -30,11 +31,6 @@ export interface ClientConveneResponse {
   guaranteedLimited: boolean;
   userState: {
     astrite: number;
-    radiantTide: number;
-    forgingTide: number;
-    lustrousTide: number;
-    afterglowCoral: number;
-    oscillatedCoral: number;
     isSandbox: boolean;
   };
 }
@@ -58,27 +54,10 @@ export interface ClientHistoryItem {
 
 export interface ClientSimState {
   astrite: number;
-  radiantTide: number;
-  forgingTide: number;
-  lustrousTide: number;
-  afterglowCoral: number;
-  oscillatedCoral: number;
   isSandbox: boolean;
   selectedLimitedChar: string;
   pity: {
     character_limited: {
-      pity5Star: number;
-      pity4Star: number;
-      guaranteedLimited: boolean;
-      guaranteedFeatured4: boolean;
-    };
-    weapon_limited: {
-      pity5Star: number;
-      pity4Star: number;
-      guaranteedLimited: boolean;
-      guaranteedFeatured4: boolean;
-    };
-    character_standard: {
       pity5Star: number;
       pity4Star: number;
       guaranteedLimited: boolean;
@@ -89,31 +68,46 @@ export interface ClientSimState {
   inventory: Record<string, number>;
 }
 
-const STORAGE_KEY = "wuwa_convene_client_sim_v1";
+// Active session context
+let activeUserId: string | null = null;
+let activeIsSandbox: boolean = false;
+
+export function setClientSimContext(userId: string | null, isSandbox: boolean = false): void {
+  activeUserId = userId;
+  activeIsSandbox = isSandbox;
+}
+
+export function getClientSimContext(): { userId: string | null; isSandbox: boolean } {
+  return { userId: activeUserId, isSandbox: activeIsSandbox };
+}
+
+export function getStorageKey(userId?: string | null, isSandbox?: boolean): string {
+  const sandbox = isSandbox !== undefined ? isSandbox : activeIsSandbox;
+  const uid = userId !== undefined ? userId : activeUserId;
+  if (sandbox) {
+    return "wuwa_convene_sandbox";
+  }
+  if (uid) {
+    return `wuwa_convene_user_${uid}`;
+  }
+  return "wuwa_convene_guest";
+}
+
+function getDefaultRotatedChar(): string {
+  try {
+    const chars = getHourlyRotatedCharacters();
+    return chars[0] || "shorekeeper";
+  } catch {
+    return "shorekeeper";
+  }
+}
 
 const DEFAULT_STATE: ClientSimState = {
-  astrite: 16000,
-  radiantTide: 0,
-  forgingTide: 0,
-  lustrousTide: 0,
-  afterglowCoral: 0,
-  oscillatedCoral: 0,
+  astrite: 12800, // 80 pulls newbie starting bonus (80 * 160)
   isSandbox: false,
-  selectedLimitedChar: "shorekeeper",
+  selectedLimitedChar: getDefaultRotatedChar(),
   pity: {
     character_limited: {
-      pity5Star: 0,
-      pity4Star: 0,
-      guaranteedLimited: false,
-      guaranteedFeatured4: false,
-    },
-    weapon_limited: {
-      pity5Star: 0,
-      pity4Star: 0,
-      guaranteedLimited: false,
-      guaranteedFeatured4: false,
-    },
-    character_standard: {
       pity5Star: 0,
       pity4Star: 0,
       guaranteedLimited: false,
@@ -124,22 +118,29 @@ const DEFAULT_STATE: ClientSimState = {
   inventory: {},
 };
 
-// Standard 5-star characters for 50/50 losses
+const DEFAULT_SANDBOX_STATE: ClientSimState = {
+  astrite: 999999,
+  isSandbox: true,
+  selectedLimitedChar: getDefaultRotatedChar(),
+  pity: {
+    character_limited: {
+      pity5Star: 0,
+      pity4Star: 0,
+      guaranteedLimited: false,
+      guaranteedFeatured4: false,
+    },
+  },
+  history: [],
+  inventory: {},
+};
+
+// Standard 5-star characters for 50/50 losses on Featured Banners
 const STANDARD_5_STAR_RESONATORS = [
   "verina",
   "calcharo",
   "encore",
   "jianxin",
   "lingyang",
-];
-
-// Standard 5-star weapons
-const STANDARD_5_STAR_WEAPONS = [
-  "emerald_of_genesis",
-  "lustrous_razor",
-  "cosmic_ripples",
-  "static_mist",
-  "abyss_surges",
 ];
 
 // All 4-star resonators
@@ -157,9 +158,9 @@ const ALL_4_STAR_RESONATORS = [
   "lumi",
 ];
 
-// 4-star & 3-star weapons
-const ALL_4_STAR_WEAPONS = Object.keys(WEAPONS).filter((id) => WEAPONS[id].rarity === 4);
-const ALL_3_STAR_WEAPONS = Object.keys(WEAPONS).filter((id) => WEAPONS[id].rarity === 3);
+// Cat placeholder weapons
+const ALL_4_STAR_WEAPONS = ["sleepy_cat"];
+const ALL_3_STAR_WEAPONS = ["hapi_cat"];
 
 // Random float generator [0, 1) using crypto when available
 function secureRandom(): number {
@@ -192,55 +193,81 @@ function get4StarRate(currentPity: number): number {
 }
 
 // Storage helpers
-export function loadClientState(): ClientSimState {
-  if (typeof window === "undefined") return DEFAULT_STATE;
+export function loadClientState(userId?: string | null, isSandbox?: boolean): ClientSimState {
+  const key = getStorageKey(userId, isSandbox);
+  const sandbox = isSandbox !== undefined ? isSandbox : activeIsSandbox;
+  const def = sandbox ? DEFAULT_SANDBOX_STATE : DEFAULT_STATE;
+
+  if (typeof window === "undefined") return { ...def };
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) {
-      saveClientState(DEFAULT_STATE);
-      return DEFAULT_STATE;
+      saveClientState(def, userId, isSandbox);
+      return { ...def };
     }
     const parsed = JSON.parse(raw);
-    const selectedLimitedChar =
-      parsed.selectedLimitedChar && parsed.selectedLimitedChar !== "jiyan"
-        ? parsed.selectedLimitedChar
-        : "shorekeeper";
+    if (Array.isArray(parsed.history) && parsed.history.length > 500) {
+      parsed.history = parsed.history.slice(0, 500);
+    }
+    const activeHourly = getHourlyRotatedCharacters();
+    let selectedLimitedChar = parsed.selectedLimitedChar;
+    if (!sandbox) {
+      if (!selectedLimitedChar || !activeHourly.includes(selectedLimitedChar)) {
+        selectedLimitedChar = activeHourly[0] || "shorekeeper";
+      }
+    } else {
+      if (!selectedLimitedChar) {
+        selectedLimitedChar = activeHourly[0] || "shorekeeper";
+      }
+    }
 
     return {
-      ...DEFAULT_STATE,
+      ...def,
       ...parsed,
+      isSandbox: sandbox,
       selectedLimitedChar,
       pity: {
-        ...DEFAULT_STATE.pity,
-        ...(parsed.pity || {}),
+        character_limited: {
+          ...def.pity.character_limited,
+          ...(parsed.pity?.character_limited || {}),
+        },
       },
     };
   } catch (e) {
     console.error("Failed to load client sim state from localStorage:", e);
-    return DEFAULT_STATE;
+    return { ...def };
   }
 }
 
-export function saveClientState(state: ClientSimState): void {
+export function saveClientState(
+  state: ClientSimState,
+  userId?: string | null,
+  isSandbox?: boolean
+): void {
   if (typeof window === "undefined") return;
+  const key = getStorageKey(userId, isSandbox);
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(key, JSON.stringify(state));
+    // Purge legacy shared key to prevent cross-account contamination
+    localStorage.removeItem("wuwa_convene_client_sim_v1");
   } catch (e) {
     console.error("Failed to save client sim state to localStorage:", e);
   }
 }
 
-// Core Convene Execution Function
+// Core Convene Execution Function (Featured Resonator Banner)
 export function executeClientConvene(
-  bannerMode: "character_limited" | "weapon_limited" | "character_standard",
+  bannerMode: "character_limited" = "character_limited",
   count: 1 | 10,
-  selectedCharId: string
+  selectedCharId: string,
+  userId?: string | null,
+  isSandbox?: boolean
 ): ClientConveneResponse {
-  const state = loadClientState();
+  const state = loadClientState(userId, isSandbox);
   const currentChar = RESONATORS[selectedCharId] || RESONATORS["shorekeeper"];
   const currentPreset = LIMITED_BANNER_PRESETS[selectedCharId] || LIMITED_BANNER_PRESETS["shorekeeper"];
 
-  if (bannerMode === "character_limited" && (currentChar?.isComingSoon || currentPreset?.isComingSoon || currentChar?.isUnavailable || currentPreset?.isUnavailable)) {
+  if (currentChar?.isComingSoon || currentPreset?.isComingSoon || currentChar?.isUnavailable || currentPreset?.isUnavailable) {
     throw new Error(currentChar?.isUnavailable ? "This banner is currently unavailable!" : "This character is yet to come!");
   }
 
@@ -255,9 +282,8 @@ export function executeClientConvene(
     state.astrite -= totalCost;
   }
 
-  // Active pity bucket
-  const pityKey = bannerMode;
-  const pityBucket = state.pity[pityKey] || {
+  // Active pity bucket (Character Limited)
+  const pityBucket = state.pity.character_limited || {
     pity5Star: 0,
     pity4Star: 0,
     guaranteedLimited: false,
@@ -288,38 +314,27 @@ export function executeClientConvene(
     let is5050Win: boolean | null = null;
 
     if (roll5 < p5Rate) {
-      // 5-STAR
+      // 5-STAR (Featured Resonator or Standard Resonator 50/50 loss)
       rarity = 5;
       goldIndices.push(i);
 
-      if (bannerMode === "character_limited") {
-        if (guaranteedLimited) {
-          pulledItem = currentChar;
-          isGuaranteedRoll = true;
-          guaranteedLimited = false;
-          is5050Win = null; // Guaranteed pull from prior loss
-        } else if (secureRandom() < 0.5) {
-          pulledItem = currentChar;
-          isGuaranteedRoll = false;
-          guaranteedLimited = false;
-          is5050Win = true; // Won 50/50
-        } else {
-          // Lost 50/50 to standard
-          const stdId = getRandomItem(STANDARD_5_STAR_RESONATORS);
-          pulledItem = RESONATORS[stdId] || RESONATORS["verina"];
-          isGuaranteedRoll = false;
-          guaranteedLimited = true;
-          is5050Win = false; // Lost 50/50
-        }
-      } else if (bannerMode === "weapon_limited") {
-        const weaponId = currentPreset?.signatureWeaponId || "blazing_brilliance";
-        pulledItem = WEAPONS[weaponId] || WEAPONS["verdant_summit"];
+      if (guaranteedLimited) {
+        pulledItem = currentChar;
         isGuaranteedRoll = true;
-        is5050Win = null;
+        guaranteedLimited = false;
+        is5050Win = null; // Guaranteed pull from prior loss
+      } else if (secureRandom() < 0.5) {
+        pulledItem = currentChar;
+        isGuaranteedRoll = false;
+        guaranteedLimited = false;
+        is5050Win = true; // Won 50/50
       } else {
+        // Lost 50/50 to standard resonator
         const stdId = getRandomItem(STANDARD_5_STAR_RESONATORS);
         pulledItem = RESONATORS[stdId] || RESONATORS["verina"];
-        is5050Win = null;
+        isGuaranteedRoll = false;
+        guaranteedLimited = true;
+        is5050Win = false; // Lost 50/50
       }
 
       const pullAtPity = pity5;
@@ -335,14 +350,13 @@ export function executeClientConvene(
         pityAtPull: pullAtPity,
         isGuaranteed: isGuaranteedRoll,
         isNew,
-        afterglowCoralAwarded: isNew ? 0 : 15,
-        oscillatedCoralAwarded: 0,
+        isFeaturedWon: pulledItem.id === currentChar.id,
       });
 
       // Add to history
       state.history.unshift({
         id: `h_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 7)}`,
-        banner_type: bannerMode,
+        banner_type: "character_limited",
         banner_id: selectedCharId,
         item_id: pulledItem.id,
         item_name: pulledItem.name,
@@ -358,39 +372,38 @@ export function executeClientConvene(
       const roll4 = secureRandom();
 
       if (roll4 < p4Rate) {
-        // 4-STAR
+        // 4-STAR (Featured 4★ Resonator or Standard 4★ / Sleepy Cat placeholder)
         rarity = 4;
         purpleIndices.push(i);
 
-        if (bannerMode === "character_limited") {
-          if (guaranteedFeatured4 || secureRandom() < 0.5) {
-            const featList = currentPreset.featured4StarIds && currentPreset.featured4StarIds.length > 0
-              ? currentPreset.featured4StarIds
-              : ["danjin", "chixia", "sanhua"];
-            const chosen = getRandomItem(featList);
-            pulledItem = RESONATORS[chosen] || RESONATORS["danjin"];
-            isGuaranteedRoll = guaranteedFeatured4;
-            guaranteedFeatured4 = false;
-          } else {
-            const isWeapon = secureRandom() < 0.5;
-            if (isWeapon) {
-              const wId = getRandomItem(ALL_4_STAR_WEAPONS) || "commando_of_conviction";
-              pulledItem = WEAPONS[wId];
-            } else {
-              const rId = getRandomItem(ALL_4_STAR_RESONATORS) || "danjin";
-              pulledItem = RESONATORS[rId];
-            }
-            guaranteedFeatured4 = true;
-          }
+        if (guaranteedFeatured4 || secureRandom() < 0.5) {
+          const featList = currentPreset.featured4StarIds && currentPreset.featured4StarIds.length > 0
+            ? currentPreset.featured4StarIds
+            : ["danjin", "chixia", "sanhua"];
+          const chosen = getRandomItem(featList);
+          pulledItem = RESONATORS[chosen] || RESONATORS["danjin"];
+          isGuaranteedRoll = guaranteedFeatured4;
+          guaranteedFeatured4 = false;
         } else {
-          const isWeapon = secureRandom() < 0.5;
-          if (isWeapon) {
-            const wId = getRandomItem(ALL_4_STAR_WEAPONS) || "commando_of_conviction";
-            pulledItem = WEAPONS[wId];
+          const isCat = secureRandom() < 0.5;
+          if (isCat) {
+            pulledItem = WEAPONS["sleepy_cat"] || {
+              id: "sleepy_cat",
+              name: "Sleepy Cat",
+              title: "Sleepy Cat",
+              rarity: 4,
+              type: "weapon",
+              weaponType: "Sword",
+              portraitUrl: "/assets/4starcat.png",
+              splashUrl: "/assets/4starcat.png",
+              stillUrl: "/assets/4starcat.png",
+              drawUrl: "/assets/4starcat.png",
+            };
           } else {
             const rId = getRandomItem(ALL_4_STAR_RESONATORS) || "danjin";
             pulledItem = RESONATORS[rId];
           }
+          guaranteedFeatured4 = true;
         }
 
         const pullAtPity = pity4;
@@ -406,13 +419,12 @@ export function executeClientConvene(
           pityAtPull: pullAtPity,
           isGuaranteed: isGuaranteedRoll,
           isNew,
-          afterglowCoralAwarded: isNew ? 0 : 3,
-          oscillatedCoralAwarded: 0,
+          isFeaturedWon: false,
         });
 
         state.history.unshift({
           id: `h_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 7)}`,
-          banner_type: bannerMode,
+          banner_type: "character_limited",
           banner_id: selectedCharId,
           item_id: pulledItem.id,
           item_name: pulledItem.name,
@@ -423,16 +435,19 @@ export function executeClientConvene(
           created_at: nowStr,
         });
       } else {
-        // 3-STAR WEAPON
+        // 3-STAR (Hapi Cat placeholder)
         rarity = 3;
-        const wId = getRandomItem(ALL_3_STAR_WEAPONS) || "sword_of_night";
-        pulledItem = WEAPONS[wId] || {
-          id: "sword_of_night",
+        pulledItem = WEAPONS["hapi_cat"] || {
+          id: "hapi_cat",
           name: "Hapi Cat",
           title: "Hapi Cat",
           rarity: 3,
           type: "weapon",
           weaponType: "Sword",
+          portraitUrl: "/assets/3starcat.png",
+          splashUrl: "/assets/3starcat.png",
+          stillUrl: "/assets/3starcat.png",
+          drawUrl: "/assets/3starcat.png",
         };
 
         const currentInv = state.inventory[pulledItem.id] || 0;
@@ -445,14 +460,13 @@ export function executeClientConvene(
           pityAtPull: pity4,
           isGuaranteed: false,
           isNew,
-          afterglowCoralAwarded: 0,
-          oscillatedCoralAwarded: 15,
+          isFeaturedWon: false,
         });
 
         // Record 3-star pull to history so ALL pulls are logged
         state.history.unshift({
           id: `h_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 7)}`,
-          banner_type: bannerMode,
+          banner_type: "character_limited",
           banner_id: selectedCharId,
           item_id: pulledItem.id,
           item_name: pulledItem.name,
@@ -472,10 +486,15 @@ export function executeClientConvene(
   pityBucket.pity4Star = pity4;
   pityBucket.guaranteedLimited = guaranteedLimited;
   pityBucket.guaranteedFeatured4 = guaranteedFeatured4;
-  state.pity[pityKey] = pityBucket;
+  state.pity.character_limited = pityBucket;
+
+  // Prevent unbounded growth of localStorage by capping pull history to the most recent 500 entries
+  if (state.history.length > 500) {
+    state.history = state.history.slice(0, 500);
+  }
 
   // Persist updated state
-  saveClientState(state);
+  saveClientState(state, userId, isSandbox);
 
   const highestRarity: ItemRarity = goldIndices.length > 0 ? 5 : purpleIndices.length > 0 ? 4 : 3;
 
@@ -489,28 +508,18 @@ export function executeClientConvene(
     guaranteedLimited,
     userState: {
       astrite: state.astrite,
-      radiantTide: state.radiantTide,
-      forgingTide: state.forgingTide,
-      lustrousTide: state.lustrousTide,
-      afterglowCoral: state.afterglowCoral,
-      oscillatedCoral: state.oscillatedCoral,
       isSandbox: state.isSandbox,
     },
   };
 }
 
 // Client helper functions for UI
-export function getClientStateData() {
-  const s = loadClientState();
+export function getClientStateData(userId?: string | null, isSandbox?: boolean) {
+  const s = loadClientState(userId, isSandbox);
   return {
     user: {
-      id: "client_user",
+      id: s.isSandbox ? "sandbox_user" : (userId || activeUserId || "client_user"),
       astrite: s.astrite,
-      radiantTide: s.radiantTide,
-      forgingTide: s.forgingTide,
-      lustrousTide: s.lustrousTide,
-      afterglowCoral: s.afterglowCoral,
-      oscillatedCoral: s.oscillatedCoral,
       isSandbox: s.isSandbox,
       selectedLimitedChar: s.selectedLimitedChar,
     },
@@ -518,42 +527,105 @@ export function getClientStateData() {
   };
 }
 
-export function updateClientCurrency(currency: string, newAmount: number) {
-  const s = loadClientState();
-  if (currency === "astrite") {
-    s.astrite = newAmount;
+export function applyCloudProfileToClientState(
+  profile: {
+    astrite: number;
+    pity_5star: number;
+    pity_4star: number;
+    guaranteed_limited: boolean;
+    guaranteed_featured_4?: boolean;
+    selected_char_id?: string;
+    total_pulls?: number;
+  },
+  userId?: string
+): ClientSimState {
+  const targetUserId = userId || activeUserId;
+  const s = loadClientState(targetUserId, false);
+
+  // Cloud database is the absolute source of truth for pity and balances
+  s.astrite = Math.max(0, profile.astrite);
+  s.pity.character_limited.pity5Star = Math.min(80, Math.max(0, profile.pity_5star ?? 0));
+  s.pity.character_limited.pity4Star = Math.min(10, Math.max(0, profile.pity_4star ?? 0));
+  s.pity.character_limited.guaranteedLimited = Boolean(profile.guaranteed_limited);
+  if (profile.guaranteed_featured_4 !== undefined) {
+    s.pity.character_limited.guaranteedFeatured4 = Boolean(profile.guaranteed_featured_4);
   }
-  saveClientState(s);
+
+  if (profile.selected_char_id) {
+    const activeHourly = getHourlyRotatedCharacters();
+    s.selectedLimitedChar = activeHourly.includes(profile.selected_char_id)
+      ? profile.selected_char_id
+      : activeHourly[0] || profile.selected_char_id;
+  }
+  saveClientState(s, targetUserId, false);
   return s;
 }
 
-export function grantClientCurrency(addAstrite: number) {
-  const s = loadClientState();
-  s.astrite = Math.max(0, (s.astrite || 0) + addAstrite);
-  saveClientState(s);
+export function updateClientCurrency(
+  currency: string,
+  newAmount: number,
+  userId?: string | null,
+  isSandbox?: boolean
+) {
+  const s = loadClientState(userId, isSandbox);
+  if (currency === "astrite") {
+    s.astrite = Math.min(MAX_ASTRITE_LIMIT, Math.max(0, newAmount));
+  }
+  saveClientState(s, userId, isSandbox);
+  return s;
+}
+
+export function grantClientCurrency(
+  addAstrite: number,
+  userId?: string | null,
+  isSandbox?: boolean
+) {
+  const s = loadClientState(userId, isSandbox);
+  s.astrite = Math.min(MAX_ASTRITE_LIMIT, Math.max(0, (s.astrite || 0) + addAstrite));
+  saveClientState(s, userId, isSandbox);
   return s;
 }
 
 export function toggleClientSandbox(enabled: boolean) {
-  const s = loadClientState();
-  s.isSandbox = enabled;
-  saveClientState(s);
-  return s;
+  if (enabled) {
+    setClientSimContext(null, true);
+    const s = loadClientState(null, true);
+    s.isSandbox = true;
+    saveClientState(s, null, true);
+    return s;
+  } else {
+    setClientSimContext(activeUserId, false);
+    const s = loadClientState(activeUserId, false);
+    s.isSandbox = false;
+    saveClientState(s, activeUserId, false);
+    return s;
+  }
 }
 
-export function setClientSelectedChar(charId: string) {
-  const s = loadClientState();
+export function setClientSelectedChar(
+  charId: string,
+  userId?: string | null,
+  isSandbox?: boolean
+) {
+  const s = loadClientState(userId, isSandbox);
   s.selectedLimitedChar = charId;
-  saveClientState(s);
+  saveClientState(s, userId, isSandbox);
 }
 
-export function resetClientSimState() {
-  saveClientState(DEFAULT_STATE);
-  return DEFAULT_STATE;
+export function resetClientSimState(userId?: string | null, isSandbox?: boolean) {
+  const sandbox = isSandbox !== undefined ? isSandbox : activeIsSandbox;
+  const def = sandbox ? DEFAULT_SANDBOX_STATE : DEFAULT_STATE;
+  saveClientState(def, userId, sandbox);
+  return def;
 }
 
-export function getClientHistory(page: number = 1, limit: number = 5) {
-  const s = loadClientState();
+export function getClientHistory(
+  page: number = 1,
+  limit: number = 5,
+  userId?: string | null,
+  isSandbox?: boolean
+) {
+  const s = loadClientState(userId, isSandbox);
   const total = s.history.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const validPage = Math.min(Math.max(1, page), totalPages);
@@ -562,8 +634,8 @@ export function getClientHistory(page: number = 1, limit: number = 5) {
   return { logs, total, totalPages, page: validPage };
 }
 
-export function get5StarHistory(): ClientHistoryItem[] {
-  const s = loadClientState();
+export function get5StarHistory(userId?: string | null, isSandbox?: boolean): ClientHistoryItem[] {
+  const s = loadClientState(userId, isSandbox);
   return s.history.filter((item) => item.rarity === 5);
 }
 
@@ -577,8 +649,8 @@ export interface WinRateStats {
   avgPity5Star: number;
 }
 
-export function get5050Stats(): WinRateStats {
-  const s = loadClientState();
+export function get5050Stats(userId?: string | null, isSandbox?: boolean): WinRateStats {
+  const s = loadClientState(userId, isSandbox);
   const fiveStars = s.history.filter((item) => item.rarity === 5);
   let total5050 = 0;
   let wins5050 = 0;
@@ -620,4 +692,10 @@ export function get5050Stats(): WinRateStats {
     total5Stars: fiveStars.length,
     avgPity5Star: avgPity,
   };
+}
+
+export function getTotalPullsCount(userId?: string | null, isSandbox?: boolean): number {
+  if (typeof window === "undefined") return 0;
+  const s = loadClientState(userId, isSandbox);
+  return s.history ? s.history.length : 0;
 }

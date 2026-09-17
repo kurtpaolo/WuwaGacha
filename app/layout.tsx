@@ -1,5 +1,13 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   title: "For Gacha Addicts",
@@ -37,7 +45,9 @@ export default function RootLayout({
           type="video/mp4"
         />
       </head>
-      <body className="antialiased bg-[#07090e] overflow-hidden">{children}</body>
+      <body className="antialiased bg-[#07090e] overflow-hidden select-none w-full h-[100dvh] min-h-[100dvh]">
+        {children}
+      </body>
     </html>
   );
 }

@@ -10,13 +10,15 @@ export const DEFAULT_R2_BASE_URL = "https://pub-abcdd91baa4c4547bd65f9408d7b541e
 
 export function getR2BaseUrl(): string {
   const envUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
-  if (envUrl !== undefined && (envUrl.trim() === "local" || envUrl.trim() === "")) {
+  if (
+    !envUrl ||
+    envUrl.trim() === "local" ||
+    envUrl.trim() === "" ||
+    envUrl.includes("abcdd91baa4c4547bd65f9408d7b541e")
+  ) {
     return "";
   }
-  if (envUrl && envUrl.trim() !== "") {
-    return envUrl.trim().replace(/\/+$/, "");
-  }
-  return DEFAULT_R2_BASE_URL.replace(/\/+$/, "");
+  return envUrl.trim().replace(/\/+$/, "");
 }
 
 /**

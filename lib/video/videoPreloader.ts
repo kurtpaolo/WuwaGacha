@@ -18,8 +18,13 @@ export const SUMMONING_VIDEOS = [
 
 const CACHE_NAME = "wuwa-video-cache-v1";
 
-// Cache of object URLs created from fetched video Blobs
+// Cache of object URLs created from fetched video Blobs (capped at 4 to prevent RAM exhaustion)
+const MAX_BLOB_CACHE_ITEMS = 4;
 const blobUrlCache = new Map<string, string>();
+// In-flight fetch promises to prevent duplicate simultaneous network requests for the same URL
+const inFlightFetches = new Map<string, Promise<string>>();
+// Track URLs for which preloading/caching has already been initiated to prevent redundant requests
+const requestedVideoUrls = new Set<string>();
 // Retained HTMLVideoElements so browser media buffer stays active and GC does not abort buffering
 const preloadedElements = new Map<string, HTMLVideoElement>();
 // In-memory cutscenes manifest cache pre-populated with Cloudflare R2 endpoints
@@ -27,16 +32,48 @@ let cutscenesManifest: Record<string, string> = buildCutscenesManifest();
 
 let isPreloadingStarted = false;
 
+function storeBlobUrl(url: string, objectUrl: string): void {
+  if (blobUrlCache.has(url)) {
+    const existing = blobUrlCache.get(url);
+    if (existing && existing !== objectUrl) {
+      try { URL.revokeObjectURL(existing); } catch {}
+    }
+  }
+
+  // Evict oldest entry when capacity is reached to prevent unmanaged RAM growth
+  if (blobUrlCache.size >= MAX_BLOB_CACHE_ITEMS) {
+    const oldestKey = blobUrlCache.keys().next().value;
+    if (oldestKey) {
+      const oldObjectUrl = blobUrlCache.get(oldestKey);
+      if (oldObjectUrl) {
+        try { URL.revokeObjectURL(oldObjectUrl); } catch {}
+      }
+      blobUrlCache.delete(oldestKey);
+
+      const el = preloadedElements.get(oldestKey);
+      if (el) {
+        el.src = "";
+        el.load();
+        preloadedElements.delete(oldestKey);
+      }
+    }
+  }
+
+  blobUrlCache.set(url, objectUrl);
+}
+
 /**
  * Returns a cached Blob URL for instant zero-latency playback if ready,
  * otherwise returns the original streaming URL.
  */
 export function getPreloadedVideoUrl(originalUrl: string): string {
+  if (!originalUrl) return "";
   if (blobUrlCache.has(originalUrl)) {
     return blobUrlCache.get(originalUrl)!;
   }
-  // If not yet in memory blob cache, ensure background caching is initiated
-  if (typeof window !== "undefined" && originalUrl) {
+  // If not yet in memory blob cache, ensure background caching is initiated at most once
+  if (typeof window !== "undefined" && !requestedVideoUrls.has(originalUrl)) {
+    requestedVideoUrls.add(originalUrl);
     cacheVideoFile(originalUrl).catch(() => {});
   }
   return originalUrl;
@@ -45,6 +82,7 @@ export function getPreloadedVideoUrl(originalUrl: string): string {
 /**
  * Caches a video file using browser CacheStorage and memory Blob URL.
  * Checks CacheStorage first to avoid re-downloading videos if previously cached.
+ * Deduplicates in-flight fetches so multiple callers await the same request.
  */
 export async function cacheVideoFile(url: string): Promise<string> {
   if (typeof window === "undefined" || !url) return url;
@@ -53,54 +91,70 @@ export async function cacheVideoFile(url: string): Promise<string> {
     return blobUrlCache.get(url)!;
   }
 
-  // 1. Check persistent CacheStorage
-  if ("caches" in window) {
-    try {
-      const cache = await caches.open(CACHE_NAME);
-      const matched = await cache.match(url);
-      if (matched) {
-        const blob = await matched.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        blobUrlCache.set(url, objectUrl);
-        return objectUrl;
-      }
+  if (inFlightFetches.has(url)) {
+    return inFlightFetches.get(url)!;
+  }
 
-      // 2. Fetch and store in CacheStorage if not present
-      const response = await fetch(url);
-      if (response.ok) {
-        await cache.put(url, response.clone());
-        const blob = await response.blob();
+  const fetchPromise = (async () => {
+    // 1. Check persistent CacheStorage
+    if ("caches" in window) {
+      try {
+        const cache = await caches.open(CACHE_NAME);
+        const matched = await cache.match(url);
+        if (matched) {
+          const blob = await matched.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          storeBlobUrl(url, objectUrl);
+          return objectUrl;
+        }
+
+        // 2. Fetch and store in CacheStorage if not present
+        const response = await fetch(url);
+        if (response.ok) {
+          await cache.put(url, response.clone());
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          storeBlobUrl(url, objectUrl);
+          return objectUrl;
+        }
+      } catch (err) {
+        console.debug("CacheStorage failed/unavailable, falling back:", err);
+      }
+    }
+
+    // 3. Fallback standard fetch if CacheStorage is unavailable
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const blob = await res.blob();
         const objectUrl = URL.createObjectURL(blob);
-        blobUrlCache.set(url, objectUrl);
+        storeBlobUrl(url, objectUrl);
         return objectUrl;
       }
     } catch (err) {
-      console.debug("CacheStorage failed/unavailable, falling back:", err);
+      console.debug("Fallback fetch failed for video:", err);
     }
-  }
 
-  // 3. Fallback standard fetch if CacheStorage is unavailable
+    return url;
+  })();
+
+  inFlightFetches.set(url, fetchPromise);
   try {
-    const res = await fetch(url);
-    if (res.ok) {
-      const blob = await res.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      blobUrlCache.set(url, objectUrl);
-      return objectUrl;
-    }
-  } catch (err) {
-    console.debug("Fallback fetch failed for video:", err);
+    return await fetchPromise;
+  } finally {
+    inFlightFetches.delete(url);
   }
-
-  return url;
 }
 
 /**
  * Preloads a single video file using both HTML5 Video element buffering
  * and persistent CacheStorage + Blob caching.
+ * Deduplicates requests so each unique URL is requested at most once.
  */
 export function preloadSingleVideo(url: string) {
   if (typeof window === "undefined" || !url) return;
+  if (requestedVideoUrls.has(url)) return;
+  requestedVideoUrls.add(url);
 
   // 1. Buffer via HTMLVideoElement (held in module-level Map so GC cannot abort it)
   if (!preloadedElements.has(url)) {

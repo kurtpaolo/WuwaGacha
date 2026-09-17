@@ -15,9 +15,13 @@ import {
   updateClientCurrency,
   toggleClientSandbox,
   setClientSelectedChar,
-  resetClientSimState,
   get5050Stats,
   WinRateStats,
+  grantClientCurrency,
+  applyCloudProfileToClientState,
+  getTotalPullsCount,
+  setClientSimContext,
+  resetClientSimState,
 } from "@/lib/gacha/clientSim";
 import {
   AstriteIcon,
@@ -29,7 +33,31 @@ import { CharacterRailItem } from "@/components/gacha/CharacterRailItem";
 import { HistoryModal } from "@/components/modals/HistoryModal";
 import { DetailsModal } from "@/components/modals/DetailsModal";
 import { DevSettingsModal } from "@/components/modals/DevSettingsModal";
-import { ReplenishModal } from "@/components/modals/ReplenishModal";
+import { LoginGateway } from "@/components/auth/LoginGateway";
+import { InventoryModal } from "@/components/modals/InventoryModal";
+import { ProfileModal } from "@/components/modals/ProfileModal";
+import { PlayerProfileModal } from "@/components/modals/PlayerProfileModal";
+import { UpdateLogModal } from "@/components/modals/UpdateLogModal";
+import { HowToPlayModal } from "@/components/modals/HowToPlayModal";
+import {
+  getHourlyRotatedCharacters,
+  getTimeUntilNextRotation,
+  getCurrentGmt8HourIndex,
+} from "@/lib/gacha/bannerRotation";
+import {
+  getTacetFieldStatus,
+  claimTacetField,
+  syncTacetCloudTimestamp,
+  TacetFieldStatus,
+  getTacetBatteryHours,
+} from "@/lib/gacha/tacetField";
+import { processLoginStreak, getStoredLoginStreak } from "@/lib/gacha/loginStreak";
+import { getAuthUser, signOut, getStoredAvatarId, PlayerPublicProfile, updateShowcaseResonatorIds } from "@/lib/supabase/auth";
+import { fetchUserProfile, updateUserProfile, flushPendingProfileSync, UserProfile } from "@/lib/supabase/profile";
+import { getPortraitFileName } from "@/lib/data/portraits";
+import { getStoredUserTitle } from "@/lib/data/titles";
+import { fetchUserInventory, saveFeaturedResonatorPull, deleteUserInventoryItems, clearAllUserInventory, UserInventoryItem } from "@/lib/supabase/inventory";
+import { User as SupabaseUser } from "@supabase/supabase-js";
 import {
   Sparkles,
   AlertCircle,
@@ -38,11 +66,16 @@ import {
   History as HistoryIcon,
   HelpCircle,
   Plus,
-  Sword,
-  Globe,
+  Briefcase,
+  LogOut,
+  User,
+  ChevronDown,
+  Shield,
+  Infinity as InfinityIcon,
+  Crown,
 } from "lucide-react";
 
-export type BannerMode = "character_limited" | "weapon_limited" | "character_standard";
+export type BannerMode = "character_limited";
 
 const DEFAULT_WIN_RATE: WinRateStats = {
   total5050: 0,
@@ -56,8 +89,14 @@ const DEFAULT_WIN_RATE: WinRateStats = {
 
 export const ConveneStage: React.FC = () => {
   // Active states
-  const [bannerMode, setBannerMode] = useState<BannerMode>("character_limited");
-  const [selectedCharId, setSelectedCharId] = useState<string>("shorekeeper");
+  const bannerMode: BannerMode = "character_limited";
+  const [activeHourlyCharacters, setActiveHourlyCharacters] = useState<string[]>(() =>
+    getHourlyRotatedCharacters()
+  );
+  const [selectedCharId, setSelectedCharId] = useState<string>(() => {
+    const initial = getHourlyRotatedCharacters();
+    return initial[0] || "shorekeeper";
+  });
   const [userState, setUserState] = useState<any>(null);
   const [pityMap, setPityMap] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState<boolean>(true);
@@ -69,13 +108,17 @@ export const ConveneStage: React.FC = () => {
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState<boolean>(false);
   const [isDevOpen, setIsDevOpen] = useState<boolean>(false);
-  const [isReplenishOpen, setIsReplenishOpen] = useState<boolean>(false);
+  const [isUpdateLogOpen, setIsUpdateLogOpen] = useState<boolean>(false);
+  const [isHowToPlayOpen, setIsHowToPlayOpen] = useState<boolean>(false);
   const [winRateStats, setWinRateStats] = useState<WinRateStats>(DEFAULT_WIN_RATE);
-  const [showOrientationScreen, setShowOrientationScreen] = useState<boolean>(true);
+  const [isPortrait, setIsPortrait] = useState<boolean>(false);
+  const [showOrientationScreen, setShowOrientationScreen] = useState<boolean>(false);
   const [isSwitchingBanner, setIsSwitchingBanner] = useState<boolean>(false);
   const [switchingCharName, setSwitchingCharName] = useState<string>("");
   const [switchingBannerTitle, setSwitchingBannerTitle] = useState<string>("");
   const switchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isPullingRef = useRef<boolean>(false);
+  const pendingCashBackRef = useRef<number>(0);
   const [comingSoonNotice, setComingSoonNotice] = useState<boolean>(false);
   const [showInsufficientModal, setShowInsufficientModal] = useState<boolean>(false);
   const [insufficientAstriteData, setInsufficientAstriteData] = useState<{
@@ -83,32 +126,456 @@ export const ConveneStage: React.FC = () => {
     current: number;
   }>({ needed: 160, current: 0 });
 
+  // Sandbox Mode (Guest Test Mode)
+  const [isSandboxGuest, setIsSandboxGuest] = useState<boolean>(false);
+
+  // Hourly Banner Rotation & Tacet Field Idle Accumulator (GMT+8)
+  const [rotationTimerText, setRotationTimerText] = useState<string>(
+    () => getTimeUntilNextRotation().formattedText
+  );
+  const [rotationMinutes, setRotationMinutes] = useState<number>(
+    () => getTimeUntilNextRotation().minutes
+  );
+  const [tacetStatus, setTacetStatus] = useState<TacetFieldStatus>(() =>
+    getTacetFieldStatus()
+  );
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const lastHourIndexRef = useRef<number>(getCurrentGmt8HourIndex());
+
+  // Cloud Auth & Inventory State (Supabase)
+  const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [inventoryList, setInventoryList] = useState<UserInventoryItem[]>([]);
+  const [isInventoryOpen, setIsInventoryOpen] = useState<boolean>(false);
+  const [isInventoryLoading, setIsInventoryLoading] = useState<boolean>(false);
+  const [authChecking, setAuthChecking] = useState<boolean>(true);
+  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
+  const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState<boolean>(false);
+  const [isPlayerProfileOpen, setIsPlayerProfileOpen] = useState<boolean>(false);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState<boolean>(false);
+  const [isAccountNavigatedFromProfile, setIsAccountNavigatedFromProfile] = useState<boolean>(false);
+  const [isInventoryNavigatedFromProfile, setIsInventoryNavigatedFromProfile] = useState<boolean>(false);
+  const [visitedPlayerProfile, setVisitedPlayerProfile] = useState<PlayerPublicProfile | null>(null);
+  const [inspectedInventory, setInspectedInventory] = useState<{
+    items: UserInventoryItem[];
+    username: string;
+    isReadOnly: boolean;
+  } | null>(null);
+  const [currentAvatarId, setCurrentAvatarId] = useState<string>("shorekeeper");
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close profile dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        profileDropdownRef.current &&
+        !profileDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsProfileDropdownOpen(false);
+      }
+    };
+
+    if (isProfileDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isProfileDropdownOpen]);
+
   // Fetch initial user, pity and winrate state from client-side simulator
   const fetchState = useCallback(() => {
     try {
-      const data = getClientStateData();
+      const isSandbox = isSandboxGuest;
+      const targetUserId = isSandbox ? null : currentUser?.id;
+      const data = getClientStateData(targetUserId, isSandbox);
       if (data.user) {
         setUserState(data.user);
         if (data.user.selectedLimitedChar) {
-          setSelectedCharId(data.user.selectedLimitedChar);
+          const char = data.user.selectedLimitedChar;
+          const activeRotation = getHourlyRotatedCharacters();
+          if (isSandbox || activeRotation.includes(char)) {
+            setSelectedCharId(char);
+          } else if (activeRotation[0]) {
+            setSelectedCharId(activeRotation[0]);
+            setClientSelectedChar(activeRotation[0], targetUserId, isSandbox);
+          }
         }
       }
       if (data.pity) {
         setPityMap(data.pity as any);
       }
-      setWinRateStats(get5050Stats());
+      setWinRateStats(get5050Stats(targetUserId, isSandbox));
     } catch (e) {
       console.error("Failed to load client state:", e);
     } finally {
       setLoading(false);
     }
+  }, [isSandboxGuest, currentUser?.id]);
+
+  // Live hardware & viewport orientation detection (Portrait vs Landscape)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const checkIsPortrait = () => {
+      if (window.screen?.orientation?.type) {
+        return window.screen.orientation.type.startsWith("portrait");
+      }
+      if (window.matchMedia) {
+        return window.matchMedia("(orientation: portrait)").matches;
+      }
+      return window.innerHeight > window.innerWidth;
+    };
+
+    const initial = checkIsPortrait();
+    setIsPortrait(initial);
+
+    // Only prompt landscape mode on initial load if device is actually in portrait mode
+    if (initial) {
+      setShowOrientationScreen(true);
+    }
+
+    const handleOrientationChange = () => {
+      const port = checkIsPortrait();
+      setIsPortrait(port);
+      // Auto-dismiss orientation warning screen if player turns device to landscape!
+      if (!port) {
+        setShowOrientationScreen(false);
+      }
+    };
+
+    const mql = window.matchMedia ? window.matchMedia("(orientation: portrait)") : null;
+    mql?.addEventListener?.("change", handleOrientationChange);
+    window.screen?.orientation?.addEventListener?.("change", handleOrientationChange);
+    window.addEventListener("resize", handleOrientationChange);
+    window.addEventListener("orientationchange", handleOrientationChange);
+
+    return () => {
+      mql?.removeEventListener?.("change", handleOrientationChange);
+      window.screen?.orientation?.removeEventListener?.("change", handleOrientationChange);
+      window.removeEventListener("resize", handleOrientationChange);
+      window.removeEventListener("orientationchange", handleOrientationChange);
+    };
   }, []);
 
   useEffect(() => {
     setMounted(true);
-    fetchState();
     soundEngine.startBGM();
+
+    getAuthUser()
+      .then(async (user) => {
+        if (user) {
+          setCurrentUser(user);
+          setClientSimContext(user.id, false);
+          flushPendingProfileSync(user.id).catch(() => {});
+          const prof = await fetchUserProfile(
+            user.id,
+            user.user_metadata?.username || user.email?.split("@")[0] || "Player"
+          );
+          setUserProfile(prof);
+          const avatar = user.user_metadata?.avatar_id || getStoredAvatarId(user.id);
+          setCurrentAvatarId(avatar);
+          if (prof) {
+            applyCloudProfileToClientState(prof, user.id);
+            if (prof.last_tacet_claim) {
+              syncTacetCloudTimestamp(user.id, prof.last_tacet_claim);
+            }
+            const activeRotation = getHourlyRotatedCharacters();
+            const validChar = activeRotation.includes(prof.selected_char_id)
+              ? prof.selected_char_id
+              : activeRotation[0] || "shorekeeper";
+            setSelectedCharId(validChar);
+            if (prof.selected_char_id !== validChar) {
+              updateUserProfile(user.id, { selected_char_id: validChar }).catch(() => {});
+            }
+
+            // Process Daily Login Streak (00:00 GMT+8 reset)
+            const streakData = processLoginStreak(
+              user.id,
+              prof.login_streak,
+              prof.max_login_streak,
+              prof.last_login_date
+            );
+            if (streakData.isNewDay) {
+              prof.login_streak = streakData.streak;
+              prof.max_login_streak = streakData.maxStreak;
+              prof.last_login_date = streakData.lastLoginDate;
+              updateUserProfile(user.id, {
+                login_streak: streakData.streak,
+                max_login_streak: streakData.maxStreak,
+                last_login_date: streakData.lastLoginDate,
+              }).catch(() => {});
+              setToastMessage(`🔥 Day ${streakData.streak} Login Streak! Check-in recorded.`);
+              setTimeout(() => setToastMessage(null), 5000);
+            }
+          }
+          setTacetStatus(getTacetFieldStatus(user.id, false, Date.now(), prof?.is_vip, prof?.max_login_streak));
+          fetchState();
+          const inv = await fetchUserInventory(user.id);
+          setInventoryList(inv);
+        } else {
+          setClientSimContext(null, false);
+          setCurrentUser(null);
+          fetchState();
+        }
+        setAuthChecking(false);
+      })
+      .catch((e) => {
+        console.error("Auth check failed:", e);
+        setClientSimContext(null, false);
+        setCurrentUser(null);
+        setAuthChecking(false);
+        fetchState();
+      });
+
+    const handleOnline = () => {
+      getAuthUser().then((u) => {
+        if (u) flushPendingProfileSync(u.id).catch(() => {});
+      });
+    };
+    window.addEventListener("online", handleOnline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+    };
   }, [fetchState]);
+
+  // In Sandbox (Guest) mode, all banners are open! Otherwise, restricted to the 3 hourly featured resonators.
+  const displayedCharacters = useMemo(() => {
+    if (isSandboxGuest) {
+      return LIMITED_CHARACTERS_LIST;
+    }
+    return activeHourlyCharacters;
+  }, [isSandboxGuest, activeHourlyCharacters]);
+
+  const handleExitSandbox = useCallback(() => {
+    soundEngine.playClick();
+    setIsSandboxGuest(false);
+    setClientSimContext(null, false);
+    toggleClientSandbox(false);
+    setUserState(null);
+    setPityMap({});
+    setWinRateStats(DEFAULT_WIN_RATE);
+    const activeRotation = getHourlyRotatedCharacters();
+    const defaultChar = activeRotation[0] || "shorekeeper";
+    setSelectedCharId(defaultChar);
+    setClientSelectedChar(defaultChar, null, false);
+    const data = getClientStateData(null, false);
+    if (data.user) setUserState(data.user);
+    if (data.pity) setPityMap(data.pity as any);
+    setWinRateStats(get5050Stats(null, false));
+  }, []);
+
+  // Live ticker for hourly rotation countdown & Free Astrite accumulator
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const { minutes, formattedText } = getTimeUntilNextRotation();
+      setRotationTimerText(formattedText);
+      setRotationMinutes(minutes);
+
+      // Check for hourly rotation switch (only in normal mode; banners don't reset in sandbox)
+      const currentHour = getCurrentGmt8HourIndex();
+      if (!isSandboxGuest && currentHour !== lastHourIndexRef.current) {
+        lastHourIndexRef.current = currentHour;
+        const newRotation = getHourlyRotatedCharacters();
+        setActiveHourlyCharacters(newRotation);
+        if (!newRotation.includes(selectedCharId)) {
+          setSelectedCharId(newRotation[0]);
+          setClientSelectedChar(newRotation[0]);
+        }
+        setToastMessage("Featured Resonators have rotated for this hour!");
+        setTimeout(() => setToastMessage(null), 6000);
+      }
+
+      setTacetStatus(
+        getTacetFieldStatus(
+          currentUser?.id,
+          isSandboxGuest,
+          Date.now(),
+          userProfile?.is_vip,
+          userProfile?.max_login_streak
+        )
+      );
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [selectedCharId, isSandboxGuest, currentUser?.id, userProfile?.is_vip, userProfile?.max_login_streak]);
+
+  // Re-sync Tacet status immediately when user or sandbox status changes
+  useEffect(() => {
+    setTacetStatus(
+      getTacetFieldStatus(
+        currentUser?.id,
+        isSandboxGuest,
+        Date.now(),
+        userProfile?.is_vip,
+        userProfile?.max_login_streak
+      )
+    );
+  }, [currentUser?.id, isSandboxGuest, userProfile?.is_vip, userProfile?.max_login_streak]);
+
+  // Claim accumulated Astrite from Tacet Field
+  const handleClaimTacetField = useCallback(() => {
+    soundEngine.playClick();
+    const claimed = claimTacetField(
+      currentUser?.id,
+      isSandboxGuest,
+      Date.now(),
+      userProfile?.is_vip,
+      userProfile?.max_login_streak
+    );
+    if (claimed > 0) {
+      const updatedState = grantClientCurrency(claimed, currentUser?.id, isSandboxGuest);
+      if (currentUser && !isSandboxGuest) {
+        updateUserProfile(currentUser.id, {
+          astrite: updatedState.astrite,
+          last_tacet_claim: new Date().toISOString(),
+        });
+      }
+      fetchState();
+      setTacetStatus(
+        getTacetFieldStatus(
+          currentUser?.id,
+          isSandboxGuest,
+          Date.now(),
+          userProfile?.is_vip,
+          userProfile?.max_login_streak
+        )
+      );
+      setToastMessage(`+${claimed.toLocaleString()} Free Astrite Claimed!`);
+      setTimeout(() => setToastMessage(null), 4000);
+    }
+  }, [currentUser, isSandboxGuest, userProfile?.is_vip, userProfile?.max_login_streak, fetchState]);
+
+  const handleLoginSuccess = useCallback((user: SupabaseUser, profile: UserProfile | null) => {
+    setIsLoggingIn(true);
+    if (typeof window !== "undefined") {
+      const port =
+        window.screen?.orientation?.type?.startsWith("portrait") ??
+        (window.matchMedia ? window.matchMedia("(orientation: portrait)").matches : window.innerHeight > window.innerWidth);
+      if (port) {
+        setShowOrientationScreen(true);
+      }
+    }
+    setCurrentUser(user);
+    setClientSimContext(user.id, false);
+    setUserProfile(profile);
+    const avatar = user.user_metadata?.avatar_id || getStoredAvatarId(user.id);
+    setCurrentAvatarId(avatar);
+    if (profile) {
+      applyCloudProfileToClientState(profile, user.id);
+      if (profile.last_tacet_claim) {
+        syncTacetCloudTimestamp(user.id, profile.last_tacet_claim);
+      }
+      const activeRotation = getHourlyRotatedCharacters();
+      const validChar = activeRotation.includes(profile.selected_char_id)
+        ? profile.selected_char_id
+        : activeRotation[0] || "shorekeeper";
+      setSelectedCharId(validChar);
+      if (profile.selected_char_id !== validChar) {
+        updateUserProfile(user.id, { selected_char_id: validChar }).catch(() => {});
+      }
+
+      // Process Daily Login Streak (00:00 GMT+8 reset)
+      const streakData = processLoginStreak(
+        user.id,
+        profile.login_streak,
+        profile.max_login_streak,
+        profile.last_login_date
+      );
+      if (streakData.isNewDay) {
+        profile.login_streak = streakData.streak;
+        profile.max_login_streak = streakData.maxStreak;
+        profile.last_login_date = streakData.lastLoginDate;
+        updateUserProfile(user.id, {
+          login_streak: streakData.streak,
+          max_login_streak: streakData.maxStreak,
+          last_login_date: streakData.lastLoginDate,
+        }).catch(() => {});
+        setToastMessage(`🔥 Day ${streakData.streak} Login Streak! Check-in recorded.`);
+        setTimeout(() => setToastMessage(null), 5000);
+      }
+
+      setTacetStatus(getTacetFieldStatus(user.id, false, Date.now(), profile.is_vip, profile.max_login_streak));
+      fetchState();
+    }
+    fetchUserInventory(user.id).then(setInventoryList);
+
+    setTimeout(() => {
+      setIsLoggingIn(false);
+    }, 1200);
+  }, [fetchState]);
+
+  const handleDeleteInventoryItems = useCallback(async (characterIds: string[]) => {
+    if (currentUser) {
+      if (characterIds.length >= inventoryList.length && inventoryList.length > 0) {
+        await clearAllUserInventory(currentUser.id);
+      } else {
+        await deleteUserInventoryItems(currentUser.id, characterIds);
+      }
+      const updated = await fetchUserInventory(currentUser.id);
+      setInventoryList(updated);
+
+      // Purge deleted resonators from showcase in profile state, localStorage, and Supabase
+      const currentShowcase = userProfile?.showcase_ids || [];
+      const lowerDeleted = new Set(characterIds.map((id) => id.toLowerCase()));
+      const updatedShowcase = currentShowcase.filter((id) => !lowerDeleted.has(id.toLowerCase()));
+      setUserProfile((prev) => (prev ? { ...prev, showcase_ids: updatedShowcase } : prev));
+      updateShowcaseResonatorIds(currentUser.id, updatedShowcase).catch(() => {});
+    } else {
+      setInventoryList((prev) => prev.filter((i) => !characterIds.includes(i.character_id)));
+    }
+  }, [currentUser, inventoryList.length, userProfile?.showcase_ids]);
+
+  const handleOpenInventory = useCallback(async () => {
+    soundEngine.playClick();
+    setIsInventoryNavigatedFromProfile(false);
+    setInspectedInventory(null);
+    setIsInventoryOpen(true);
+    setIsInventoryLoading(true);
+    if (currentUser) {
+      try {
+        const fresh = await fetchUserInventory(currentUser.id);
+        setInventoryList(fresh);
+      } catch (err) {
+        console.error("Failed to refresh inventory:", err);
+      }
+    }
+    setTimeout(() => {
+      setIsInventoryLoading(false);
+    }, 650);
+  }, [currentUser]);
+
+  const handleSignOut = useCallback(async () => {
+    soundEngine.playClick();
+    setIsLoggingOut(true);
+    try {
+      await signOut();
+    } catch (err) {
+      console.error("Sign out error:", err);
+    }
+    setClientSimContext(null, false);
+    resetClientSimState(null, false);
+    // Purge any lingering cross-account keys so the next logged in account starts completely isolated
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("wuwa_active_title");
+        localStorage.removeItem("wuwa_active_avatar");
+        localStorage.removeItem("wuwa_convene_client_sim_v1");
+        localStorage.removeItem("wuwa_tacet_field_state_v1");
+      } catch {}
+    }
+    setCurrentUser(null);
+    setUserProfile(null);
+    setUserState(null);
+    setPityMap({});
+    setWinRateStats(DEFAULT_WIN_RATE);
+    setInventoryList([]);
+    setCurrentAvatarId("shorekeeper");
+    setTimeout(() => {
+      setIsLoggingOut(false);
+    }, 600);
+  }, []);
 
   // Preload queue: 3 critical summoning videos FIRST upon entering website, then deferred images
   useEffect(() => {
@@ -118,34 +585,13 @@ export const ConveneStage: React.FC = () => {
     // 2. Preload active limited character art and standard fallbacks
     const activeChar = RESONATORS[selectedCharId];
     if (activeChar) {
-      [activeChar.splashUrl, activeChar.drawUrl, activeChar.stillUrl, activeChar.portraitUrl].forEach((url) => {
+      [activeChar.splashUrl, activeChar.portraitUrl].forEach((url) => {
         if (url) {
           const img = new Image();
           img.src = url;
         }
       });
     }
-    const verinaImg = new Image();
-    verinaImg.src = "/assets/characters/verina_splash.png";
-    const changliImg = new Image();
-    changliImg.src = "/assets/characters/changli_splash.png";
-
-    // 3. Defer secondary resonator images to idle time so video preloading has unobstructed network priority
-    const timer = setTimeout(() => {
-      LIMITED_CHARACTERS_LIST.forEach((charId) => {
-        if (charId === selectedCharId) return;
-        const char = RESONATORS[charId];
-        if (!char) return;
-        [char.splashUrl, char.drawUrl, char.stillUrl, char.portraitUrl].forEach((url) => {
-          if (url) {
-            const img = new Image();
-            img.src = url;
-          }
-        });
-      });
-    }, 2000);
-
-    return () => clearTimeout(timer);
   }, [selectedCharId]);
 
   useEffect(() => {
@@ -156,12 +602,12 @@ export const ConveneStage: React.FC = () => {
 
   // Current banner character & weapon presets (memoized to avoid re-computations on unrelated state updates)
   const currentChar = useMemo(
-    () => RESONATORS[selectedCharId] || RESONATORS["shorekeeper"],
-    [selectedCharId]
+    () => RESONATORS[selectedCharId] || RESONATORS[activeHourlyCharacters[0]] || RESONATORS["shorekeeper"],
+    [selectedCharId, activeHourlyCharacters]
   );
   const currentPreset = useMemo(
-    () => LIMITED_BANNER_PRESETS[selectedCharId] || LIMITED_BANNER_PRESETS["shorekeeper"],
-    [selectedCharId]
+    () => LIMITED_BANNER_PRESETS[selectedCharId] || LIMITED_BANNER_PRESETS[activeHourlyCharacters[0]] || LIMITED_BANNER_PRESETS["shorekeeper"],
+    [selectedCharId, activeHourlyCharacters]
   );
   const currentPity = useMemo(
     () => pityMap[bannerMode] || { pity5Star: 0, pity4Star: 0, guaranteedLimited: false },
@@ -179,7 +625,7 @@ export const ConveneStage: React.FC = () => {
 
   // Handle selecting a limited character from the rail
   const handleSelectCharacter = useCallback((charId: string) => {
-    if (charId === selectedCharId && bannerMode === "character_limited") return;
+    if (charId === selectedCharId) return;
     soundEngine.playClick();
 
     const charName = RESONATORS[charId]?.name || "Resonator";
@@ -189,8 +635,9 @@ export const ConveneStage: React.FC = () => {
     setIsSwitchingBanner(true);
 
     setSelectedCharId(charId);
-    setBannerMode("character_limited");
-    setClientSelectedChar(charId);
+    const isSandbox = isSandboxGuest || Boolean(userState?.isSandbox);
+    const targetUserId = isSandbox ? null : currentUser?.id;
+    setClientSelectedChar(charId, targetUserId, isSandbox);
 
     if (switchTimerRef.current) {
       clearTimeout(switchTimerRef.current);
@@ -198,11 +645,15 @@ export const ConveneStage: React.FC = () => {
     switchTimerRef.current = setTimeout(() => {
       setIsSwitchingBanner(false);
     }, 1500);
-  }, [selectedCharId, bannerMode]);
 
-  // Perform Convene Pull (1 or 10) completely client-side
+    if (currentUser && !isSandbox) {
+      updateUserProfile(currentUser.id, { selected_char_id: charId });
+    }
+  }, [selectedCharId, currentUser, isSandboxGuest, userState?.isSandbox]);
+
+  // Perform Convene Pull (1 or 10) with cloud sync for won 5-stars
   const handlePull = useCallback(async (count: 1 | 10) => {
-    if (isPulling) return;
+    if (isPulling || isPullingRef.current) return;
 
     if (
       bannerMode === "character_limited" &&
@@ -215,7 +666,8 @@ export const ConveneStage: React.FC = () => {
 
     const neededAstrite = count * 160;
     const currentAstrite = userState?.astrite ?? 0;
-    const isSandbox = Boolean(userState?.isSandbox);
+    const isSandbox = isSandboxGuest || Boolean(userState?.isSandbox);
+    const targetUserId = isSandbox ? null : currentUser?.id;
 
     if (!isSandbox && currentAstrite < neededAstrite) {
       soundEngine.playClick();
@@ -224,10 +676,11 @@ export const ConveneStage: React.FC = () => {
       return;
     }
 
+    isPullingRef.current = true;
     setIsPulling(true);
 
     try {
-      const data = executeClientConvene(bannerMode, count, selectedCharId);
+      const data = executeClientConvene(bannerMode, count, selectedCharId, targetUserId, isSandbox);
       setConveneResult(data as any);
 
       // Update local balances and pity
@@ -242,8 +695,68 @@ export const ConveneStage: React.FC = () => {
           guaranteedLimited: data.guaranteedLimited,
         },
       }));
-      setWinRateStats(get5050Stats());
+      setWinRateStats(get5050Stats(targetUserId, isSandbox));
+
+      // Group won 5-stars by character_id so multiple 5-stars in a 10-pull are counted accurately
+      const wonCounts: Record<string, { name: string; count: number }> = {};
+      let totalFeatured5Stars = 0;
+      for (const resItem of data.results) {
+        if (resItem.rarity === 5 && resItem.isFeaturedWon) {
+          const id = resItem.item.id;
+          if (!wonCounts[id]) {
+            wonCounts[id] = { name: resItem.item.name, count: 0 };
+          }
+          wonCounts[id].count += 1;
+          totalFeatured5Stars += 1;
+        }
+      }
+
+      // 5★ Cash Back: each FEATURED 5 star copy grants 5 pulls (800 Astrite)
+      let rebateAstrite = 0;
+      if (totalFeatured5Stars > 0) {
+        rebateAstrite = totalFeatured5Stars * 800; // 5 Convenes per copy
+        grantClientCurrency(rebateAstrite, targetUserId, isSandbox);
+        data.userState.astrite += rebateAstrite;
+        setUserState((prev: any) => ({
+          ...prev,
+          astrite: (prev?.astrite || 0) + rebateAstrite,
+        }));
+        pendingCashBackRef.current = rebateAstrite;
+      } else {
+        pendingCashBackRef.current = 0;
+      }
+
+      // Cloud Persistence to Supabase (ONLY for logged in user and NOT in sandbox)
+      if (currentUser && !isSandbox) {
+        const entries = Object.entries(wonCounts);
+        if (entries.length > 0) {
+          for (const [charId, info] of entries) {
+            await saveFeaturedResonatorPull(
+              currentUser.id,
+              charId,
+              info.name,
+              info.count
+            );
+          }
+          const updatedInv = await fetchUserInventory(currentUser.id);
+          setInventoryList(updatedInv);
+        }
+
+        // 2. Sync updated Astrite balance, Pity, and True 50/50 Stats to Supabase profile (1 row per user)
+        const currentStats = get5050Stats(currentUser.id, false);
+        updateUserProfile(currentUser.id, {
+          astrite: data.userState.astrite,
+          pity_5star: data.newPity5,
+          pity_4star: data.newPity4,
+          guaranteed_limited: data.guaranteedLimited,
+          selected_char_id: selectedCharId,
+          total_pulls: getTotalPullsCount(currentUser.id, false),
+          wins_5050: currentStats.wins5050,
+          total_5050: currentStats.total5050,
+        });
+      }
     } catch (err: any) {
+      isPullingRef.current = false;
       const errStr = (err.message || "").toLowerCase();
       if (errStr.includes("astrite") || errStr.includes("insufficient")) {
         setInsufficientAstriteData({ needed: neededAstrite, current: currentAstrite });
@@ -254,27 +767,172 @@ export const ConveneStage: React.FC = () => {
       setIsPulling(false);
       return;
     }
-  }, [isPulling, bannerMode, currentChar, currentPreset, userState, selectedCharId]);
+  }, [isPulling, bannerMode, currentChar, currentPreset, userState, selectedCharId, currentUser, isSandboxGuest]);
 
-  // Currency updates from ReplenishModal (Client-Side)
-  const handleUpdateCurrency = useCallback(async (currencyCol: string, amount: number) => {
-    updateClientCurrency(currencyCol, amount);
-    fetchState();
-  }, [fetchState]);
+  // Upfront Auth Screen: Require Account
+  if (authChecking) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#07090e] text-white select-none">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 flex items-center justify-center shadow-[0_0_25px_rgba(250,204,21,0.2)]">
+            <Sparkles className="w-6 h-6 animate-spin" />
+          </div>
+          <span className="font-mono text-xs text-gray-400 tracking-wider uppercase">Loading Resonance System...</span>
+        </div>
+      </div>
+    );
+  }
 
-  const handleToggleSandbox = useCallback(async (enabled: boolean) => {
-    toggleClientSandbox(enabled);
-    fetchState();
-  }, [fetchState]);
+  if (!currentUser && !isSandboxGuest) {
+    return (
+      <>
+        <LoginGateway
+          onLoginSuccess={handleLoginSuccess}
+          onEnterSandbox={() => {
+            soundEngine.playClick();
+            setIsSandboxGuest(true);
+            setClientSimContext(null, true);
+            toggleClientSandbox(true);
+            if (typeof window !== "undefined") {
+              const port =
+                window.screen?.orientation?.type?.startsWith("portrait") ??
+                (window.matchMedia ? window.matchMedia("(orientation: portrait)").matches : window.innerHeight > window.innerWidth);
+              if (port) {
+                setShowOrientationScreen(true);
+              }
+            }
+            const data = getClientStateData(null, true);
+            if (data.user) setUserState(data.user);
+            if (data.pity) setPityMap(data.pity as any);
+            setWinRateStats(get5050Stats(null, true));
+            if (data.user?.selectedLimitedChar) {
+              setSelectedCharId(data.user.selectedLimitedChar);
+            }
+          }}
+        />
+        {/* Logout Loading Transition Overlay */}
+        <AnimatePresence>
+          {isLoggingOut && (
+            <motion.div
+              initial={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.35, ease: "easeInOut" }}
+              className="fixed inset-0 z-[150] bg-[#07090e] flex flex-col items-center justify-center p-6 text-center select-none"
+            >
+              <div className="flex flex-col items-center space-y-5 max-w-sm">
+                <div className="relative flex items-center justify-center w-20 h-20">
+                  <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping pointer-events-none" />
+                  <div className="relative p-5 rounded-2xl bg-[#10141d] border border-yellow-400/50 text-yellow-400 shadow-[0_0_35px_rgba(250,204,21,0.3)]">
+                    <Sparkles className="w-8 h-8 animate-spin" />
+                  </div>
+                </div>
 
-  const handleResetState = useCallback(async () => {
-    resetClientSimState();
-    fetchState();
-    setWinRateStats(get5050Stats());
-  }, [fetchState]);
+                <div className="space-y-1.5">
+                  <h3 className="text-lg sm:text-xl font-black uppercase tracking-widest text-white font-display">
+                    LOGGING OUT
+                  </h3>
+                  <p className="text-xs font-mono text-yellow-400/80 tracking-wider">
+                    Disconnecting Resonance Terminal...
+                  </p>
+                </div>
+
+                <div className="w-44 h-1 bg-white/10 rounded-full overflow-hidden">
+                  <motion.div
+                    initial={{ x: "-100%" }}
+                    animate={{ x: "100%" }}
+                    transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut" }}
+                    className="w-1/2 h-full bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-500 rounded-full shadow-[0_0_12px_rgba(250,204,21,0.8)]"
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </>
+    );
+  }
 
   return (
-    <main className="relative w-screen h-screen overflow-hidden bg-[#06080e] text-white flex flex-col justify-between font-sans select-none">
+    <main className="relative w-screen h-[100dvh] overflow-hidden bg-[#06080e] text-white flex flex-col justify-between font-sans select-none">
+      {/* Logout Loading Transition Overlay */}
+      <AnimatePresence>
+        {isLoggingOut && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.35, ease: "easeInOut" }}
+            className="fixed inset-0 z-[150] bg-[#07090e] flex flex-col items-center justify-center p-6 text-center select-none"
+          >
+            <div className="flex flex-col items-center space-y-5 max-w-sm">
+              <div className="relative flex items-center justify-center w-20 h-20">
+                <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping pointer-events-none" />
+                <div className="relative p-5 rounded-2xl bg-[#10141d] border border-yellow-400/50 text-yellow-400 shadow-[0_0_35px_rgba(250,204,21,0.3)]">
+                  <Sparkles className="w-8 h-8 animate-spin" />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-lg sm:text-xl font-black uppercase tracking-widest text-white font-display">
+                  LOGGING OUT
+                </h3>
+                <p className="text-xs font-mono text-yellow-400/80 tracking-wider">
+                  Disconnecting Resonance Terminal...
+                </p>
+              </div>
+
+              <div className="w-44 h-1 bg-white/10 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ x: "-100%" }}
+                  animate={{ x: "100%" }}
+                  transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut" }}
+                  className="w-1/2 h-full bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-500 rounded-full shadow-[0_0_12px_rgba(250,204,21,0.8)]"
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Login Loading Transition Overlay */}
+      <AnimatePresence>
+        {isLoggingIn && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.45, ease: "easeInOut" }}
+            className="fixed inset-0 z-[120] bg-[#07090e] flex flex-col items-center justify-center p-6 text-center select-none"
+          >
+            <div className="flex flex-col items-center space-y-5 max-w-sm">
+              <div className="relative flex items-center justify-center w-20 h-20">
+                <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping pointer-events-none" />
+                <div className="relative p-5 rounded-2xl bg-[#10141d] border border-yellow-400/50 text-yellow-400 shadow-[0_0_35px_rgba(250,204,21,0.3)]">
+                  <Sparkles className="w-8 h-8 animate-spin" />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-lg sm:text-xl font-black uppercase tracking-widest text-white font-display">
+                  Synchronizing Resonance System
+                </h3>
+                <p className="text-xs font-mono text-yellow-400/80 tracking-wider">
+                  Entering Solaris-3 Convene Stage...
+                </p>
+              </div>
+
+              <div className="w-44 h-1 bg-white/10 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ x: "-100%" }}
+                  animate={{ x: "100%" }}
+                  transition={{ repeat: Infinity, duration: 1, ease: "easeInOut" }}
+                  className="w-1/2 h-full bg-gradient-to-r from-transparent via-yellow-400 to-transparent"
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ========================================================================= */}
       {/* 0. OPENING ORIENTATION NOTICE OVERLAY ("Be on landscape mode...") */}
       {/* ========================================================================= */}
@@ -317,7 +975,9 @@ export const ConveneStage: React.FC = () => {
                 <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-wider text-white">
                   Switch to landscape mode for full experience
                 </h2>
-                <p>Click Anywhere to Continue</p>
+                <p className="text-xs sm:text-sm font-mono text-yellow-400/90 uppercase tracking-widest animate-pulse">
+                  Rotate your device or click anywhere to continue
+                </p>
               </div>
 
               <div className="pt-4">
@@ -392,12 +1052,7 @@ export const ConveneStage: React.FC = () => {
         <div
           className="absolute inset-0 transition-opacity duration-1000"
           style={{
-            background:
-              bannerMode === "character_limited"
-                ? `radial-gradient(ellipse at 70% 45%, ${currentPreset.accentColor}24 0%, #06080e 72%)`
-                : bannerMode === "weapon_limited"
-                ? "radial-gradient(ellipse at 70% 45%, rgba(56,189,248,0.22) 0%, #06080e 72%)"
-                : "radial-gradient(ellipse at 70% 45%, rgba(192,132,252,0.2) 0%, #06080e 72%)",
+            background: `radial-gradient(ellipse at 70% 45%, ${currentPreset.accentColor}24 0%, #06080e 72%)`,
           }}
         />
         {/* Subtle Tech Grid overlay */}
@@ -407,69 +1062,247 @@ export const ConveneStage: React.FC = () => {
       {/* ========================================================================= */}
       {/* 1. TOP HEADER HUD */}
       {/* ========================================================================= */}
-      <header className="relative z-20 flex items-center justify-between px-3 sm:px-6 py-2 sm:py-3 border-b border-white/10 bg-black/40 backdrop-blur-md">
-        {/* Top Left: Title "you a gacha addict" (ESC removed) */}
-        <div className="flex items-center space-x-2 sm:space-x-3">
-          <h1 className="font-black tracking-wider text-sm sm:text-base md:text-lg uppercase text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">
+      <header className="relative z-20 flex items-center justify-between px-2 sm:px-6 py-1.5 sm:py-3 border-b border-white/10 bg-black/40 backdrop-blur-md gap-1 sm:gap-3">
+        {/* Top Left: Title "you a gacha addict" & Update Logs */}
+        <div className="flex items-center space-x-1 sm:space-x-2">
+          <h1 className="font-black tracking-wider text-xs sm:text-base md:text-lg uppercase text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)] whitespace-nowrap hidden portrait:hidden landscape:min-[640px]:inline">
             you a gacha addict
           </h1>
 
-          {userState?.isSandbox && (
-            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-mono text-[10px] sm:text-[11px] font-bold uppercase">
-              Sandbox Mode
-            </span>
-          )}
-        </div>
-
-        {/* Top Right: 50/50 Win Rate Badge, Clean Astrite Counter & Settings */}
-        <div className="flex items-center space-x-2 sm:space-x-3">
-          {/* 50/50 Win Rate Badge (wuwatracker.com style) */}
+          {/* Update Log Button */}
           <button
             onClick={() => {
               soundEngine.playClick();
-              setIsHistoryOpen(true);
+              setIsUpdateLogOpen(true);
             }}
-            className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-yellow-400/40 rounded-lg backdrop-blur-sm shadow-inner transition-all group"
-            title="View 50/50 History & Convenes"
+            className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/35 border border-purple-400/40 text-purple-300 hover:text-white text-[10px] sm:text-xs font-mono font-bold tracking-wider flex items-center space-x-1 transition-all shadow-sm active:scale-95 cursor-pointer"
+            title="View Updates & Submit Suggestions"
           >
-            <span className="text-[10px] sm:text-xs font-mono uppercase text-gray-400 group-hover:text-gray-300 font-bold">
-              50/50:
-            </span>
-            <span
-              suppressHydrationWarning
-              className={`font-mono text-xs sm:text-sm font-bold ${
-                mounted && winRateStats.winRate !== null
-                  ? winRateStats.winRate >= 50
-                    ? "text-emerald-400"
-                    : "text-amber-400"
-                  : "text-gray-400"
-              }`}
-            >
-              {mounted ? winRateStats.winRateFormatted : "N/A"}
-            </span>
-            {mounted && winRateStats.total5050 > 0 && (
-              <span className="text-[10px] font-mono text-gray-400 hidden sm:inline" suppressHydrationWarning>
-                ({winRateStats.wins5050}/{winRateStats.total5050})
-              </span>
-            )}
+            <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+            <span className="hidden md:inline">Updates</span>
           </button>
 
-          {/* Astrite Counter */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-white/5 border border-white/10 rounded-lg backdrop-blur-sm shadow-inner">
-            <AstriteIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="font-mono text-xs md:text-sm font-bold text-gray-100" suppressHydrationWarning>
-              {mounted && userState?.astrite !== undefined ? userState.astrite.toLocaleString() : "0"}
-            </span>
-            <button
-              onClick={() => {
-                setIsReplenishOpen(true);
-              }}
-              className="p-0.5 rounded hover:bg-yellow-400/20 text-yellow-400 transition-colors"
-              title="Replenish Astrite"
+          {/* How to Play / Guide Button */}
+          <button
+            onClick={() => {
+              soundEngine.playClick();
+              setIsHowToPlayOpen(true);
+            }}
+            className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-yellow-500/20 hover:bg-yellow-500/35 border border-yellow-400/40 text-yellow-300 hover:text-white text-[10px] sm:text-xs font-mono font-bold tracking-wider flex items-center space-x-1 transition-all shadow-sm active:scale-95 cursor-pointer"
+            title="Game Guide & Rules"
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-yellow-400" />
+            <span className="hidden md:inline">Guide</span>
+          </button>
+        </div>
+
+        {/* Top Right: Tacet Field Idle Astrite, Astrite Counter & Settings */}
+        <div className="flex items-center space-x-1 sm:space-x-2">
+          {/* VIP Status Rectangle (Positioned to the left of Tacet Field) */}
+          {userProfile?.is_vip && (
+            <div
+              className="flex items-center space-x-1 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-lg border border-amber-400/50 bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-500/20 text-amber-300 backdrop-blur-sm shadow-[0_0_15px_rgba(251,191,36,0.3)] select-none cursor-default"
+              title="VIP Status Active: +50% Tacet Field Storage (+80 Pulls / +6h). Up to 24h capacity (51,200 Astrite / 320 pulls) with all streaks!"
             >
-              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <Crown className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+              <span className="hidden sm:inline text-[10px] sm:text-xs font-mono font-black tracking-wider uppercase text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">
+                VIP
+              </span>
+            </div>
+          )}
+
+          {/* Free Astrite Idle Accumulator (Hidden in Sandbox Mode) */}
+          {!isSandboxGuest && !userState?.isSandbox && (
+            <button
+              onClick={handleClaimTacetField}
+              disabled={tacetStatus.accumulated === 0}
+              className={`flex items-center space-x-1 sm:space-x-1.5 px-1.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border backdrop-blur-sm shadow-inner transition-all group ${
+                tacetStatus.isMaxed
+                  ? "bg-gradient-to-r from-yellow-500/30 via-amber-500/25 to-yellow-500/30 border-yellow-400 text-yellow-300 shadow-[0_0_20px_rgba(250,204,21,0.45)] animate-pulse cursor-pointer"
+                  : tacetStatus.accumulated > 0
+                  ? "bg-white/5 hover:bg-white/10 border-yellow-400/40 text-yellow-300 cursor-pointer"
+                  : "bg-white/5 border-white/10 text-gray-500 cursor-not-allowed opacity-70"
+              }`}
+              title={
+                tacetStatus.isMaxed
+                  ? `Free Astrite MAX (${tacetStatus.maxCap.toLocaleString()} Astrite / ${tacetStatus.batteryHours}h) - Click to claim!`
+                  : `Free Astrite: ${tacetStatus.accumulated.toLocaleString()} / ${tacetStatus.maxCap.toLocaleString()} (${tacetStatus.batteryHours}h Cap, 160 every 4.5m)`
+              }
+            >
+              <Sparkles
+                className={`w-3.5 h-3.5 ${
+                  tacetStatus.isMaxed ? "text-yellow-300 animate-spin" : "text-yellow-400"
+                }`}
+              />
+              <span className="text-[10px] sm:text-xs font-mono font-bold hidden landscape:md:inline">
+                <span>Free Astrite: </span>
+                <strong className="text-white">{tacetStatus.accumulated.toLocaleString()}</strong>
+                <span className="hidden lg:inline">/{tacetStatus.maxCap.toLocaleString()}</span>
+              </span>
+              {tacetStatus.accumulated > 0 && (
+                <span className="px-1.5 py-0.5 rounded bg-yellow-400/20 text-yellow-300 border border-yellow-400/40 text-[9px] font-mono font-black uppercase tracking-wider group-hover:bg-yellow-400 group-hover:text-black transition-colors">
+                  Claim
+                </span>
+              )}
             </button>
+          )}
+
+          {/* Astrite Counter (Unlimited Replenish removed) */}
+          <div className="flex items-center space-x-1 sm:space-x-1.5 px-2 sm:px-3 py-1 sm:py-1.5 bg-white/5 border border-white/10 rounded-lg backdrop-blur-sm shadow-inner">
+            <AstriteIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="font-mono text-xs sm:text-sm font-bold text-gray-100" suppressHydrationWarning>
+              {mounted && userState?.astrite !== undefined
+                ? isSandboxGuest
+                  ? "∞"
+                  : userState.astrite.toLocaleString()
+                : "0"}
+            </span>
           </div>
+
+          {/* Inventory Button (Suitcase Icon - regular accounts only) */}
+          {!isSandboxGuest && (
+            <button
+              onClick={handleOpenInventory}
+              className="hidden md:flex p-1.5 sm:p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-yellow-400/40 text-gray-300 hover:text-yellow-400 transition-all"
+              title="Inventory"
+            >
+              <Briefcase className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Sandbox Guest Mode Controls or User Account Dropdown */}
+          {isSandboxGuest ? (
+            <div className="flex items-center space-x-1.5 sm:space-x-2 pl-1.5 sm:pl-2 border-l border-white/15">
+              <div className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[10px] sm:text-xs font-mono font-bold">
+                <InfinityIcon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">SANDBOX</span>
+              </div>
+              <button
+                onClick={handleExitSandbox}
+                className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black font-black uppercase text-[10px] sm:text-xs font-mono tracking-wider transition-all shadow-[0_0_15px_rgba(250,204,21,0.3)] active:scale-95 cursor-pointer"
+                title="Exit Sandbox Mode and return to Login"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Exit</span>
+              </button>
+            </div>
+          ) : (
+            /* User Account Dropdown (Profile & Sign Out) */
+            <div className="relative pl-1.5 sm:pl-2 border-l border-white/15" ref={profileDropdownRef}>
+            <button
+              type="button"
+              onClick={() => {
+                soundEngine.playClick();
+                setIsProfileDropdownOpen((prev) => !prev);
+              }}
+              className={`flex items-center space-x-1.5 p-1 sm:px-2 sm:py-1 rounded-lg border text-xs sm:text-sm font-mono transition-all duration-150 active:scale-95 ${
+                isProfileDropdownOpen
+                  ? "bg-yellow-400/15 border-yellow-400/60 text-white shadow-[0_0_15px_rgba(250,204,21,0.3)]"
+                  : "bg-white/5 hover:bg-white/10 border-white/10 hover:border-yellow-400/40 text-gray-200 hover:text-white"
+              }`}
+              title="Account Menu"
+            >
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full overflow-hidden border border-yellow-400/60 shadow-[0_0_8px_rgba(250,204,21,0.3)] flex-shrink-0 bg-black/60">
+                <img
+                  src={`/assets/inventory_portraits/${getPortraitFileName(currentAvatarId)}`}
+                  alt="Avatar"
+                  className="w-full h-full object-cover object-top"
+                  onError={(e) => {
+                    const t = e.currentTarget as HTMLImageElement;
+                    if (t.src.endsWith(".jpeg")) {
+                      t.src = `/assets/inventory_portraits/${currentAvatarId}.jpg`;
+                    }
+                  }}
+                />
+              </div>
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${
+                  isProfileDropdownOpen ? "rotate-180 text-yellow-400" : ""
+                }`}
+              />
+            </button>
+
+            {/* Dropdown Menu */}
+            <AnimatePresence>
+              {isProfileDropdownOpen && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 5 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 5 }}
+                  transition={{ duration: 0.12 }}
+                  className="absolute right-0 mt-2 w-48 rounded-xl bg-[#0c1017]/95 border border-white/15 shadow-[0_10px_30px_rgba(0,0,0,0.85)] backdrop-blur-md overflow-hidden z-50 py-1"
+                >
+                  {/* Account Header with Avatar */}
+                  <div className="flex items-center space-x-2.5 px-3.5 py-2.5 border-b border-white/10 bg-white/[0.02]">
+                    <div className="w-7 h-7 rounded-full overflow-hidden border border-yellow-400/50 shadow-sm flex-shrink-0 bg-black/60">
+                      <img
+                        src={`/assets/inventory_portraits/${getPortraitFileName(currentAvatarId)}`}
+                        alt="Avatar"
+                        className="w-full h-full object-cover object-top"
+                        onError={(e) => {
+                          const t = e.currentTarget as HTMLImageElement;
+                          if (t.src.endsWith(".jpeg")) {
+                            t.src = `/assets/inventory_portraits/${currentAvatarId}.jpg`;
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">
+                        Account
+                      </p>
+                      <p className="text-xs font-bold font-mono text-yellow-400 truncate">
+                        @{userProfile?.username || currentUser?.user_metadata?.username || "Player"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Profile Option (Anime Vanguards Player Profile) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundEngine.playClick();
+                      setIsProfileDropdownOpen(false);
+                      setIsPlayerProfileOpen(true);
+                    }}
+                    className="w-full flex items-center space-x-2.5 px-3.5 py-2 text-xs font-mono font-bold text-gray-200 hover:text-white hover:bg-yellow-400/10 transition-all text-left"
+                  >
+                    <User className="w-3.5 h-3.5 text-yellow-400" />
+                    <span>Profile</span>
+                  </button>
+
+                  {/* Account Option (Roblox-style Username, Password & Avatar Settings) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundEngine.playClick();
+                      setIsAccountNavigatedFromProfile(false);
+                      setIsProfileDropdownOpen(false);
+                      setIsAccountModalOpen(true);
+                    }}
+                    className="w-full flex items-center space-x-2.5 px-3.5 py-2 text-xs font-mono font-bold text-gray-200 hover:text-white hover:bg-yellow-400/10 transition-all text-left border-t border-white/5"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-yellow-400" />
+                    <span>Account</span>
+                  </button>
+
+                  {/* Sign Out Option */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileDropdownOpen(false);
+                      handleSignOut();
+                    }}
+                    className="w-full flex items-center space-x-2.5 px-3.5 py-2 text-xs font-mono font-bold text-rose-300 hover:text-rose-200 hover:bg-rose-500/15 transition-all text-left border-t border-white/5"
+                  >
+                    <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Sign Out</span>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
 
           {/* Settings Trigger */}
           <button
@@ -486,130 +1319,298 @@ export const ConveneStage: React.FC = () => {
       </header>
 
       {/* ========================================================================= */}
-      {/* 2. MAIN CONVENE STAGE & DIRECT CHARACTER LEFT RAIL */}
+      {/* 2. MAIN CONVENE STAGE & DIRECT CHARACTER RAIL */}
       {/* ========================================================================= */}
-      <div className="relative z-10 flex-1 flex overflow-hidden">
-        {/* LEFT BANNER RAIL = DIRECT SCROLLABLE CHARACTER LIST (Patches 1.0 - 3.7) */}
-        <aside className="w-20 md:w-60 flex flex-col z-20 border-r border-white/10 bg-[#07090ec9] backdrop-blur-lg">
-          {/* Rail Header */}
-          <div className="px-3 py-2 border-b border-white/5 text-[10px] font-mono uppercase tracking-widest text-gray-400 font-bold hidden md:block">
-            Featured Resonators
+      <div className="relative z-10 flex-1 flex flex-col landscape:flex-row overflow-hidden min-h-0">
+        {/* CHARACTER RAIL: TOP TAB STRIP ON PORTRAIT, LEFT SIDEBAR ON LANDSCAPE */}
+        <aside className="w-full landscape:w-36 landscape:sm:w-48 landscape:md:w-56 landscape:lg:w-64 flex flex-row landscape:flex-col z-20 border-b landscape:border-b-0 landscape:border-r border-white/10 bg-[#07090ec9] backdrop-blur-lg flex-shrink-0">
+          {/* Rail Header (Landscape only) */}
+          <div className="px-3 py-2 border-b border-white/5 text-[10px] font-mono uppercase tracking-widest text-yellow-400 font-bold hidden landscape:flex items-center justify-between">
+            <span>{isSandboxGuest ? "All Banners" : "Hourly Featured"}</span>
+            <span
+              className="text-[9px] text-gray-400 font-normal"
+              title={isSandboxGuest ? "Sandbox Mode - All Banners Active" : rotationTimerText}
+              suppressHydrationWarning
+            >
+              {isSandboxGuest ? "Sandbox" : `${rotationMinutes}m`}
+            </span>
           </div>
 
-          {/* Scrollable Resonator List */}
-          <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1.5 scrollbar-thin scrollbar-thumb-white/10">
-            {LIMITED_CHARACTERS_LIST.map((charId) => {
-              const char = RESONATORS[charId];
-              const preset = LIMITED_BANNER_PRESETS[charId];
-              if (!char || !preset) return null;
-
-              const isSelected = bannerMode === "character_limited" && selectedCharId === charId;
-
-              return (
-                <CharacterRailItem
-                  key={charId}
-                  charId={charId}
-                  name={char.name}
-                  portraitUrl={
+          {/* 1. Portrait Mode: Top Banner Choices, Sized Equally Left-to-Right, Icon-Only */}
+          <div className="flex landscape:hidden w-full min-w-0 overflow-hidden px-2 py-1.5 bg-[#07090ec9] border-b border-white/10 backdrop-blur-md">
+            {isSandboxGuest ? (
+              /* Sandbox Mode: Scrollable equal icon buttons (left to right) */
+              <div
+                className="flex w-full min-w-0 flex-nowrap overflow-x-auto gap-2 py-0.5 scrollbar-thin scrollbar-thumb-white/20 touch-pan-x select-none overscroll-x-contain"
+                style={{ WebkitOverflowScrolling: "touch" }}
+              >
+                {displayedCharacters.map((charId) => {
+                  const char = RESONATORS[charId];
+                  const preset = LIMITED_BANNER_PRESETS[charId];
+                  if (!char || !preset) return null;
+                  const isSelected = bannerMode === "character_limited" && selectedCharId === charId;
+                  const portraitUrl =
                     char.portraitUrl ||
                     char.stillUrl ||
                     char.drawUrl ||
-                    "/assets/characters/changli_portrait.png"
-                  }
-                  title={preset.title}
-                  isSelected={isSelected}
-                  isUnavailable={preset.isUnavailable}
-                  isComingSoon={preset.isComingSoon}
-                  onSelect={handleSelectCharacter}
-                />
-              );
-            })}
+                    "/assets/characters/changli_portrait.png";
+
+                  return (
+                    <button
+                      key={charId}
+                      type="button"
+                      onClick={() => handleSelectCharacter(charId)}
+                      className={`relative flex-shrink-0 flex items-center justify-center w-12 h-11 sm:w-14 sm:h-12 rounded-xl border transition-all duration-150 active:scale-95 ${
+                        isSelected
+                          ? "bg-gradient-to-b from-yellow-500/30 to-yellow-500/10 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.35)]"
+                          : "bg-white/[0.03] hover:bg-white/[0.08] border-white/10"
+                      }`}
+                      title={`${char.name} • ${preset.title}`}
+                    >
+                      <div
+                        className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg overflow-hidden border ${
+                          isSelected
+                            ? "border-yellow-400 shadow-[0_0_6px_rgba(250,204,21,0.5)]"
+                            : "border-white/15 opacity-80"
+                        }`}
+                      >
+                        <img
+                          src={portraitUrl}
+                          alt={char.name}
+                          className="w-full h-full object-cover object-top"
+                        />
+                      </div>
+                      {isSelected && (
+                        <div className="absolute bottom-0 inset-x-2 h-0.5 bg-yellow-400 rounded-full shadow-[0_0_8px_#ffd15c]" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              /* Account Mode: 3 Hourly Featured Banners Divided Exactly Equally Left-to-Right */
+              <div className="grid grid-cols-3 w-full gap-2">
+                {displayedCharacters.slice(0, 3).map((charId) => {
+                  const char = RESONATORS[charId];
+                  const preset = LIMITED_BANNER_PRESETS[charId];
+                  if (!char || !preset) return null;
+                  const isSelected = bannerMode === "character_limited" && selectedCharId === charId;
+                  const portraitUrl =
+                    char.portraitUrl ||
+                    char.stillUrl ||
+                    char.drawUrl ||
+                    "/assets/characters/changli_portrait.png";
+
+                  return (
+                    <button
+                      key={charId}
+                      type="button"
+                      onClick={() => handleSelectCharacter(charId)}
+                      className={`relative flex items-center justify-center py-1.5 sm:py-2 rounded-xl border transition-all duration-150 active:scale-95 ${
+                        isSelected
+                          ? "bg-gradient-to-b from-yellow-500/30 via-yellow-500/15 to-transparent border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.35)]"
+                          : "bg-white/[0.03] hover:bg-white/[0.08] border-white/10 hover:border-white/20"
+                      }`}
+                      title={`${char.name} • ${preset.title}`}
+                    >
+                      {/* Character Icon */}
+                      <div
+                        className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg overflow-hidden border transition-all ${
+                          isSelected
+                            ? "border-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)] scale-105"
+                            : "border-white/15 opacity-75 group-hover:opacity-100"
+                        }`}
+                      >
+                        <img
+                          src={portraitUrl}
+                          alt={char.name}
+                          className="w-full h-full object-cover object-top"
+                        />
+                      </div>
+
+                      {/* Bottom Active Indicator Line */}
+                      {isSelected && (
+                        <div className="absolute bottom-0 inset-x-3 h-0.5 bg-yellow-400 rounded-full shadow-[0_0_8px_#ffd15c]" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
+
+          {/* 2. Landscape Mode (Side Rail) */}
+          {isSandboxGuest ? (
+            /* SANDBOX MODE: Full Scrollable Resonator List */
+            <div className="hidden landscape:flex flex-1 flex-col overflow-y-auto px-2 py-2 space-y-1.5 scrollbar-thin scrollbar-thumb-white/10">
+              {displayedCharacters.map((charId) => {
+                const char = RESONATORS[charId];
+                const preset = LIMITED_BANNER_PRESETS[charId];
+                if (!char || !preset) return null;
+
+                const isSelected = bannerMode === "character_limited" && selectedCharId === charId;
+
+                return (
+                  <CharacterRailItem
+                    key={charId}
+                    charId={charId}
+                    name={char.name}
+                    portraitUrl={
+                      char.portraitUrl ||
+                      char.stillUrl ||
+                      char.drawUrl ||
+                      "/assets/characters/changli_portrait.png"
+                    }
+                    title={preset.title}
+                    isSelected={isSelected}
+                    isUnavailable={preset.isUnavailable}
+                    isComingSoon={preset.isComingSoon}
+                    onSelect={handleSelectCharacter}
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            /* ACCOUNT MODE: 3 Tall Cards using Inventory Splash Art (Zero Dead Space) */
+            <div className="hidden landscape:flex flex-1 flex-col gap-2 p-2 min-h-0 justify-start sm:justify-between overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
+              {displayedCharacters.slice(0, 3).map((charId) => {
+                const char = RESONATORS[charId];
+                const preset = LIMITED_BANNER_PRESETS[charId];
+                if (!char || !preset) return null;
+
+                const isSelected = bannerMode === "character_limited" && selectedCharId === charId;
+                const portraitFile = getPortraitFileName(charId);
+
+                return (
+                  <button
+                    key={charId}
+                    type="button"
+                    onClick={() => {
+                      soundEngine.playClick();
+                      handleSelectCharacter(charId);
+                    }}
+                    className={`group relative flex-1 min-h-[90px] w-full rounded-xl overflow-hidden text-left transition-all duration-300 border flex flex-col justify-end p-2 sm:p-2.5 cursor-pointer select-none ${
+                      isSelected
+                        ? "border-yellow-400 ring-2 ring-yellow-400/40 shadow-[0_0_20px_rgba(250,204,21,0.35)] scale-[1.02] z-10"
+                        : "border-white/10 hover:border-white/30 opacity-70 hover:opacity-100 hover:scale-[1.01]"
+                    }`}
+                  >
+                    {/* Splash Art Used in Inventory */}
+                    <img
+                      src={`/assets/inventory_portraits/${portraitFile}`}
+                      alt={char.name}
+                      className="absolute inset-0 w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+                    />
+
+                    {/* Gradient Overlay for Readability */}
+                    <div
+                      className={`absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/10 transition-opacity ${
+                        isSelected ? "opacity-90" : "opacity-80 group-hover:opacity-70"
+                      }`}
+                    />
+
+                    {/* Active / Status Tag */}
+                    <div className="absolute top-2 right-2 z-10">
+                      {isSelected ? (
+                        <span className="px-2 py-0.5 rounded-full bg-yellow-400 text-black text-[9px] font-black uppercase font-mono tracking-wider shadow-[0_0_10px_rgba(250,204,21,0.8)]">
+                          ACTIVE
+                        </span>
+                      ) : preset.isComingSoon ? (
+                        <span className="px-1.5 py-0.5 rounded bg-amber-500/80 text-white text-[9px] font-mono font-bold uppercase">
+                          SOON
+                        </span>
+                      ) : preset.isUnavailable ? (
+                        <span className="px-1.5 py-0.5 rounded bg-rose-500/80 text-white text-[9px] font-mono font-bold uppercase">
+                          N/A
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {/* Character Name & Banner Info */}
+                    <div className="relative z-10 flex flex-col min-w-0">
+                      <span className="text-[10px] font-mono text-yellow-400/90 font-semibold truncate uppercase tracking-wider drop-shadow-sm">
+                        {preset.title}
+                      </span>
+                      <span className="text-xs sm:text-sm font-black text-white tracking-wide truncate drop-shadow-[0_2px_4px_rgba(0,0,0,0.85)]">
+                        {char.name}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </aside>
 
         {/* Center Stage: Framed Banner Presentation (Matches reference mockup box) */}
-        <section className="relative flex-1 m-2 sm:m-3 md:m-3.5 rounded-2xl border border-white/10 bg-[#07090e] shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col justify-between p-6 md:p-8">
+        <section className="relative flex-1 m-1.5 sm:m-3 md:m-3.5 rounded-2xl border border-white/10 bg-[#07090e] shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col justify-between p-3 sm:p-6 md:p-8 min-h-0">
           {/* Banner Meta Info (Top Left of Stage) */}
-          <div className="relative z-20 max-w-xl space-y-3 pointer-events-auto">
+          <div className="relative z-20 max-w-xl space-y-2 sm:space-y-3 pointer-events-auto">
             <AnimatePresence initial={false}>
               <motion.div
                 key={`${bannerMode}-${selectedCharId}`}
                 initial={{ opacity: 0.3 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.1 }}
-                className="space-y-2.5"
+                className="space-y-1.5 sm:space-y-2.5"
               >
-                {/* 1. Header category (Featured Resonator Convene / Featured Weapon Convene) */}
+                {/* 1. Header category */}
                 <div className="flex items-center space-x-2">
-                  <span className="text-base sm:text-lg md:text-xl font-bold text-[#fef08a] tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]">
-                    {bannerMode === "character_limited"
-                      ? "Featured Resonator Convene"
-                      : bannerMode === "weapon_limited"
-                      ? "Featured Weapon Convene"
-                      : "Standard Resonator Convene"}
+                  <span className="text-xs sm:text-base md:text-xl font-bold text-[#fef08a] tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]">
+                    Featured Resonator Convene
                   </span>
                 </div>
 
                 {/* 2. Main Banner Title */}
-                <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)]">
-                  {bannerMode === "character_limited"
-                    ? (currentPreset?.isUnavailable
-                        ? (currentPreset.unavailableBannerTitle || "Unavailable for Now")
-                        : currentPreset?.isComingSoon
-                        ? "Coming Soon"
-                        : currentPreset.title)
-                    : bannerMode === "weapon_limited"
-                    ? currentPreset.signatureWeaponName
-                    : "Tidal Cadence"}
+                <h2 className="text-xl sm:text-3xl md:text-5xl lg:text-6xl font-black tracking-tight text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)]">
+                  {currentPreset?.isUnavailable
+                    ? (currentPreset.unavailableBannerTitle || "Unavailable for Now")
+                    : currentPreset?.isComingSoon
+                    ? "Coming Soon"
+                    : currentPreset.title}
                 </h2>
 
                 {/* 3. Time Remaining with Clock Icon */}
-                <div className="flex items-center space-x-2 text-sm sm:text-base font-bold text-[#fef08a] drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
-                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-[#fef08a] shrink-0" />
-                  <span>Remaining: 67d 67h</span>
+                <div className="flex items-center space-x-1.5 sm:space-x-2 text-[11px] sm:text-sm md:text-base font-bold text-[#fef08a] drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
+                  <Clock className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-[#fef08a] shrink-0" />
+                  <span>{isSandboxGuest ? "Sandbox: All Banners Open" : rotationTimerText}</span>
                 </div>
 
-                {/* 4. Guarantee rules matching TEXTS reference */}
-                <div className="pt-0.5 space-y-0.5 text-xs sm:text-sm md:text-base text-white/95 font-medium leading-relaxed drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
+                {/* 4. Guarantee rules (Collapsed on small screens to prioritize splash art & pity) */}
+                <div className="pt-0.5 space-y-0.5 text-[11px] sm:text-sm md:text-base text-white/95 font-medium leading-relaxed drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)] hidden sm:block">
                   <p>
                     Every <span className="text-[#fef08a] font-bold">10</span> Convenes guarantees a 4-Star or above item.
                   </p>
                   <p>
-                    {bannerMode === "weapon_limited" ? (
-                      <>A 5-Star Weapon is guaranteed within <span className="text-[#fef08a] font-bold">80</span> Convenes.</>
-                    ) : (
-                      <>A 5-Star Character is guaranteed within <span className="text-[#fef08a] font-bold">80</span> Convenes.</>
-                    )}
+                    A 5-Star Character is guaranteed within <span className="text-[#fef08a] font-bold">80</span> Convenes.
                   </p>
                 </div>
 
                 {/* Rate-up 4-Stars Display (Historically paired rate-ups) */}
-                {bannerMode === "character_limited" && (
-                  <div className="pt-3 flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
-                    <span className="text-xs font-mono uppercase text-gray-400 font-bold drop-shadow-md">
-                      Rate-Up 4★ Resonators:
-                    </span>
-                    <div className="flex items-center space-x-2">
-                      {currentPreset.featured4StarIds.map((fId) => {
-                        const fRes = RESONATORS[fId];
-                        return (
-                          <div
-                            key={fId}
-                            className="flex items-center space-x-2 px-2.5 py-1 rounded-md bg-purple-950/50 border border-purple-500/40 text-purple-200 text-xs font-mono shadow-sm backdrop-blur-sm"
-                          >
-                            <img
-                              src={fRes?.portraitUrl || `/assets/characters/${fId}_portrait.png`}
-                              alt={fRes?.name || fId}
-                              className="w-5 h-5 rounded-full object-cover"
-                            />
-                            <span className="font-bold">{fRes ? fRes.name : fId}</span>
-                            <span className="text-purple-400 text-[10px] font-bold">4★</span>
-                          </div>
-                        );
-                      })}
-                    </div>
+                <div className="pt-1 sm:pt-3 flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-3">
+                  <span className="text-[10px] sm:text-xs font-mono uppercase text-white font-bold drop-shadow-md inline">
+                    Rate-Up 4★:
+                  </span>
+                  <div className="flex items-center space-x-1.5 sm:space-x-2 flex-wrap gap-y-1">
+                    {currentPreset.featured4StarIds.map((fId) => {
+                      const fRes = RESONATORS[fId];
+                      return (
+                        <div
+                          key={fId}
+                          className="flex items-center space-x-1 sm:space-x-1.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-md bg-purple-950/50 border border-purple-500/40 text-purple-200 text-[10px] sm:text-xs font-mono shadow-sm backdrop-blur-sm"
+                        >
+                          <img
+                            src={fRes?.portraitUrl || `/assets/characters/${fId}_portrait.png`}
+                            alt={fRes?.name || fId}
+                            className="w-3.5 h-3.5 sm:w-5 sm:h-5 rounded-full object-cover"
+                          />
+                          <span className="font-bold hidden min-[480px]:inline">{fRes ? fRes.name : fId}</span>
+                          <span className="text-purple-400 text-[9px] sm:text-[10px] font-bold">4★</span>
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
+                </div>
               </motion.div>
             </AnimatePresence>
           </div>
@@ -620,7 +1621,7 @@ export const ConveneStage: React.FC = () => {
           }`}>
             <AnimatePresence initial={false}>
               <motion.div
-                key={`art-${bannerMode}-${selectedCharId}`}
+                key={`art-${selectedCharId}`}
                 initial={{ opacity: 0.4 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.12, ease: "easeOut" }}
@@ -628,80 +1629,67 @@ export const ConveneStage: React.FC = () => {
                   isV2 ? "justify-start" : "justify-end"
                 }`}
               >
-                {bannerMode === "character_limited" ? (
-                  <img
-                    src={
-                      currentChar.splashUrl ||
-                      currentChar.stillUrl ||
-                      currentChar.drawUrl ||
-                      currentChar.portraitUrl ||
-                      "/assets/characters/changli_splash.png"
-                    }
-                    alt={currentChar.name}
-                    decoding="async"
-                    className={`splash-art-img h-full w-full select-none pointer-events-none ${
-                      isV2
-                        ? "object-cover object-center drop-shadow-[0_15px_35px_rgba(0,0,0,0.85)]"
-                        : "object-contain object-right pr-4 md:pr-12 drop-shadow-[0_20px_45px_rgba(0,0,0,0.95)]"
-                    }`}
-                  />
-                ) : bannerMode === "weapon_limited" ? (
-                  <div className="flex flex-col items-center justify-center p-6 md:p-8 bg-black/60 border border-white/15 rounded-2xl backdrop-blur-md mx-auto md:mr-20">
-                    <Sword className="w-36 h-36 md:w-48 md:h-48 text-sky-400 drop-shadow-[0_0_35px_rgba(56,189,248,0.5)] animate-pulse" />
-                    <span className="mt-4 text-xl md:text-2xl font-black uppercase text-white font-display text-center">
-                      {currentPreset.signatureWeaponName}
-                    </span>
-                    <RarityStars rarity={5} size={20} className="mt-2" />
-                  </div>
-                ) : (
-                  <img
-                    src="/assets/characters/verina_splash.png"
-                    alt="Tidal Cadence"
-                    decoding="async"
-                    className="splash-art-img h-full w-full object-contain object-right pr-4 md:pr-12 opacity-90 drop-shadow-[0_20px_45px_rgba(0,0,0,0.95)] select-none pointer-events-none"
-                  />
-                )}
+                <img
+                  src={
+                    currentChar.splashUrl ||
+                    currentChar.stillUrl ||
+                    currentChar.drawUrl ||
+                    currentChar.portraitUrl ||
+                    "/assets/characters/changli_splash_v2.jpeg"
+                  }
+                  alt={currentChar.name}
+                  decoding="async"
+                  className={`splash-art-img h-full w-full select-none pointer-events-none ${
+                    isV2
+                      ? "object-cover object-center drop-shadow-[0_15px_35px_rgba(0,0,0,0.85)]"
+                      : "object-contain object-right pr-4 md:pr-12 drop-shadow-[0_20px_45px_rgba(0,0,0,0.95)]"
+                  }`}
+                />
               </motion.div>
             </AnimatePresence>
           </div>
 
           {/* Pity Status Widget (Bottom-Left of Banner Stage) */}
-          <div className="relative z-20 flex items-center space-x-4 bg-black/75 border border-white/15 px-4 py-2.5 rounded-xl backdrop-blur-md w-fit shadow-lg">
+          <div className="relative z-20 flex items-center space-x-2 sm:space-x-4 bg-black/75 border border-white/15 px-2.5 sm:px-4 py-1.5 sm:py-2.5 rounded-xl backdrop-blur-md w-fit shadow-lg">
             <div className="flex flex-col">
-              <span className="text-[10px] uppercase font-mono text-gray-400">5-Star Pity</span>
+              <span className="text-[9px] sm:text-[10px] uppercase font-mono text-gray-400">5-Star Pity</span>
               <div className="flex items-baseline space-x-1">
                 <span
-                  className={`text-base font-bold font-mono ${
+                  className={`text-sm sm:text-base font-bold font-mono ${
                     currentPity.pity5Star >= 66 ? "text-amber-300 animate-pulse" : "text-yellow-400"
                   }`}
                 >
                   {currentPity.pity5Star}
                 </span>
-                <span className="text-xs font-mono text-gray-500">/ 80</span>
+                <span className="text-[10px] sm:text-xs font-mono text-gray-500">/ 80</span>
               </div>
             </div>
 
-            <div className="h-6 w-px bg-white/15" />
+            <div className="h-5 sm:h-6 w-px bg-white/15" />
 
             <div className="flex flex-col">
-              <span className="text-[10px] uppercase font-mono text-gray-400">4-Star Pity</span>
+              <span className="text-[9px] sm:text-[10px] uppercase font-mono text-gray-400">4-Star Pity</span>
               <div className="flex items-baseline space-x-1">
-                <span className="text-base font-bold font-mono text-purple-300">
+                <span className="text-sm sm:text-base font-bold font-mono text-purple-300">
                   {currentPity.pity4Star}
                 </span>
-                <span className="text-xs font-mono text-gray-500">/ 10</span>
+                <span className="text-[10px] sm:text-xs font-mono text-gray-500">/ 10</span>
               </div>
             </div>
 
-            <div className="h-6 w-px bg-white/15" />
+            <div className="h-5 sm:h-6 w-px bg-white/15" />
 
             <div className="flex flex-col">
-              <span className="text-[10px] uppercase font-mono text-gray-400">Rate Status</span>
-              <span className="text-xs font-bold font-mono text-emerald-400">
+              <span className="text-[9px] sm:text-[10px] uppercase font-mono text-gray-400">Rate Status</span>
+              <span
+                className={`text-[11px] sm:text-xs font-bold font-mono ${
+                  currentPity.guaranteedLimited
+                    ? "text-amber-300 drop-shadow-[0_0_10px_rgba(251,191,36,0.85)] animate-pulse"
+                    : "text-emerald-400"
+                }`}
+              >
                 {currentPity.guaranteedLimited
-                  ? "100% Guaranteed"
-                  : bannerMode === "weapon_limited"
-                  ? "100% Signature"
+                  ? "★ 100% Guaranteed"
                   : "50/50 Chance"}
               </span>
             </div>
@@ -712,50 +1700,63 @@ export const ConveneStage: React.FC = () => {
       {/* ========================================================================= */}
       {/* 3. BOTTOM FOOTER HUD (DETAILS, HISTORY & DUAL CONVENE BUTTONS) */}
       {/* ========================================================================= */}
-      <footer className="relative z-20 flex flex-col sm:flex-row items-center justify-between px-3 sm:px-8 py-2.5 sm:py-4 border-t border-white/10 bg-black/60 backdrop-blur-md gap-3 sm:gap-4">
-        {/* Left: schmuckey, Details & History Buttons */}
-        <div className="flex items-center space-x-2 sm:space-x-3">
-          <a
-            href="https://portfolio-ni-schmuckey.vercel.app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded bg-white/5 hover:bg-white/15 border border-white/15 text-xs font-display font-bold tracking-wider text-gray-300 hover:text-white transition-all hover:scale-105"
-          >
-            <Globe className="w-4 h-4 text-yellow-400" />
-            <span>schmuckey</span>
-          </a>
-
+      <footer className="relative z-20 flex flex-row items-center justify-between px-2 sm:px-6 md:px-8 py-1.5 sm:py-3 border-t border-white/10 bg-black/60 backdrop-blur-md gap-1.5 sm:gap-4 flex-shrink-0">
+        {/* Left: Notice, History & Inventory Buttons */}
+        <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
           <button
-            onClick={() => setIsDetailsOpen(true)}
-            className="flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded bg-white/5 hover:bg-white/15 border border-white/15 text-xs font-display font-bold uppercase tracking-wider text-gray-300 hover:text-white transition-all hover:scale-105"
+            onClick={() => {
+              soundEngine.playClick();
+              setIsDetailsOpen(true);
+            }}
+            className="flex items-center space-x-1 p-1.5 sm:px-3 sm:py-1.5 rounded bg-white/5 hover:bg-white/15 border border-white/15 text-[11px] sm:text-xs font-display font-bold uppercase tracking-wider text-gray-300 hover:text-white transition-all hover:scale-105 whitespace-nowrap"
+            title="Disclaimer"
           >
-            <HelpCircle className="w-4 h-4 text-yellow-400" />
-            <span>Notice</span>
+            <Shield className="w-3.5 h-3.5 text-yellow-400" />
+            <span className="hidden sm:inline">Disclaimer</span>
           </button>
 
           <button
             onClick={() => setIsHistoryOpen(true)}
-            className="flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded bg-white/5 hover:bg-white/15 border border-white/15 text-xs font-display font-bold uppercase tracking-wider text-gray-300 hover:text-white transition-all hover:scale-105"
+            className="flex items-center space-x-1 p-1.5 sm:px-3 sm:py-1.5 rounded bg-white/5 hover:bg-white/15 border border-white/15 text-[11px] sm:text-xs font-display font-bold uppercase tracking-wider text-gray-300 hover:text-white transition-all hover:scale-105 whitespace-nowrap"
+            title="Convene History"
           >
-            <HistoryIcon className="w-4 h-4 text-yellow-400" />
-            <span>History</span>
+            <HistoryIcon className="w-3.5 h-3.5 text-yellow-400" />
+            <span className="hidden sm:inline">History</span>
+          </button>
+
+          <button
+            onClick={handleOpenInventory}
+            className="flex items-center space-x-1 p-1.5 sm:px-3 sm:py-1.5 rounded bg-yellow-400/10 hover:bg-yellow-400/20 border border-yellow-400/40 text-[11px] sm:text-xs font-display font-bold uppercase tracking-wider text-yellow-400 hover:text-yellow-300 transition-all hover:scale-105 whitespace-nowrap"
+            title="Open Inventory"
+          >
+            <Briefcase className="w-3.5 h-3.5 text-yellow-400" />
+            <span className="hidden sm:inline">Inventory</span>
           </button>
         </div>
 
         {/* Right: Exact Dual Pill-shaped Convene Buttons with Astrite */}
-        <div className="flex items-center space-x-2.5 sm:space-x-4">
+        <div className="flex items-center space-x-1.5 sm:space-x-4 flex-shrink-0">
           {/* Convene 1 */}
           <button
             disabled={isPulling}
             onClick={() => handlePull(1)}
-            className="group relative flex flex-col items-center justify-center px-4 sm:px-7 py-2 sm:py-2.5 rounded-full bg-[#171d2b] hover:bg-[#202738] border border-white/25 hover:border-yellow-400/60 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none min-w-[125px] sm:min-w-[150px] shadow-md"
+            className="group relative flex flex-col items-center justify-center px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full bg-[#171d2b] hover:bg-[#202738] border border-white/25 hover:border-yellow-400/60 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none min-w-[56px] sm:min-w-[130px] shadow-md"
           >
-            <span className="font-display text-[11px] sm:text-xs font-black uppercase tracking-widest text-white group-hover:text-yellow-400 transition-colors">
-              {currentPreset?.isUnavailable ? "Unavailable" : currentPreset?.isComingSoon ? "Coming Soon" : "Convene 1"}
+            <span className="font-display text-xs sm:text-xs font-black uppercase tracking-widest text-white group-hover:text-yellow-400 transition-colors whitespace-nowrap">
+              {currentPreset?.isUnavailable ? (
+                "Unavailable"
+              ) : currentPreset?.isComingSoon ? (
+                "Soon"
+              ) : (
+                <>
+                  <span className="portrait:inline landscape:sm:hidden">1x</span>
+                  <span className="hidden landscape:sm:inline">Convene 1</span>
+                </>
+              )}
             </span>
-            <div className="flex items-center space-x-1 sm:space-x-1.5 mt-0.5">
-              <AstriteIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="font-mono text-[11px] sm:text-xs font-bold text-gray-200">160</span>
+            <div className="hidden landscape:flex items-center space-x-1 sm:space-x-1.5 mt-0.5">
+              <AstriteIcon className="w-2.5 h-2.5 sm:w-4 sm:h-4" />
+              <span className="font-mono text-[9px] sm:text-xs font-bold text-gray-200">160</span>
             </div>
           </button>
 
@@ -763,14 +1764,23 @@ export const ConveneStage: React.FC = () => {
           <button
             disabled={isPulling}
             onClick={() => handlePull(10)}
-            className="group relative flex flex-col items-center justify-center px-5 sm:px-9 py-2 sm:py-2.5 rounded-full bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 hover:from-yellow-300 hover:via-amber-300 hover:to-yellow-400 text-black border border-yellow-300 font-bold transition-all hover:scale-105 active:scale-95 shadow-[0_0_22px_rgba(250,204,21,0.55)] disabled:opacity-50 disabled:pointer-events-none min-w-[145px] sm:min-w-[175px]"
+            className="group relative flex flex-col items-center justify-center px-3.5 sm:px-8 py-1.5 sm:py-2.5 rounded-full bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 hover:from-yellow-300 hover:via-amber-300 hover:to-yellow-400 text-black border border-yellow-300 shadow-[0_0_22px_rgba(250,204,21,0.55)] font-bold transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none min-w-[62px] sm:min-w-[160px]"
           >
-            <span className="font-display text-[11px] sm:text-xs font-black uppercase tracking-widest text-black">
-              {currentPreset?.isUnavailable ? "Unavailable" : currentPreset?.isComingSoon ? "Coming Soon" : "Convene 10"}
+            <span className="font-display text-xs sm:text-xs font-black uppercase tracking-widest text-black whitespace-nowrap">
+              {currentPreset?.isUnavailable ? (
+                "Unavailable"
+              ) : currentPreset?.isComingSoon ? (
+                "Soon"
+              ) : (
+                <>
+                  <span className="portrait:inline landscape:sm:hidden">10x</span>
+                  <span className="hidden landscape:sm:inline">Convene 10</span>
+                </>
+              )}
             </span>
-            <div className="flex items-center space-x-1 sm:space-x-1.5 mt-0.5">
-              <AstriteIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="font-mono text-[11px] sm:text-xs font-black text-black">1,600</span>
+            <div className="hidden landscape:flex items-center space-x-1 sm:space-x-1.5 mt-0.5">
+              <AstriteIcon className="w-2.5 h-2.5 sm:w-4 sm:h-4" />
+              <span className="font-mono text-[9px] sm:text-xs font-black text-black">1,600</span>
             </div>
           </button>
         </div>
@@ -785,15 +1795,21 @@ export const ConveneStage: React.FC = () => {
           highestRarity={conveneResult.highestRarity}
           goldIndices={conveneResult.goldIndices}
           purpleIndices={conveneResult.purpleIndices}
-          bannerType={bannerMode}
+          bannerType="character_limited"
           onFinish={() => {
+            isPullingRef.current = false;
             setIsPulling(false);
             setConveneResult(null);
-          }}
-          onConveneAgain={(count) => {
-            setIsPulling(false);
-            setConveneResult(null);
-            setTimeout(() => handlePull(count), 150);
+
+            // Show Cash Back notification AFTER the summary is closed!
+            if (pendingCashBackRef.current > 0) {
+              const refunded = pendingCashBackRef.current;
+              pendingCashBackRef.current = 0;
+              setToastMessage(
+                `✨ 5★ Cash Back: +${refunded.toLocaleString()} Astrite (${refunded / 160} Convenes) Refunded!`
+              );
+              setTimeout(() => setToastMessage(null), 5000);
+            }
           }}
         />
       )}
@@ -804,6 +1820,8 @@ export const ConveneStage: React.FC = () => {
       <HistoryModal
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
+        userId={isSandboxGuest ? null : currentUser?.id}
+        isSandbox={isSandboxGuest}
       />
 
       <DetailsModal
@@ -814,19 +1832,135 @@ export const ConveneStage: React.FC = () => {
       <DevSettingsModal
         isOpen={isDevOpen}
         onClose={() => setIsDevOpen(false)}
-        isSandbox={Boolean(userState?.isSandbox)}
-        onToggleSandbox={handleToggleSandbox}
-        onResetState={handleResetState}
       />
 
-      <ReplenishModal
-        isOpen={isReplenishOpen}
-        onClose={() => setIsReplenishOpen(false)}
-        currencyType="astrite"
-        currentBalances={{
-          astrite: userState?.astrite || 0,
+      <InventoryModal
+        isOpen={isInventoryOpen}
+        onClose={() => {
+          setIsInventoryOpen(false);
+          setInspectedInventory(null);
+          setIsInventoryNavigatedFromProfile(false);
         }}
-        onUpdateCurrency={handleUpdateCurrency}
+        onBack={
+          isInventoryNavigatedFromProfile
+            ? () => {
+                setIsInventoryOpen(false);
+                setInspectedInventory(null);
+                setIsInventoryNavigatedFromProfile(false);
+                setIsPlayerProfileOpen(true);
+              }
+            : undefined
+        }
+        inventory={inspectedInventory ? inspectedInventory.items : inventoryList}
+        username={
+          inspectedInventory
+            ? inspectedInventory.username
+            : userProfile?.username || currentUser?.user_metadata?.username || "Player"
+        }
+        currentUserId={inspectedInventory?.isReadOnly ? undefined : currentUser?.id}
+        onDeleteItems={inspectedInventory?.isReadOnly ? undefined : handleDeleteInventoryItems}
+        isLoading={isInventoryLoading}
+        isReadOnly={inspectedInventory ? inspectedInventory.isReadOnly : false}
+      />
+
+      <PlayerProfileModal
+        isOpen={isPlayerProfileOpen}
+        onClose={() => {
+          setIsPlayerProfileOpen(false);
+          setVisitedPlayerProfile(null);
+        }}
+        currentUserId={currentUser?.id}
+        currentUsername={userProfile?.username || currentUser?.user_metadata?.username || "Player"}
+        currentAvatarId={currentAvatarId}
+        initialShowcaseIds={userProfile?.showcase_ids}
+        initialCustomTitle={userProfile?.custom_title || currentUser?.user_metadata?.custom_title || getStoredUserTitle(currentUser?.id)}
+        astrite={userState?.astrite ?? userProfile?.astrite ?? 0}
+        pity5Star={pityMap[bannerMode]?.pity5Star ?? userProfile?.pity_5star ?? 0}
+        inventory={inventoryList}
+        winRateFormatted={winRateStats.winRateFormatted}
+        totalPulls={userProfile?.total_pulls ?? getTotalPullsCount()}
+        isVip={userProfile?.is_vip}
+        loginStreak={userProfile?.login_streak ?? getStoredLoginStreak(currentUser?.id).streak}
+        maxLoginStreak={userProfile?.max_login_streak ?? getStoredLoginStreak(currentUser?.id).maxStreak}
+        visitedProfile={visitedPlayerProfile}
+        onVisitedProfileChange={setVisitedPlayerProfile}
+        onAstriteClaimed={(rewardAmount) => {
+          grantClientCurrency(rewardAmount, currentUser?.id, isSandboxGuest);
+          setUserState((prev: any) => ({
+            ...prev,
+            astrite: (prev?.astrite || 0) + rewardAmount,
+          }));
+          fetchState();
+          setToastMessage(`✨ Claimed Title Reward: +${rewardAmount.toLocaleString()} Astrite!`);
+          setTimeout(() => setToastMessage(null), 4000);
+        }}
+        onInspectInventory={(targetInventory, targetUsername, isReadOnly) => {
+          setInspectedInventory({
+            items: targetInventory,
+            username: targetUsername,
+            isReadOnly,
+          });
+          setIsInventoryNavigatedFromProfile(true);
+          setIsPlayerProfileOpen(false);
+          setIsInventoryOpen(true);
+        }}
+        onOpenAccountModal={() => {
+          setIsPlayerProfileOpen(false);
+          setIsAccountNavigatedFromProfile(true);
+          setIsAccountModalOpen(true);
+        }}
+      />
+
+      <ProfileModal
+        isOpen={isAccountModalOpen}
+        onClose={() => {
+          setIsAccountModalOpen(false);
+          setIsAccountNavigatedFromProfile(false);
+        }}
+        onBack={
+          isAccountNavigatedFromProfile
+            ? () => {
+                setIsAccountModalOpen(false);
+                setIsAccountNavigatedFromProfile(false);
+                setIsPlayerProfileOpen(true);
+              }
+            : undefined
+        }
+        userId={currentUser?.id || ""}
+        currentUsername={userProfile?.username || currentUser?.user_metadata?.username || "Player"}
+        currentAvatarId={currentAvatarId}
+        createdAt={currentUser?.created_at}
+        onUsernameChanged={(newUsername) => {
+          if (userProfile) {
+            setUserProfile((prev) => (prev ? { ...prev, username: newUsername } : null));
+          }
+          if (currentUser) {
+            setCurrentUser((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    user_metadata: { ...prev.user_metadata, username: newUsername },
+                  }
+                : null
+            );
+          }
+        }}
+        onAvatarChanged={(newAvatarId) => {
+          setCurrentAvatarId(newAvatarId);
+        }}
+      />
+
+      {/* Update Log & Suggestion Modal */}
+      <UpdateLogModal
+        isOpen={isUpdateLogOpen}
+        onClose={() => setIsUpdateLogOpen(false)}
+        currentUsername={userProfile?.username || currentUser?.user_metadata?.username || "Player"}
+      />
+
+      {/* How to Play Guide Modal */}
+      <HowToPlayModal
+        isOpen={isHowToPlayOpen}
+        onClose={() => setIsHowToPlayOpen(false)}
       />
 
       {/* Coming Soon Notice Modal */}
@@ -958,34 +2092,53 @@ export const ConveneStage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Choice to + or Exit */}
-              <div className="grid grid-cols-2 gap-3 pt-1">
+              {/* Choice to Claim Free Astrite or Exit */}
+              <div className="flex flex-col gap-2 pt-1">
+                {tacetStatus.accumulated > 0 ? (
+                  <button
+                    onClick={() => {
+                      handleClaimTacetField();
+                      setShowInsufficientModal(false);
+                    }}
+                    className="flex items-center justify-center space-x-1.5 py-2.5 px-4 rounded-xl bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 hover:from-yellow-300 hover:via-amber-300 hover:to-yellow-400 text-black font-black uppercase text-xs tracking-wider transition-all shadow-[0_0_20px_rgba(250,204,21,0.4)] hover:scale-102 active:scale-95"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Claim Free Astrite (+{tacetStatus.accumulated.toLocaleString()})</span>
+                  </button>
+                ) : (
+                  <p className="text-[11px] font-mono text-gray-400 text-center px-2 py-1 bg-white/[0.03] border border-white/5 rounded-lg">
+                    Earn 160 Free Astrite every 4.5 mins (top right) or +800 Astrites via 5★ Cash Back!
+                  </p>
+                )}
+
                 {/* Exit Button */}
                 <button
                   onClick={() => {
                     soundEngine.playClick();
                     setShowInsufficientModal(false);
                   }}
-                  className="py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 hover:border-white/30 text-gray-300 hover:text-white font-bold uppercase text-xs tracking-wider transition-all active:scale-95"
+                  className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 hover:border-white/30 text-gray-300 hover:text-white font-bold uppercase text-xs tracking-wider transition-all active:scale-95"
                 >
-                  Exit
-                </button>
-
-                {/* + Button (Replenish) */}
-                <button
-                  onClick={() => {
-                    soundEngine.playClick();
-                    setShowInsufficientModal(false);
-                    setIsReplenishOpen(true);
-                  }}
-                  className="flex items-center justify-center space-x-1.5 py-2.5 px-4 rounded-xl bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 hover:from-yellow-300 hover:via-amber-300 hover:to-yellow-400 text-black font-black uppercase text-xs tracking-wider transition-all shadow-[0_0_20px_rgba(250,204,21,0.4)] hover:scale-102 active:scale-95"
-                >
-                  <Plus className="w-4 h-4 stroke-[3]" />
-                  <span>Replenish</span>
+                  {tacetStatus.accumulated > 0 ? "Cancel" : "Understood"}
                 </button>
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Toast Notification (Tacet Field / Milestone Rebate) */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -25, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -25, scale: 0.95 }}
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-2.5 rounded-xl bg-black/90 border border-yellow-400/50 shadow-[0_0_30px_rgba(250,204,21,0.35)] backdrop-blur-md flex items-center space-x-2.5 text-xs font-mono font-bold text-yellow-300 pointer-events-none"
+          >
+            <Sparkles className="w-4 h-4 text-yellow-400 animate-pulse flex-shrink-0" />
+            <span>{toastMessage}</span>
+          </motion.div>
         )}
       </AnimatePresence>
     </main>
