@@ -10,20 +10,20 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "For Gacha Addicts | Wuthering Waves Convene Simulator",
-  description: "Experience authentic Wuthering Waves convenes with hourly rotating banners, tacet field idle astrites, 5-star inventory, and showcase profiles.",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://wuwa-convene-system.vercel.app"),
+  title: "For Gacha Addicts",
+  description: "Wuthering Waves Gacha Simulator",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://wuwa-sim.vercel.app"),
   openGraph: {
-    title: "For Gacha Addicts | Wuthering Waves Convene Simulator",
-    description: "Experience authentic Wuthering Waves convenes with hourly rotating banners, tacet field idle astrites, 5-star inventory, and showcase profiles.",
-    url: "/",
-    siteName: "WuWa Convene Simulator",
+    title: "For Gacha Addicts",
+    description: "Wuthering Waves Gacha Simulator",
+    url: "https://wuwa-sim.vercel.app",
+    siteName: "WuWa Gacha Simulator",
     images: [
       {
         url: "/embed_wuwasim.png",
         width: 1200,
         height: 630,
-        alt: "Wuthering Waves Convene Simulator",
+        alt: "Wuthering Waves Gacha Simulator",
       },
     ],
     locale: "en_US",
@@ -31,8 +31,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "For Gacha Addicts | Wuthering Waves Convene Simulator",
-    description: "Experience authentic Wuthering Waves convenes with hourly rotating banners, tacet field idle astrites, 5-star inventory, and showcase profiles.",
+    title: "For Gacha Addicts",
+    description: "Wuthering Waves Gacha Simulator",
     images: ["/embed_wuwasim.png"],
   },
   icons: {
