@@ -95,10 +95,20 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   const isMuted = masterVol === 0;
   const prevMasterVolRef = useRef<number>(masterVol > 0 ? masterVol : 80);
+
+  useEffect(() => {
+    if (isOpen) {
+      const currentMaster = Math.round(soundEngine.getMasterVolume() * 100);
+      setMasterVol(currentMaster);
+      if (currentMaster > 0) {
+        prevMasterVolRef.current = currentMaster;
+      }
+      setMusicVol(Math.round(soundEngine.getMusicVolume() * 100));
+      setSummonVol(Math.round(soundEngine.getSummonVolume() * 100));
+    }
+  }, [isOpen]);
 
   const handleMasterChange = (val: number) => {
     if (val > 0) {
@@ -128,6 +138,8 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
     setSummonVol(val);
     soundEngine.setSummonVolume(val / 100);
   };
+
+  if (!isOpen) return null;
 
   return (
     <AnimatePresence>
