@@ -6,7 +6,7 @@
  * Supports automatic fallback to local video streaming if offline or during local development.
  */
 
-export const DEFAULT_R2_BASE_URL = "https://pub-abcdd91baa4c4547bd65f9408d7b541e.r2.dev";
+export const DEFAULT_R2_BASE_URL = "https://wuwa-cdn.kurtpaoloredondo14.workers.dev";
 
 export function getR2BaseUrl(): string {
   const envUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || DEFAULT_R2_BASE_URL;
