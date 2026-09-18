@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from "./client";
 import { User, Session } from "@supabase/supabase-js";
 import { UserInventoryItem } from "./inventory";
+import { triggerSlowDownModal } from "@/components/modals/SlowDownModal";
 
 export const PRESET_SECURITY_QUESTIONS = [
   "Most Favorite Resonator",
@@ -8,6 +9,75 @@ export const PRESET_SECURITY_QUESTIONS = [
 ] as const;
 
 export { ALL_RESONATORS_LIST, type ResonatorOption } from "@/lib/data/items";
+
+// --- Rate Limiting Guards ---
+const LOGIN_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_LOGIN_ATTEMPTS = 10; // 10 attempts per 5 minutes
+
+const SIGNUP_RATE_LIMIT_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+const MAX_SIGNUP_ATTEMPTS = 10; // 10 signups per 30 minutes
+
+function isRateLimitError(errMsg: string = ""): boolean {
+  const lower = errMsg.toLowerCase();
+  return (
+    lower.includes("rate limit") ||
+    lower.includes("too many") ||
+    lower.includes("over_request_rate_limit") ||
+    lower.includes("email rate limit exceeded") ||
+    lower.includes("429")
+  );
+}
+
+function checkAndRecordLoginAttempt(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const key = "wuwa_login_attempts";
+    const now = Date.now();
+    const raw = localStorage.getItem(key);
+    let attempts: number[] = raw ? JSON.parse(raw) : [];
+    attempts = attempts.filter((t) => now - t < LOGIN_RATE_LIMIT_WINDOW_MS);
+
+    if (attempts.length >= MAX_LOGIN_ATTEMPTS) {
+      triggerSlowDownModal("Too many login attempts!");
+      return false;
+    }
+
+    attempts.push(now);
+    localStorage.setItem(key, JSON.stringify(attempts));
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function clearLoginAttempts(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem("wuwa_login_attempts");
+  } catch {}
+}
+
+function checkAndRecordSignupAttempt(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const key = "wuwa_signup_attempts";
+    const now = Date.now();
+    const raw = localStorage.getItem(key);
+    let attempts: number[] = raw ? JSON.parse(raw) : [];
+    attempts = attempts.filter((t) => now - t < SIGNUP_RATE_LIMIT_WINDOW_MS);
+
+    if (attempts.length >= MAX_SIGNUP_ATTEMPTS) {
+      triggerSlowDownModal("Too many sign up attempts!");
+      return false;
+    }
+
+    attempts.push(now);
+    localStorage.setItem(key, JSON.stringify(attempts));
+    return true;
+  } catch {
+    return true;
+  }
+}
 
 /**
  * Computes a standard SHA-256 hash string for security answers.
@@ -52,6 +122,11 @@ export async function signUpWithUsername(
     };
   }
 
+  // Device-level rate limit guard
+  if (!checkAndRecordSignupAttempt()) {
+    return { user: null, session: null, error: "Too many sign up attempts!" };
+  }
+
   const trimmedUser = username.trim();
   if (trimmedUser.length < 3) {
     return { user: null, session: null, error: "Username must be at least 3 characters long." };
@@ -80,6 +155,10 @@ export async function signUpWithUsername(
     });
 
     if (error) {
+      if (isRateLimitError(error.message)) {
+        triggerSlowDownModal("Too many sign up attempts!");
+        return { user: null, session: null, error: "Too many sign up attempts!" };
+      }
       if (error.message.toLowerCase().includes("already registered") || error.message.toLowerCase().includes("user already exists")) {
         return { user: null, session: null, error: "This username is already taken. Please choose another." };
       }
@@ -112,6 +191,10 @@ export async function signUpWithUsername(
       error: null,
     };
   } catch (err: any) {
+    if (isRateLimitError(err.message)) {
+      triggerSlowDownModal("Too many sign up attempts!");
+      return { user: null, session: null, error: "Too many sign up attempts!" };
+    }
     return { user: null, session: null, error: err.message || "Sign up failed" };
   }
 }
@@ -131,6 +214,11 @@ export async function signInWithUsername(
     };
   }
 
+  // Device-level rate limit guard (10 attempts per 5 minutes)
+  if (!checkAndRecordLoginAttempt()) {
+    return { user: null, session: null, error: "Too many login attempts!" };
+  }
+
   const trimmedUser = username.trim();
   if (!trimmedUser || !password) {
     return { user: null, session: null, error: "Please enter both username and password." };
@@ -144,11 +232,18 @@ export async function signInWithUsername(
     });
 
     if (error) {
+      if (isRateLimitError(error.message)) {
+        triggerSlowDownModal("Too many login attempts!");
+        return { user: null, session: null, error: "Too many login attempts!" };
+      }
       if (error.message.toLowerCase().includes("invalid login credentials")) {
         return { user: null, session: null, error: "Invalid username or password." };
       }
       return { user: null, session: null, error: error.message };
     }
+
+    // Successful login resets the attempt counter
+    clearLoginAttempts();
 
     return {
       user: data.user,
@@ -156,6 +251,10 @@ export async function signInWithUsername(
       error: null,
     };
   } catch (err: any) {
+    if (isRateLimitError(err.message)) {
+      triggerSlowDownModal("Too many login attempts!");
+      return { user: null, session: null, error: "Too many login attempts!" };
+    }
     return { user: null, session: null, error: err.message || "Sign in failed" };
   }
 }
@@ -202,6 +301,47 @@ export function getPreviousUsernames(userId: string): string[] {
   }
 }
 
+// --- 1-Hour Account Change Cooldown Guards ---
+export const ACCOUNT_UPDATE_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+
+export function getUsernameCooldownRemainingMs(userId: string): number {
+  if (typeof window === "undefined" || !userId) return 0;
+  try {
+    const last = Number(localStorage.getItem(`wuwa_last_username_change_${userId}`) || 0);
+    if (!last) return 0;
+    const diff = Date.now() - last;
+    return diff < ACCOUNT_UPDATE_COOLDOWN_MS ? ACCOUNT_UPDATE_COOLDOWN_MS - diff : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function recordUsernameChange(userId: string): void {
+  if (typeof window === "undefined" || !userId) return;
+  try {
+    localStorage.setItem(`wuwa_last_username_change_${userId}`, String(Date.now()));
+  } catch {}
+}
+
+export function getPasswordCooldownRemainingMs(userId: string): number {
+  if (typeof window === "undefined" || !userId) return 0;
+  try {
+    const last = Number(localStorage.getItem(`wuwa_last_password_change_${userId}`) || 0);
+    if (!last) return 0;
+    const diff = Date.now() - last;
+    return diff < ACCOUNT_UPDATE_COOLDOWN_MS ? ACCOUNT_UPDATE_COOLDOWN_MS - diff : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function recordPasswordChange(userId: string): void {
+  if (typeof window === "undefined" || !userId) return;
+  try {
+    localStorage.setItem(`wuwa_last_password_change_${userId}`, String(Date.now()));
+  } catch {}
+}
+
 /**
  * Updates a user's username across Supabase Auth and Profiles table.
  */
@@ -217,6 +357,17 @@ export async function updateUserUsername(
 }> {
   if (!isSupabaseConfigured()) {
     return { success: false, error: "Database not configured." };
+  }
+
+  // Check 1-hour username change cooldown
+  const usernameCooldown = getUsernameCooldownRemainingMs(userId);
+  if (usernameCooldown > 0) {
+    const minsLeft = Math.ceil(usernameCooldown / (60 * 1000));
+    triggerSlowDownModal(`Username change cooldown: ${minsLeft}m remaining!`);
+    return {
+      success: false,
+      error: `You can only change your username once per hour (${minsLeft}m remaining).`,
+    };
   }
 
   const trimmed = newUsername.trim();
@@ -296,6 +447,9 @@ export async function updateUserUsername(
       } catch {}
     }
 
+    // Record 1-hour cooldown timestamp
+    recordUsernameChange(userId);
+
     return {
       success: true,
       updatedUsername: trimmed,
@@ -311,10 +465,33 @@ export async function updateUserUsername(
  */
 export async function updateUserPassword(
   newPassword: string,
-  currentPassword?: string
+  currentPassword?: string,
+  userId?: string
 ): Promise<{ success: boolean; error?: string | null }> {
   if (!isSupabaseConfigured()) {
     return { success: false, error: "Database not configured." };
+  }
+
+  let activeUserId = userId;
+  if (!activeUserId) {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      activeUserId = user?.id;
+    } catch {}
+  }
+
+  if (activeUserId) {
+    const passwordCooldown = getPasswordCooldownRemainingMs(activeUserId);
+    if (passwordCooldown > 0) {
+      const minsLeft = Math.ceil(passwordCooldown / (60 * 1000));
+      triggerSlowDownModal(`Password change cooldown: ${minsLeft}m remaining!`);
+      return {
+        success: false,
+        error: `You can only change your password once per hour (${minsLeft}m remaining).`,
+      };
+    }
   }
 
   if (!newPassword || newPassword.length < 6) {
@@ -348,6 +525,10 @@ export async function updateUserPassword(
 
     if (error) {
       return { success: false, error: error.message };
+    }
+
+    if (activeUserId) {
+      recordPasswordChange(activeUserId);
     }
 
     return { success: true };

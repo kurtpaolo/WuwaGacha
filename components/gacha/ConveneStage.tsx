@@ -39,6 +39,7 @@ import { PlayerProfileModal } from "@/components/modals/PlayerProfileModal";
 import { UpdateLogModal } from "@/components/modals/UpdateLogModal";
 import { HowToPlayModal } from "@/components/modals/HowToPlayModal";
 import { ExternalRedirectModal } from "@/components/modals/ExternalRedirectModal";
+import { SlowDownModal } from "@/components/modals/SlowDownModal";
 import {
   getHourlyRotatedCharacters,
   getTimeUntilNextRotation,
@@ -1853,6 +1854,9 @@ export const ConveneStage: React.FC = () => {
 
       {/* Global External Link Redirect Confirmation Modal */}
       <ExternalRedirectModal />
+
+      {/* Global Rate Limit Warning Modal */}
+      <SlowDownModal />
 
       {/* Coming Soon Notice Modal */}
       <AnimatePresence>

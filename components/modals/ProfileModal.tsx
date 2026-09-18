@@ -27,7 +27,10 @@ import {
   ALL_RESONATORS_LIST,
   getUserSecurityQuestionById,
   updateUserSecurityQuestion,
+  getUsernameCooldownRemainingMs,
+  getPasswordCooldownRemainingMs,
 } from "@/lib/supabase/auth";
+import { triggerSlowDownModal } from "@/components/modals/SlowDownModal";
 import { INVENTORY_PORTRAITS, getPortraitFileName, DEFAULT_AVATAR_ID } from "@/lib/data/portraits";
 import { ScrollableSelect } from "@/components/ui/ScrollableSelect";
 
@@ -237,7 +240,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     try {
       const result = await updateUserPassword(
         newPasswordInput,
-        currentPasswordInput.trim() || undefined
+        currentPasswordInput.trim() || undefined,
+        userId
       );
 
       if (result.success) {
@@ -419,6 +423,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     type="button"
                     onClick={() => {
                       soundEngine.playClick();
+                      const cooldown = getUsernameCooldownRemainingMs(userId);
+                      if (cooldown > 0) {
+                        const mins = Math.ceil(cooldown / (60 * 1000));
+                        triggerSlowDownModal(`Username change cooldown: ${mins}m remaining!`);
+                        return;
+                      }
                       setIsEditingUsername((prev) => !prev);
                       setUsernameError(null);
                       setNewUsernameInput(currentUsername);
@@ -539,6 +549,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     type="button"
                     onClick={() => {
                       soundEngine.playClick();
+                      const cooldown = getPasswordCooldownRemainingMs(userId);
+                      if (cooldown > 0) {
+                        const mins = Math.ceil(cooldown / (60 * 1000));
+                        triggerSlowDownModal(`Password change cooldown: ${mins}m remaining!`);
+                        return;
+                      }
                       setIsEditingPassword((prev) => !prev);
                       setPasswordError(null);
                       setCurrentPasswordInput("");

@@ -35,6 +35,8 @@ import { DetailsModal } from "@/components/modals/DetailsModal";
 import { PrivacyModal } from "@/components/modals/PrivacyModal";
 import { HowToPlayModal } from "@/components/modals/HowToPlayModal";
 import { ScrollableSelect } from "@/components/ui/ScrollableSelect";
+import { SlowDownModal } from "@/components/modals/SlowDownModal";
+import { ExternalRedirectModal } from "@/components/modals/ExternalRedirectModal";
 
 interface LoginGatewayProps {
   onLoginSuccess: (user: SupabaseUser, profile: UserProfile | null, isNewAccount?: boolean) => void;
@@ -845,6 +847,10 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Global Modals */}
+      <SlowDownModal />
+      <ExternalRedirectModal />
     </div>
   );
 };
