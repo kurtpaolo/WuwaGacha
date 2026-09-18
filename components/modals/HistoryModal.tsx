@@ -127,16 +127,20 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                   Convene History
                 </h2>
                 <p className="text-[11px] sm:text-xs text-gray-400 tracking-wider font-mono">
-                  Solaris-3 Resonance Log Records
+                  Detailed Pull &amp; Pity Logs
                 </p>
               </div>
             </div>
 
             <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+              onClick={() => {
+                soundEngine.playClick();
+                onClose();
+              }}
+              className="relative p-2 rounded-xl bg-gradient-to-br from-rose-500/25 to-pink-600/30 hover:from-rose-500/40 hover:to-pink-600/50 border border-rose-500/50 text-rose-300 hover:text-white transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)] active:scale-95 group flex-shrink-0 cursor-pointer"
+              title="Close"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5 stroke-[2.5] group-hover:rotate-90 transition-transform duration-200" />
             </button>
           </div>
 
@@ -226,7 +230,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
           <div className="flex-1 overflow-y-auto p-3 sm:p-6 md:p-8">
             {loading ? (
               <div className="py-24 text-center text-gray-400 font-mono animate-pulse">
-                Querying Solaris-3 Resonance Database...
+                Loading history...
               </div>
             ) : activeTab === "all" ? (
               /* ========================================================================= */
@@ -234,7 +238,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
               /* ========================================================================= */
               logs.length === 0 ? (
                 <div className="py-24 text-center text-gray-500 font-mono">
-                  No convene records found yet. Perform summons to view them here!
+                  No convene records found yet. Pull on any banner to view history!
                 </div>
               ) : (
                 <div className="w-full border border-white/10 rounded-xl overflow-x-auto bg-black/30 shadow-inner">
@@ -375,7 +379,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                       No 5-Star Convenes Recorded Yet
                     </h4>
                     <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                      Perform convenes to pull 5-star resonators. Your history and pity stats will appear right here!
+                      Pull 5★ resonators to see your pity and drop history here!
                     </p>
                   </div>
                 ) : (

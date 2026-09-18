@@ -22,6 +22,7 @@ import {
   Pencil,
   Settings,
   Flame,
+  Camera,
 } from "lucide-react";
 import { soundEngine } from "@/lib/audio/soundEngine";
 import { RESONATORS } from "@/lib/data/items";
@@ -38,6 +39,7 @@ import {
   updateShowcaseResonatorIds,
   getStoredShowcaseResonatorIds,
   PlayerPublicProfile,
+  updateUserAvatar,
 } from "@/lib/supabase/auth";
 import {
   UserInventoryItem,
@@ -75,6 +77,7 @@ interface PlayerProfileModalProps {
     isReadOnly: boolean
   ) => void;
   onOpenAccountModal?: () => void;
+  onAvatarChanged?: (newAvatarId: string) => void;
   visitedProfile?: PlayerPublicProfile | null;
   onVisitedProfileChange?: (profile: PlayerPublicProfile | null) => void;
   onAstriteClaimed?: (amount: number) => void;
@@ -98,6 +101,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
   totalPulls = 0,
   onInspectInventory,
   onOpenAccountModal,
+  onAvatarChanged,
   visitedProfile: externalVisitedProfile,
   onVisitedProfileChange,
   onAstriteClaimed,
@@ -130,11 +134,16 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
 
   // Own Showcase Resonator IDs (up to 6)
   const [ownShowcaseIds, setOwnShowcaseIds] = useState<string[]>([]);
-  const [isShowcasePickerOpen, setIsShowcasePickerOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editTab, setEditTab] = useState<"showcase" | "avatar">("showcase");
   const [tempShowcaseIds, setTempShowcaseIds] = useState<string[]>([]);
+  const [tempAvatarId, setTempAvatarId] = useState<string>(() => currentAvatarId || DEFAULT_AVATAR_ID);
   const [pickerSearch, setPickerSearch] = useState("");
+  const [avatarSearch, setAvatarSearch] = useState("");
   const [pickerElementFilter, setPickerElementFilter] = useState("ALL");
   const [isSavingShowcase, setIsSavingShowcase] = useState(false);
+  const [isSavingAvatar, setIsSavingAvatar] = useState(false);
+  const [avatarSuccess, setAvatarSuccess] = useState(false);
 
   // Own Favorites from LocalStorage
   const [ownFavorites, setOwnFavorites] = useState<Set<string>>(new Set());
@@ -177,7 +186,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
       setSearchResults([]);
       setIsSearchListOpen(false);
       setHasSearched(false);
-      setIsShowcasePickerOpen(false);
+      setIsEditModalOpen(false);
       return;
     }
 
@@ -489,14 +498,21 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
     return `${((wins5050 / total5050) * 100).toFixed(1)}%`;
   }, [isViewingSelf, winRateFormatted, visitedProfile]);
 
-  // Open Showcase Editor
-  const handleOpenShowcasePicker = () => {
+  // Open Edit Profile Modal (Showcase or Avatar tab)
+  const handleOpenEditModal = (tab: "showcase" | "avatar" = "showcase") => {
     soundEngine.playClick();
     setTempShowcaseIds([...ownShowcaseIds]);
+    setTempAvatarId(activeAvatarId || currentAvatarId || DEFAULT_AVATAR_ID);
     setPickerSearch("");
+    setAvatarSearch("");
     setPickerElementFilter("ALL");
-    setIsShowcasePickerOpen(true);
+    setAvatarSuccess(false);
+    setEditTab(tab);
+    setIsEditModalOpen(true);
   };
+
+  // Backward compatibility alias
+  const handleOpenShowcasePicker = () => handleOpenEditModal("showcase");
 
   // Toggle unit in showcase picker
   const handleTogglePickerUnit = (characterId: string) => {
@@ -524,11 +540,34 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
         await updateShowcaseResonatorIds(currentUserId, sanitized);
       }
       setOwnShowcaseIds(sanitized);
-      setIsShowcasePickerOpen(false);
+      setIsEditModalOpen(false);
     } catch (err) {
       console.error("Failed to save showcase IDs:", err);
     } finally {
       setIsSavingShowcase(false);
+    }
+  };
+
+  // Save profile picture (Avatar)
+  const handleSaveAvatar = async (avatarId: string) => {
+    soundEngine.playClick();
+    setIsSavingAvatar(true);
+    try {
+      if (currentUserId) {
+        await updateUserAvatar(currentUserId, avatarId);
+      }
+      if (typeof window !== "undefined" && currentUserId) {
+        localStorage.setItem(`wuwa_avatar_${currentUserId}`, avatarId);
+      }
+      if (onAvatarChanged) {
+        onAvatarChanged(avatarId);
+      }
+      setAvatarSuccess(true);
+      setTimeout(() => setAvatarSuccess(false), 2200);
+    } catch (err) {
+      console.error("Failed to save avatar:", err);
+    } finally {
+      setIsSavingAvatar(false);
     }
   };
 
@@ -566,6 +605,13 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
       return matchesSearch && matchesElem;
     });
   }, [inventory, pickerSearch, pickerElementFilter, ownFavorites]);
+
+  // Filtered portraits for avatar picker
+  const filteredPortraits = useMemo(() => {
+    if (!avatarSearch.trim()) return INVENTORY_PORTRAITS;
+    const q = avatarSearch.toLowerCase().trim();
+    return INVENTORY_PORTRAITS.filter((p) => p.name.toLowerCase().includes(q));
+  }, [avatarSearch]);
 
   if (!isOpen) return null;
 
@@ -885,7 +931,13 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                   {/* Avatar + Username + Resonator Title Under Name */}
                   <div className="flex items-center space-x-3 sm:space-x-4 min-w-0">
                     {/* Avatar with Neon Magenta Glowing Border */}
-                    <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden border-2 border-fuchsia-500 shadow-[0_0_20px_rgba(217,70,239,0.6)] bg-black/60 flex-shrink-0">
+                    <div
+                      onClick={isViewingSelf ? () => handleOpenEditModal("avatar") : undefined}
+                      className={`relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden border-2 border-fuchsia-500 shadow-[0_0_20px_rgba(217,70,239,0.6)] bg-black/60 flex-shrink-0 ${
+                        isViewingSelf ? "cursor-pointer hover:border-fuchsia-400 transition-all group" : ""
+                      }`}
+                      title={isViewingSelf ? "Click to change profile picture" : undefined}
+                    >
                       <img
                         src={`/assets/inventory_portraits/${getPortraitFileName(activeAvatarId)}`}
                         alt={activeUsername}
@@ -897,6 +949,11 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                           }
                         }}
                       />
+                      {isViewingSelf && (
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <Camera className="w-5 h-5 text-fuchsia-300 drop-shadow" />
+                        </div>
+                      )}
                     </div>
 
                     {/* Username & Avatar Resonator Title */}
@@ -948,11 +1005,12 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                     <div className="flex items-center space-x-1.5 sm:space-x-2 flex-shrink-0">
                       <button
                         type="button"
-                        onClick={handleOpenShowcasePicker}
-                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-purple-600/25 hover:bg-purple-600/45 border border-purple-400/40 text-purple-200 hover:text-white flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer"
-                        title="Edit Showcase Resonators"
+                        onClick={() => handleOpenEditModal("showcase")}
+                        className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-purple-600/25 hover:bg-purple-600/45 border border-purple-400/40 text-purple-200 hover:text-white flex items-center space-x-1.5 transition-all shadow-sm active:scale-95 cursor-pointer font-mono font-bold text-xs"
+                        title="Edit Profile"
                       >
-                        <Pencil className="w-4 h-4 text-purple-300 flex-shrink-0" />
+                        <Pencil className="w-3.5 h-3.5 text-purple-300 flex-shrink-0" />
+                        <span>Edit</span>
                       </button>
 
                       <button
@@ -997,10 +1055,16 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                 </span>
                 {isViewingSelf && (
                   <button
-                    onClick={handleOpenShowcasePicker}
-                    className="text-[11px] font-mono text-purple-400 hover:text-purple-300 underline underline-offset-2"
+                    type="button"
+                    onClick={() => {
+                      soundEngine.playClick();
+                      onInspectInventory(activeInventory, activeUsername, false);
+                    }}
+                    className="text-[11px] font-mono text-yellow-400 hover:text-yellow-300 flex items-center space-x-1 cursor-pointer transition-colors"
+                    title="Open Inventory"
                   >
-                    Change
+                    <Briefcase className="w-3 h-3 text-yellow-400" />
+                    <span className="underline underline-offset-2">Inventory</span>
                   </button>
                 )}
               </div>
@@ -1049,10 +1113,10 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                         />
 
                         {/* Top Overlay: Element Top Left, Balanced Waveband (S1/S6) Top Right */}
-                        <div className="relative z-10 p-1.5 sm:p-2 flex items-center justify-between pointer-events-none">
+                        <div className="relative z-10 p-1 sm:p-2 flex items-center justify-between pointer-events-none">
                           {/* Element Symbol (Top-Left) */}
                           <div
-                            className="w-6 h-6 sm:w-6.5 sm:h-6.5 rounded-full p-0.5 sm:p-1 bg-black/85 border border-white/20 shadow-md flex items-center justify-center"
+                            className="w-[22px] h-[22px] sm:w-6 sm:h-6 shrink-0 rounded-full p-0.5 sm:p-1 bg-black/85 border border-white/20 shadow-md flex items-center justify-center"
                             title={element}
                           >
                             <img
@@ -1067,7 +1131,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
 
                           {/* Yellow Star with Sequence Number / S6 (Top-Right, Balanced Size) */}
                           <div
-                            className={`relative w-7.5 h-7.5 sm:w-8 sm:h-8 flex items-center justify-center ${
+                            className={`relative w-[22px] h-[22px] sm:w-6 sm:h-6 shrink-0 flex items-center justify-center ${
                               isS6
                                 ? "drop-shadow-[0_0_10px_rgba(250,204,21,0.85)]"
                                 : "drop-shadow-[0_0_6px_rgba(250,204,21,0.55)]"
@@ -1076,7 +1140,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                           >
                             <svg
                               viewBox="0 0 24 24"
-                              className="w-full h-full text-yellow-400 fill-yellow-400 overflow-visible"
+                              className="w-full h-full text-yellow-400 fill-yellow-400"
                             >
                               <path
                                 d="M12 1.5C12 7.5 16.5 12 22.5 12C16.5 12 12 16.5 12 22.5C12 16.5 7.5 12 1.5 12C7.5 12 12 7.5 12 1.5Z"
@@ -1084,7 +1148,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                                 strokeWidth="0.65"
                               />
                             </svg>
-                            <span className="absolute inset-0 flex items-center justify-center text-black font-black font-mono text-[9.5px] sm:text-[10px] leading-none select-none tracking-tight">
+                            <span className="absolute inset-0 flex items-center justify-center text-black font-black font-mono text-[8.5px] sm:text-[9.5px] leading-none select-none tracking-tight">
                               {isS6 ? "S6" : wavebandsUnlocked > 0 ? `S${wavebandsUnlocked}` : "S0"}
                             </span>
                           </div>
@@ -1143,7 +1207,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                 {/* 1. Total 5 star Resonators */}
                 <div className="bg-black/80 border border-white/10 rounded-xl px-3.5 py-2 flex items-center justify-between">
                   <span className="text-xs sm:text-sm font-bold text-gray-200">
-                    Total 5 star Resonators
+                    Total 5-Star Resonators
                   </span>
                   <div className="bg-[#050e09] border border-[#00ff66]/30 px-3 py-0.5 rounded-lg shadow-[0_0_10px_rgba(0,255,102,0.25)]">
                     <span className="text-xs sm:text-sm font-mono font-black text-[#00ff66]">
@@ -1176,10 +1240,10 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                   </div>
                 </div>
 
-                {/* 4. Total Pulled Used */}
+                {/* 4. Total Pulls Used */}
                 <div className="bg-black/80 border border-white/10 rounded-xl px-3.5 py-2 flex items-center justify-between">
                   <span className="text-xs sm:text-sm font-bold text-gray-200">
-                    Total Pulled Used
+                    Total Pulls Used
                   </span>
                   <div className="bg-[#050e09] border border-[#00ff66]/30 px-3 py-0.5 rounded-lg shadow-[0_0_10px_rgba(0,255,102,0.25)]">
                     <span className="text-xs sm:text-sm font-mono font-black text-[#00ff66]">
@@ -1191,7 +1255,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                 {/* 5. 50/50 Winrate */}
                 <div className="bg-black/80 border border-white/10 rounded-xl px-3.5 py-2 flex items-center justify-between">
                   <span className="text-xs sm:text-sm font-bold text-gray-200">
-                    50/50 Winrate
+                    50/50 Win Rate
                   </span>
                   <div className="bg-[#050e09] border border-[#00ff66]/30 px-3 py-0.5 rounded-lg shadow-[0_0_10px_rgba(0,255,102,0.25)]">
                     <span className="text-xs sm:text-sm font-mono font-black text-[#00ff66]">
@@ -1246,18 +1310,18 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
   </div>
 
       {/* ========================================================================= */}
-      {/* Showcase Resonator Customizer Modal (When user clicks Edit Showcase)      */}
+      {/* Edit Profile Modal (Showcase Resonators & Profile Picture tabs)            */}
       {/* ========================================================================= */}
-      {isShowcasePickerOpen && (
+      {isEditModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/95 select-none"
-          onClick={() => setIsShowcasePickerOpen(false)}
+          onClick={() => setIsEditModalOpen(false)}
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="relative w-full max-w-2xl bg-[#0c1017] border border-purple-500/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+            className="relative w-full max-w-2xl bg-[#0c1017] border border-purple-500/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -1265,185 +1329,365 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
               <div className="flex items-center space-x-2.5">
                 <Sparkles className="w-5 h-5 text-purple-400" />
                 <h3 className="text-base font-black uppercase tracking-wider text-white">
-                  Customize 6 Showcase Resonators
+                  Edit Profile
                 </h3>
               </div>
               <button
-                onClick={() => setIsShowcasePickerOpen(false)}
-                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white"
+                onClick={() => setIsEditModalOpen(false)}
+                className="relative p-1.5 sm:p-2 rounded-xl bg-gradient-to-br from-rose-500/25 to-pink-600/30 hover:from-rose-500/40 hover:to-pink-600/50 border border-rose-500/50 text-rose-300 hover:text-white transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)] active:scale-95 group flex-shrink-0 cursor-pointer"
+                title="Close"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5] group-hover:rotate-90 transition-transform duration-200" />
               </button>
             </div>
 
-            {/* Current 6 Selected Slots */}
-            <div className="p-4 border-b border-white/10 bg-black/40">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-mono font-bold text-gray-300">
-                  Selected Slots ({tempShowcaseIds.length}/6)
-                </span>
-                <button
-                  onClick={handleAutoFillFavorites}
-                  className="text-xs font-mono font-bold text-yellow-400 hover:text-yellow-300 flex items-center space-x-1"
-                >
-                  <Star className="w-3 h-3 fill-yellow-400" />
-                  <span>Use Favorites</span>
-                </button>
-              </div>
+            {/* Navigation Tabs (Showcase vs Profile Picture) */}
+            <div className="flex items-center space-x-2 px-5 py-2.5 border-b border-white/10 bg-black/40">
+              <button
+                type="button"
+                onClick={() => {
+                  soundEngine.playClick();
+                  setEditTab("showcase");
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold uppercase transition-all flex items-center space-x-1.5 cursor-pointer ${
+                  editTab === "showcase"
+                    ? "bg-purple-600 text-white shadow-[0_0_15px_rgba(147,51,234,0.4)]"
+                    : "text-gray-400 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <Star className="w-3.5 h-3.5" />
+                <span>Showcase Resonators ({tempShowcaseIds.length}/6)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  soundEngine.playClick();
+                  setEditTab("avatar");
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold uppercase transition-all flex items-center space-x-1.5 cursor-pointer ${
+                  editTab === "avatar"
+                    ? "bg-purple-600 text-white shadow-[0_0_15px_rgba(147,51,234,0.4)]"
+                    : "text-gray-400 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>Profile Picture</span>
+              </button>
+            </div>
 
-              <div className="grid grid-cols-6 gap-2">
-                {Array.from({ length: 6 }).map((_, idx) => {
-                  const id = tempShowcaseIds[idx];
-                  const res = id ? RESONATORS[id] : null;
-
-                  if (id && res) {
-                    return (
-                      <div
-                        key={`sel-${id}-${idx}`}
-                        className="relative aspect-square rounded-xl overflow-hidden border border-purple-500/60 bg-black/50 group"
-                      >
-                        <img
-                          src={`/assets/inventory_portraits/${getPortraitFileName(id)}`}
-                          alt={res.name}
-                          className="w-full h-full object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleTogglePickerUnit(id)}
-                          className="absolute inset-0 bg-red-600/70 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white"
-                          title="Remove from showcase"
-                        >
-                          <X className="w-4 h-4 stroke-[3]" />
-                        </button>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={`empty-sel-${idx}`}
-                      className="aspect-square rounded-xl border border-dashed border-white/20 bg-white/[0.02] flex items-center justify-center text-gray-600"
+            {/* TAB CONTENT */}
+            {editTab === "showcase" ? (
+              <>
+                {/* Current 6 Selected Slots */}
+                <div className="p-4 border-b border-white/10 bg-black/40">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-mono font-bold text-gray-300">
+                      Selected Slots ({tempShowcaseIds.length}/6)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAutoFillFavorites}
+                      className="text-xs font-mono font-bold text-yellow-400 hover:text-yellow-300 flex items-center space-x-1 cursor-pointer"
                     >
-                      <Plus className="w-4 h-4" />
+                      <Star className="w-3 h-3 fill-yellow-400" />
+                      <span>Use Favorites</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-6 gap-2">
+                    {Array.from({ length: 6 }).map((_, idx) => {
+                      const id = tempShowcaseIds[idx];
+                      const res = id ? RESONATORS[id] : null;
+
+                      if (id && res) {
+                        return (
+                          <div
+                            key={`sel-${id}-${idx}`}
+                            className="relative aspect-square rounded-xl overflow-hidden border border-purple-500/60 bg-black/50 group"
+                          >
+                            <img
+                              src={`/assets/inventory_portraits/${getPortraitFileName(id)}`}
+                              alt={res.name}
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePickerUnit(id)}
+                              className="absolute inset-0 bg-red-600/70 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white"
+                              title="Remove from showcase"
+                            >
+                              <X className="w-4 h-4 stroke-[3]" />
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={`empty-sel-${idx}`}
+                          className="aspect-square rounded-xl border border-dashed border-white/20 bg-white/[0.02] flex items-center justify-center text-gray-600"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Filter & Search Bar inside showcase picker (Smooth side-by-side scrollable on all devices) */}
+                <div className="px-4 py-2.5 border-b border-white/10 bg-black/30 flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0 flex items-center space-x-1.5 overflow-x-auto overscroll-x-contain touch-pan-x flex-nowrap scrollbar-none scroll-smooth py-1 -my-1">
+                    {["ALL", "FAVORITES", "Spectro", "Havoc", "Fusion", "Aero", "Electro", "Glacio"].map(
+                      (elem) => {
+                        const isSelected = pickerElementFilter === elem;
+                        const isFav = elem === "FAVORITES";
+                        return (
+                          <button
+                            key={elem}
+                            type="button"
+                            onClick={() => {
+                              soundEngine.playClick();
+                              setPickerElementFilter(elem);
+                            }}
+                            className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition-all whitespace-nowrap cursor-pointer flex items-center space-x-1 active:scale-95 ${
+                              isSelected
+                                ? "bg-purple-600 text-white shadow-[0_0_10px_rgba(168,85,247,0.4)]"
+                                : isFav
+                                ? "bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-400/90 border border-yellow-400/30"
+                                : "bg-white/5 text-gray-400 hover:text-white border border-white/10"
+                            }`}
+                          >
+                            {isFav && (
+                              <Star
+                                className={`w-2.5 h-2.5 ${
+                                  isSelected ? "fill-white text-white" : "fill-yellow-400 text-yellow-400"
+                                }`}
+                              />
+                            )}
+                            <span>{elem}</span>
+                          </button>
+                        );
+                      }
+                    )}
+                  </div>
+
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={pickerSearch}
+                    onChange={(e) => setPickerSearch(e.target.value)}
+                    className="flex-shrink-0 w-28 sm:w-36 px-2 py-1 rounded-lg bg-black/70 border border-white/15 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-purple-400"
+                  />
+                </div>
+
+                {/* Owned Units List */}
+                <div className="p-4 overflow-y-auto flex-1 min-h-[220px]">
+                  {filteredPickerItems.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-gray-500 text-xs font-mono">
+                      No matching resonators found in inventory.
                     </div>
-                  );
-                })}
-              </div>
-            </div>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
+                      {filteredPickerItems.map((item) => {
+                        const res = RESONATORS[item.character_id];
+                        const isChosen = tempShowcaseIds.includes(item.character_id);
+                        const isFav = ownFavorites.has(item.character_id);
 
-            {/* Filter & Search Bar inside picker */}
-            <div className="px-4 py-2.5 border-b border-white/10 bg-black/30 flex items-center justify-between gap-2">
-              <div className="flex items-center space-x-1 overflow-x-auto scrollbar-none pb-0.5">
-                {["ALL", "FAVORITES", "Spectro", "Havoc", "Fusion", "Aero", "Electro", "Glacio"].map(
-                  (elem) => {
-                    const isSelected = pickerElementFilter === elem;
-                    return (
-                      <button
-                        key={elem}
-                        onClick={() => {
-                          soundEngine.playClick();
-                          setPickerElementFilter(elem);
-                        }}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold uppercase transition-all whitespace-nowrap ${
-                          isSelected
-                            ? "bg-purple-600 text-white"
-                            : "bg-white/5 text-gray-400 hover:text-white"
-                        }`}
-                      >
-                        {elem}
-                      </button>
-                    );
-                  }
-                )}
-              </div>
+                        return (
+                          <div
+                            key={item.character_id}
+                            onClick={() => handleTogglePickerUnit(item.character_id)}
+                            className={`group relative aspect-[4/5] rounded-xl overflow-hidden border cursor-pointer transition-all ${
+                              isChosen
+                                ? "border-purple-500 ring-2 ring-purple-500/50 scale-[0.98]"
+                                : "border-white/15 hover:border-white/40"
+                            }`}
+                          >
+                            <img
+                              src={`/assets/inventory_portraits/${getPortraitFileName(
+                                item.character_id
+                              )}`}
+                              alt={res?.name || item.character_name}
+                              className="w-full h-full object-cover"
+                            />
 
-              <input
-                type="text"
-                placeholder="Search..."
-                value={pickerSearch}
-                onChange={(e) => setPickerSearch(e.target.value)}
-                className="w-32 sm:w-40 px-2 py-1 rounded-lg bg-black/70 border border-white/15 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-purple-400"
-              />
-            </div>
-
-            {/* Owned Units List */}
-            <div className="p-4 overflow-y-auto flex-1 min-h-[220px]">
-              {filteredPickerItems.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-gray-500 text-xs font-mono">
-                  No matching resonators found in inventory.
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
-                  {filteredPickerItems.map((item) => {
-                    const res = RESONATORS[item.character_id];
-                    const isChosen = tempShowcaseIds.includes(item.character_id);
-                    const isFav = ownFavorites.has(item.character_id);
-
-                    return (
-                      <div
-                        key={item.character_id}
-                        onClick={() => handleTogglePickerUnit(item.character_id)}
-                        className={`group relative aspect-[4/5] rounded-xl overflow-hidden border cursor-pointer transition-all ${
-                          isChosen
-                            ? "border-purple-500 ring-2 ring-purple-500/50 scale-[0.98]"
-                            : "border-white/15 hover:border-white/40"
-                        }`}
-                      >
-                        <img
-                          src={`/assets/inventory_portraits/${getPortraitFileName(
-                            item.character_id
-                          )}`}
-                          alt={res?.name || item.character_name}
-                          className="w-full h-full object-cover"
-                        />
-
-                        {/* Top indicators */}
-                        <div className="absolute top-1 right-1 flex items-center space-x-1 z-10">
-                          {isFav && (
-                            <div className="p-1 rounded bg-black/70">
-                              <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                            {/* Top indicators */}
+                            <div className="absolute top-1 right-1 flex items-center space-x-1 z-10">
+                              {isFav && (
+                                <div className="p-1 rounded bg-black/70">
+                                  <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                                </div>
+                              )}
+                              {isChosen && (
+                                <div className="p-1 rounded bg-purple-600 text-white shadow-md">
+                                  <Check className="w-3 h-3 stroke-[3]" />
+                                </div>
+                              )}
                             </div>
-                          )}
-                          {isChosen && (
-                            <div className="p-1 rounded bg-purple-600 text-white shadow-md">
-                              <Check className="w-3 h-3 stroke-[3]" />
+
+                            {/* Bottom Name */}
+                            <div className="absolute inset-x-0 bottom-0 py-1 bg-black/80 text-center">
+                              <span className="text-[10px] font-mono font-bold text-white truncate block px-1">
+                                {res?.name || item.character_name}
+                              </span>
                             </div>
-                          )}
-                        </div>
-
-                        {/* Bottom Name */}
-                        <div className="absolute inset-x-0 bottom-0 py-1 bg-black/80 text-center">
-                          <span className="text-[10px] font-mono font-bold text-white truncate block px-1">
-                            {res?.name || item.character_name}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* Footer Buttons */}
-            <div className="px-5 py-3 border-t border-white/10 bg-white/[0.02] flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setIsShowcasePickerOpen(false)}
-                className="px-4 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-mono font-bold text-gray-300 hover:text-white"
-              >
-                Cancel
-              </button>
+                {/* Footer Buttons for Showcase */}
+                <div className="px-5 py-3 border-t border-white/10 bg-white/[0.02] flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(false)}
+                    className="px-4 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-mono font-bold text-gray-300 hover:text-white cursor-pointer"
+                  >
+                    Cancel
+                  </button>
 
-              <button
-                type="button"
-                disabled={isSavingShowcase}
-                onClick={handleSaveShowcase}
-                className="px-5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-mono font-black text-xs uppercase tracking-wider flex items-center space-x-1.5 shadow-[0_0_15px_rgba(168,85,247,0.4)]"
-              >
-                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>{isSavingShowcase ? "Saving..." : "Save Showcase"}</span>
-              </button>
-            </div>
+                  <button
+                    type="button"
+                    disabled={isSavingShowcase}
+                    onClick={handleSaveShowcase}
+                    className="px-5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-mono font-black text-xs uppercase tracking-wider flex items-center space-x-1.5 shadow-[0_0_15px_rgba(168,85,247,0.4)] cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                    <span>{isSavingShowcase ? "Saving..." : "Save Showcase"}</span>
+                  </button>
+                </div>
+              </>
+            ) : (
+              /* PROFILE PICTURE (AVATAR) TAB */
+              <>
+                {/* Active Avatar Preview & Search */}
+                <div className="p-4 border-b border-white/10 bg-black/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center space-x-3">
+                    <div className="relative w-12 h-12 rounded-2xl overflow-hidden border-2 border-fuchsia-500 shadow-[0_0_15px_rgba(217,70,239,0.5)] bg-black/60 flex-shrink-0">
+                      <img
+                        src={`/assets/inventory_portraits/${getPortraitFileName(tempAvatarId)}`}
+                        alt="Selected Avatar"
+                        className="w-full h-full object-cover object-top"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider block">
+                        Selected Avatar
+                      </span>
+                      <span className="text-xs sm:text-sm font-black font-sans text-white capitalize">
+                        {tempAvatarId.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="relative w-full sm:w-56">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Search portrait..."
+                      value={avatarSearch}
+                      onChange={(e) => setAvatarSearch(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-black/70 border border-white/15 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-purple-400"
+                    />
+                  </div>
+                </div>
+
+                {/* Grid of Portraits */}
+                <div className="p-4 overflow-y-auto flex-1 min-h-[260px] max-h-[400px]">
+                  {filteredPortraits.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-gray-500 text-xs font-mono">
+                      No matching portraits found.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
+                      {filteredPortraits.map((item) => {
+                        const isSelected = tempAvatarId === item.id;
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => {
+                              soundEngine.playClick();
+                              setTempAvatarId(item.id);
+                            }}
+                            className={`group relative flex flex-col items-center p-2 rounded-xl border transition-all cursor-pointer ${
+                              isSelected
+                                ? "bg-purple-600/20 border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.35)] scale-[1.03]"
+                                : "bg-white/[0.02] border-white/10 hover:border-white/30 hover:bg-white/[0.05]"
+                            }`}
+                          >
+                            <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden border border-white/20 bg-black/50">
+                              <img
+                                src={`/assets/inventory_portraits/${item.fileName}`}
+                                alt={item.name}
+                                loading="lazy"
+                                className="w-full h-full object-cover object-top"
+                              />
+                              {isSelected && (
+                                <div className="absolute inset-0 bg-purple-600/30 flex items-center justify-center">
+                                  <div className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-md">
+                                    <Check className="w-3 h-3 stroke-[3]" />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <span
+                              className={`mt-1.5 text-[10px] font-mono text-center truncate max-w-full font-bold ${
+                                isSelected ? "text-purple-300" : "text-gray-300 group-hover:text-white"
+                              }`}
+                            >
+                              {item.name}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Buttons for Avatar */}
+                <div className="px-5 py-3 border-t border-white/10 bg-white/[0.02] flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    {avatarSuccess && (
+                      <span className="text-xs font-mono text-emerald-300 flex items-center space-x-1">
+                        <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[3]" />
+                        <span>Profile Picture Updated!</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditModalOpen(false)}
+                      className="px-4 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-mono font-bold text-gray-300 hover:text-white cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isSavingAvatar}
+                      onClick={() => handleSaveAvatar(tempAvatarId)}
+                      className="px-5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-mono font-black text-xs uppercase tracking-wider flex items-center space-x-1.5 shadow-[0_0_15px_rgba(168,85,247,0.4)] cursor-pointer active:scale-95 transition-all"
+                    >
+                      {isSavingAvatar ? (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>Save Picture</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </motion.div>
         </div>
       )}

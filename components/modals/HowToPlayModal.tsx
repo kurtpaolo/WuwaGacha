@@ -5,17 +5,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
   HelpCircle,
-  Coins,
-  Gift,
   Clock,
-  Briefcase,
+  Gift,
   User,
-  Infinity,
   Sparkles,
   Flame,
   CheckCircle2,
-  Award,
-  Crown,
 } from "lucide-react";
 import { soundEngine } from "@/lib/audio/soundEngine";
 
@@ -52,10 +47,10 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({
               </div>
               <div>
                 <h2 className="text-sm sm:text-base font-black uppercase tracking-wider text-white">
-                  How the Game Works
+                  Quick Player Guide
                 </h2>
                 <p className="text-[11px] font-mono text-yellow-300/80">
-                  Game Loop, Free Astrite, Banners & Collections
+                  Everything you need to know in under 60 seconds
                 </p>
               </div>
             </div>
@@ -65,157 +60,166 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({
                 soundEngine.playClick();
                 onClose();
               }}
-              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border border-white/10 transition-colors"
+              className="relative p-2 rounded-xl bg-gradient-to-br from-rose-500/25 to-pink-600/30 hover:from-rose-500/40 hover:to-pink-600/50 border border-rose-500/50 text-rose-300 hover:text-white transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)] active:scale-95 group flex-shrink-0 cursor-pointer"
+              title="Close"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5 stroke-[2.5] group-hover:rotate-90 transition-transform duration-200" />
             </button>
           </div>
 
-          {/* Body: Scrollable Cards */}
+          {/* Body: Scrollable Cards in Logical Sequence */}
           <div className="p-4 sm:p-6 overflow-y-auto max-h-[68vh] space-y-3.5 scrollbar-thin scrollbar-thumb-white/10">
-            {/* 1. Free Astrite (Waveplate System) */}
-            <div className="p-3.5 rounded-xl bg-gradient-to-r from-yellow-500/10 via-amber-500/5 to-transparent border border-yellow-500/30 space-y-1.5">
+            {/* 1. Welcome & 160 Free Starter Pulls */}
+            <div className="p-3.5 rounded-xl bg-gradient-to-r from-yellow-500/10 via-amber-500/5 to-transparent border border-yellow-500/30 space-y-2">
               <div className="flex items-center space-x-2 text-yellow-400">
-                <Coins className="w-4 h-4 flex-shrink-0" />
+                <Sparkles className="w-4 h-4 flex-shrink-0" />
                 <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
-                  1. Free Astrite (Works Like Waveplates!)
+                  1. Welcome! 160 Free Starter Pulls
                 </h3>
               </div>
               <p className="text-xs font-mono text-gray-300 leading-relaxed">
-                Astrite recharges automatically similar to how Waveplates in Wuthering Waves:
+                This is an unofficial fan-made convenes simulator. Zero real money, zero ads. Every new account immediately gets <strong>160 Free Pulls (25,600 Astrite)</strong> right off the bat to build your dream collection!
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px] font-mono">
-                <div className="p-2 rounded-lg bg-black/40 border border-white/5 space-y-0.5">
-                  <span className="text-yellow-300 font-bold block">Rate:</span>
-                  <span className="text-gray-300">
-                    <strong>160 Astrite every 4.5 mins</strong> (1 pull every 4m 30s).
-                  </span>
+              <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
+                <div className="p-2 rounded-lg bg-black/40 border border-white/5">
+                  <span className="text-yellow-300 font-bold block">1 Pull:</span>
+                  <span className="text-gray-300">160 Astrite</span>
                 </div>
-                <div className="p-2 rounded-lg bg-black/40 border border-white/5 space-y-0.5">
-                  <span className="text-amber-300 font-bold block">12h to 18h (24h VIP) Cap:</span>
-                  <span className="text-gray-300">
-                    Base <strong>25,600 (160 pulls / 12h)</strong>. Scales permanently up to <strong>38,400 (240 pulls / 18h)</strong> via Login Streaks! VIP grants +50% base (+80 pulls / +6h) reaching up to <strong>51,200 (320 pulls / 24h)</strong>.
-                  </span>
+                <div className="p-2 rounded-lg bg-black/40 border border-white/5">
+                  <span className="text-yellow-300 font-bold block">10 Pulls:</span>
+                  <span className="text-gray-300">1,600 Astrite</span>
                 </div>
               </div>
-              <p className="text-[11px] font-mono text-yellow-200/90 pt-1 flex items-center space-x-1.5">
-                <Flame className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0" />
-                <span>
-                  <strong>Daily Streak Resets:</strong> Streaks evaluate at <strong>00:00 GMT+8</strong> daily. Reaching 2, 5, 9, and 14 days permanently expands your battery by +1.5h (+20 pulls) each milestone!
-                </span>
+            </div>
+
+            {/* 2. Convene & Pity Rules */}
+            <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
+              <div className="flex items-center space-x-2 text-cyan-400">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                  2. Pity &amp; The 50/50 Guarantee
+                </h3>
+              </div>
+              <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                You never have to worry about getting unlucky. The safety net is built in:
+              </p>
+              <div className="space-y-1.5 text-[11px] font-mono text-gray-300">
+                <div className="p-2 rounded-lg bg-black/40 border border-white/5">
+                  <span className="text-yellow-400 font-bold">🎯 80-Pull Hard Pity: </span>
+                  <span>If you don&apos;t get a 5★ earlier, your 80th pull is <strong>100% guaranteed</strong> to drop a 5★ Resonator.</span>
+                </div>
+                <div className="p-2 rounded-lg bg-black/40 border border-white/5">
+                  <span className="text-cyan-400 font-bold">⚖️ The 50/50 Rule: </span>
+                  <span>When a 5★ drops, there&apos;s a 50% chance it&apos;s the featured banner unit. If you lose, your <strong>next 5★ is 100% guaranteed</strong> to be featured!</span>
+                </div>
+                <div className="p-2 rounded-lg bg-black/40 border border-white/5">
+                  <span className="text-emerald-400 font-bold">🔄 Persistent Pity: </span>
+                  <span>Your pity count and guarantees carry over across all banner rotations forever.</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. 20-Minute Banner Rotations (:00, :20, :40) */}
+            <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
+              <div className="flex items-center space-x-2 text-yellow-300">
+                <Clock className="w-4 h-4 flex-shrink-0" />
+                <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                  3. 20-Minute Banner Rotations (:00, :20, :40)
+                </h3>
+              </div>
+              <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                Featured banners rotate every <strong>20 minutes</strong> globally at <strong>xx:00, xx:20, and xx:40</strong> with 3 featured limited 5★ Resonators. Click any character avatar on the banner rail to roll for whoever you want!
               </p>
             </div>
 
-            {/* 2. Player Profile, Titles & Showcase */}
+            {/* 4. Duplicates, Sequences & Cashback */}
+            <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
+              <div className="flex items-center space-x-2 text-purple-400">
+                <Gift className="w-4 h-4 flex-shrink-0" />
+                <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                  4. Duplicate Sequences (S0 to S6) &amp; Cashback
+                </h3>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">
+                <div className="p-2.5 rounded-lg bg-black/40 border border-white/5 space-y-1">
+                  <span className="text-purple-300 font-bold block">Resonance Chain (S0–S6):</span>
+                  <p className="text-gray-300">
+                    Your 1st copy unlocks the unit (S0). Each duplicate unlocks a Sequence node up to <strong>S6 max</strong> with crowned artwork!
+                  </p>
+                </div>
+                <div className="p-2.5 rounded-lg bg-black/40 border border-white/5 space-y-1">
+                  <span className="text-yellow-300 font-bold block">5-Pull Cash Back:</span>
+                  <p className="text-gray-300">
+                    Every featured 5★ you pull instantly refunds <strong>5 free pulls (800 Astrite)</strong> straight back to your wallet.
+                  </p>
+                </div>
+              </div>
+              <p className="text-[11px] font-mono text-gray-400">
+                Note: 3★/4★ weapons and standard 50/50 losses are simulator fodder and aren&apos;t saved, keeping your collection fast and clean.
+              </p>
+            </div>
+
+            {/* 5. Free Astrite Battery & Daily Streaks */}
+            <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
+              <div className="flex items-center space-x-2 text-amber-400">
+                <Flame className="w-4 h-4 flex-shrink-0" />
+                <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                  5. Free Astrite Battery &amp; Login Streaks
+                </h3>
+              </div>
+              <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                Ran out of pulls? The battery generates free Astrite automatically, even while offline:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">
+                <div className="p-2 rounded-lg bg-black/40 border border-white/5">
+                  <span className="text-yellow-300 font-bold block">Recharge Rate:</span>
+                  <span className="text-gray-300"><strong>1 pull (160 Astrite) every 4.5 minutes</strong></span>
+                </div>
+                <div className="p-2 rounded-lg bg-black/40 border border-white/5">
+                  <span className="text-amber-300 font-bold block">Starting Tank:</span>
+                  <span className="text-gray-300">Holds up to <strong>12 hours (160 pulls)</strong></span>
+                </div>
+              </div>
+              <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] font-mono text-amber-200/90">
+                🔥 <strong>Daily Streaks (00:00 GMT+8 reset):</strong> Check in daily to permanently expand your battery capacity at 2, 5, 9, and 14 days, up to <strong>18 hours (240 pulls)</strong>!
+              </div>
+            </div>
+
+            {/* 6. Profile, Edit Tab & Cloud Saves */}
             <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
               <div className="flex items-center space-x-2 text-emerald-400">
                 <User className="w-4 h-4 flex-shrink-0" />
                 <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
-                  2. Player Profile, Titles & Showcase
+                  6. Profile, Showcase &amp; Cloud Saves
                 </h3>
               </div>
               <p className="text-xs font-mono text-gray-300 leading-relaxed">
-                Personalize your public profile with custom avatar portraits, your 6-Resonator showcase, and live stats (5★ count, pity, and 50/50 win rate). Anyone can search your username to inspect your achievements!
+                Open your <strong>Profile</strong> and click <strong>Edit</strong> to manage your 6-unit Showcase team or change your profile picture anytime.
               </p>
-              <div className="p-2.5 rounded-lg bg-yellow-500/10 border border-yellow-500/25 space-y-1">
-                <div className="flex items-center space-x-1.5 text-yellow-300 font-bold text-xs font-mono">
-                  <Award className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0" />
-                  <span>Collect Titles to Flex to Others!</span>
-                </div>
-                <p className="text-[11px] font-mono text-gray-300 leading-relaxed">
-                  Unlock cool titles across various rarities through convenes, lucky winning streaks, milestones, and achieving S6 on specific 5★ Resonators. Claim each title to earn bonus Astrite and equip them to showcase your profile to others!
-                </p>
-              </div>
-            </div>
-
-            {/* 3. 5★ Cash Back */}
-            <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-1.5">
-              <div className="flex items-center space-x-2 text-amber-400">
-                <Gift className="w-4 h-4 flex-shrink-0" />
-                <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
-                  3. 5★ Cash Back (+5 Pulls per Copy)
-                </h3>
-              </div>
-              <p className="text-xs font-mono text-gray-300 leading-relaxed">
-                Every copy of a featured 5★ Resonator you convene gives you an automatic refund of <strong>5 pulls (800 Astrite)</strong> credited straight to your balance.
-              </p>
-            </div>
-
-            {/* 4. Hourly Banner Reset (GMT+8) */}
-            <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-1.5">
-              <div className="flex items-center space-x-2 text-cyan-400">
-                <Clock className="w-4 h-4 flex-shrink-0" />
-                <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
-                  4. Hourly 3-Character Banner Rotation
-                </h3>
-              </div>
-              <p className="text-xs font-mono text-gray-300 leading-relaxed">
-                Featured banners rotate every hour (xx:00 GMT+8) with <strong>3 random 5★ limited Resonators</strong>. All players see the exact same 3 characters. Your 5★ pity (guaranteed at 80) and 50/50 guarantees carry over between rotations!
-              </p>
-            </div>
-
-            {/* 5. Resonator Collection & Inventory */}
-            <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-1.5">
-              <div className="flex items-center space-x-2 text-purple-400">
-                <Briefcase className="w-4 h-4 flex-shrink-0" />
-                <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
-                  5. Resonator Inventory & Wavebands
-                </h3>
-              </div>
-              <p className="text-xs font-mono text-gray-300 leading-relaxed">
-                Click the <strong>Inventory</strong> suitcase in the top header or at the bottom of your screen to inspect your 5★ Resonators, duplicate waveband sequences (S0 to S6), and total collection progress.
-              </p>
-            </div>
-
-            {/* 6. Accounts vs Sandbox Mode */}
-            <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-1.5">
-              <div className="flex items-center space-x-2 text-teal-400">
-                <Infinity className="w-4 h-4 flex-shrink-0" />
-                <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
-                  6. Accounts vs Sandbox Mode
-                </h3>
-              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">
-                <div className="p-2 rounded-lg bg-black/40 border border-white/5 space-y-0.5">
-                  <span className="text-white font-bold block">Cloud Account (Recommended):</span>
-                  <span className="text-gray-300">
-                    Saves your pulls, inventory, and Astrite permanently across devices.
-                  </span>
+                <div className="p-2 rounded-lg bg-black/40 border border-white/5">
+                  <span className="text-emerald-300 font-bold block">Titles &amp; Rewards:</span>
+                  <span className="text-gray-300">Unlock titles to flex on your profile and claim bonus Astrite rewards.</span>
                 </div>
-                <div className="p-2 rounded-lg bg-black/40 border border-white/5 space-y-0.5">
-                  <span className="text-teal-300 font-bold block">Sandbox Mode:</span>
-                  <span className="text-gray-300">
-                    Accessible from the bottom right of the login screen. Free pulls with all banners open (no saves).
-                  </span>
+                <div className="p-2 rounded-lg bg-black/40 border border-white/5">
+                  <span className="text-cyan-300 font-bold block">Permanent Cloud Save:</span>
+                  <span className="text-gray-300">Your resonators, sequences, pity, and streaks are safely tied to your account across all devices.</span>
                 </div>
               </div>
-            </div>
-
-            {/* 7. VIP Status (Purely Non-Monetary) */}
-            <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-yellow-500/5 to-transparent border border-amber-500/30 space-y-1.5">
-              <div className="flex items-center space-x-2 text-amber-400">
-                <Crown className="w-4 h-4 flex-shrink-0 animate-pulse" />
-                <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
-                  7. VIP Status (Not For Sale)
-                </h3>
-              </div>
-              <p className="text-xs font-mono text-gray-300 leading-relaxed">
-                VIP status is <strong>strictly non-monetary and not for sale</strong>. This simulator is 100% free and non-commercial. VIP is a fun honorary perk hand-granted specifically to the creator&apos;s closest friends and people close to them (unlocking 1.5x Tacet Field Astrite storage and the mythic VIP title).
-              </p>
             </div>
           </div>
 
           {/* Footer */}
           <div className="p-3.5 sm:p-4 border-t border-white/10 bg-black/60 flex items-center justify-between">
             <span className="text-[11px] font-mono text-gray-400">
-              Good luck on your convenes, Rover!
+              Good luck on your pulls, Rover!
             </span>
             <button
               onClick={() => {
                 soundEngine.playClick();
                 onClose();
               }}
-              className="px-4 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-mono font-bold uppercase transition-all shadow-[0_0_15px_rgba(250,204,21,0.3)] active:scale-95"
+              className="px-4 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-mono font-bold uppercase transition-all shadow-[0_0_15px_rgba(250,204,21,0.3)] active:scale-95 cursor-pointer"
             >
               Got It!
             </button>

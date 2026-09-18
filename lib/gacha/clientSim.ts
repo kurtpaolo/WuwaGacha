@@ -9,7 +9,6 @@ import {
   ItemData,
   ItemRarity,
 } from "@/lib/data/items";
-import { MAX_ASTRITE_LIMIT } from "@/lib/supabase/profile";
 import { getHourlyRotatedCharacters } from "@/lib/gacha/bannerRotation";
 
 export interface ClientRollResultItem {
@@ -103,7 +102,7 @@ function getDefaultRotatedChar(): string {
 }
 
 const DEFAULT_STATE: ClientSimState = {
-  astrite: 12800, // 80 pulls newbie starting bonus (80 * 160)
+  astrite: 25600, // 160 pulls newbie starting bonus (160 * 160)
   isSandbox: false,
   selectedLimitedChar: getDefaultRotatedChar(),
   pity: {
@@ -569,7 +568,7 @@ export function updateClientCurrency(
 ) {
   const s = loadClientState(userId, isSandbox);
   if (currency === "astrite") {
-    s.astrite = Math.min(MAX_ASTRITE_LIMIT, Math.max(0, newAmount));
+    s.astrite = Math.max(0, newAmount);
   }
   saveClientState(s, userId, isSandbox);
   return s;
@@ -581,7 +580,7 @@ export function grantClientCurrency(
   isSandbox?: boolean
 ) {
   const s = loadClientState(userId, isSandbox);
-  s.astrite = Math.min(MAX_ASTRITE_LIMIT, Math.max(0, (s.astrite || 0) + addAstrite));
+  s.astrite = Math.max(0, (s.astrite || 0) + addAstrite);
   saveClientState(s, userId, isSandbox);
   return s;
 }

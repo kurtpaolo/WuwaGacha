@@ -32,11 +32,12 @@ import {
 } from "lucide-react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { DetailsModal } from "@/components/modals/DetailsModal";
+import { PrivacyModal } from "@/components/modals/PrivacyModal";
 import { HowToPlayModal } from "@/components/modals/HowToPlayModal";
 import { ScrollableSelect } from "@/components/ui/ScrollableSelect";
 
 interface LoginGatewayProps {
-  onLoginSuccess: (user: SupabaseUser, profile: UserProfile | null) => void;
+  onLoginSuccess: (user: SupabaseUser, profile: UserProfile | null, isNewAccount?: boolean) => void;
   onEnterSandbox?: () => void;
 }
 
@@ -44,6 +45,12 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
   onLoginSuccess,
   onEnterSandbox,
 }) => {
+  const [hasAcceptedBeta, setHasAcceptedBeta] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("wuwa_beta_acknowledged") === "true";
+    }
+    return false;
+  });
   const [mode, setMode] = useState<"signin" | "signup" | "forgot">("signin");
   const [username, setUsername] = useState<string>("");
   const [password, setPassword] = useState<string>("");
@@ -64,6 +71,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [showDisclaimer, setShowDisclaimer] = useState<boolean>(false);
+  const [showPrivacy, setShowPrivacy] = useState<boolean>(false);
   const [showHowToPlay, setShowHowToPlay] = useState<boolean>(false);
   const [showSandboxWarning, setShowSandboxWarning] = useState<boolean>(false);
 
@@ -133,7 +141,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
 
         if (res.user) {
           const profile = await fetchUserProfile(res.user.id, cleanUser);
-          onLoginSuccess(res.user, profile);
+          onLoginSuccess(res.user, profile, false);
         }
       } else {
         const res = await signUpWithUsername(
@@ -149,8 +157,11 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
         }
 
         if (res.user) {
+          if (typeof window !== "undefined") {
+            localStorage.setItem(`wuwa_newbie_guide_pending_${res.user.id}`, "true");
+          }
           const profile = await fetchUserProfile(res.user.id, cleanUser);
-          onLoginSuccess(res.user, profile);
+          onLoginSuccess(res.user, profile, true);
         }
       }
     } catch (err: any) {
@@ -250,15 +261,60 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:3.5rem_3.5rem] opacity-70" />
       </div>
 
-      {/* Main Login Card */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 15 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
-        className="relative w-full max-w-md bg-[#0e121b]/95 border border-white/15 rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.9)] backdrop-blur-xl overflow-hidden"
-      >
-        {/* Top Branded Accent Bar */}
-        <div className="h-1.5 w-full bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-300 shadow-[0_0_15px_rgba(250,204,21,0.6)]" />
+      <AnimatePresence mode="wait">
+        {!hasAcceptedBeta ? (
+          <motion.div
+            key="beta-screen"
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -15 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            className="relative w-full max-w-md bg-[#0e121b]/95 border border-yellow-400/40 rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.9)] backdrop-blur-xl overflow-hidden p-6 sm:p-8 text-center space-y-6"
+          >
+            {/* Top Branded Accent Bar */}
+            <div className="absolute top-0 inset-x-0 h-1.5 w-full bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-300 shadow-[0_0_15px_rgba(250,204,21,0.6)]" />
+
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 shadow-[0_0_25px_rgba(250,204,21,0.25)]">
+              <Sparkles className="w-7 h-7 animate-pulse" />
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-xs font-mono font-bold tracking-widest text-yellow-400 uppercase">
+                Notice
+              </h2>
+              <p className="text-base sm:text-lg font-black text-white leading-snug font-display">
+                This web app is still in beta, bugs and delays are to be expected
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                soundEngine.playClick();
+                soundEngine.startBGM();
+                if (typeof window !== "undefined") {
+                  sessionStorage.setItem("wuwa_beta_acknowledged", "true");
+                }
+                setHasAcceptedBeta(true);
+              }}
+              className="w-full py-3 px-6 rounded-xl bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 hover:from-yellow-300 hover:to-amber-400 text-black font-black uppercase tracking-wider text-xs sm:text-sm shadow-[0_0_25px_rgba(250,204,21,0.5)] active:scale-95 transition-all cursor-pointer flex items-center justify-center space-x-2"
+            >
+              <span>Continue</span>
+              <ArrowRight className="w-4 h-4 stroke-[3]" />
+            </button>
+          </motion.div>
+        ) : (
+          /* Main Login Card */
+          <motion.div
+            key="login-card"
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            className="relative w-full max-w-md bg-[#0e121b]/95 border border-white/15 rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.9)] backdrop-blur-xl overflow-hidden"
+          >
+            {/* Top Branded Accent Bar */}
+            <div className="h-1.5 w-full bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-300 shadow-[0_0_15px_rgba(250,204,21,0.6)]" />
 
         <div className="p-6 sm:p-8 space-y-5">
           {/* Header & Logo */}
@@ -272,7 +328,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
             <p className="text-xs font-mono text-gray-400">
               {mode === "forgot"
                 ? "Account Recovery via Security Question"
-                : "Wuthering Waves Convene Simulator"}
+                : "Unofficial Fan-Made Convene Simulator • Non-Commercial"}
             </p>
 
             {/* How to Play Guide & Sandbox Mode Triggers */}
@@ -375,12 +431,17 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
                     type="text"
                     required
                     autoFocus
-                    placeholder="e.g. rover_main"
+                    placeholder={mode === "signup" ? "e.g. rover_main (don't use real name)" : "Enter your username"}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 bg-black/60 border border-white/15 focus:border-yellow-400 rounded-xl text-sm font-mono text-white placeholder-gray-600 focus:outline-none transition-all shadow-inner"
                   />
                 </div>
+                {mode === "signup" && (
+                  <p className="text-[10px] font-mono text-gray-500 pl-1">
+                    💡 For your privacy, please use a gamer handle instead of your real name.
+                  </p>
+                )}
               </div>
 
               {/* Password Field */}
@@ -473,8 +534,8 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
                 {!loading && <ArrowRight className="w-4 h-4 stroke-[2.5]" />}
               </button>
 
-              {/* Disclaimer / Copyright Link Button at Bottom */}
-              <div className="pt-2 text-center">
+              {/* Disclaimer & Privacy Policy Link Buttons at Bottom */}
+              <div className="pt-2 flex items-center justify-center space-x-3 text-center">
                 <button
                   type="button"
                   onClick={() => {
@@ -484,7 +545,19 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
                   className="text-[11px] font-mono text-gray-400 hover:text-yellow-400 transition-colors underline underline-offset-4 tracking-wider uppercase inline-flex items-center space-x-1.5"
                 >
                   <ShieldCheck className="w-3.5 h-3.5 text-yellow-400/70" />
-                  <span>Disclaimer</span>
+                  <span>Copyright & Fair Use</span>
+                </button>
+                <span className="text-gray-600 font-mono text-xs">•</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundEngine.playClick();
+                    setShowPrivacy(true);
+                  }}
+                  className="text-[11px] font-mono text-gray-400 hover:text-emerald-400 transition-colors underline underline-offset-4 tracking-wider uppercase inline-flex items-center space-x-1.5"
+                >
+                  <Lock className="w-3.5 h-3.5 text-emerald-400/70" />
+                  <span>Privacy Policy</span>
                 </button>
               </div>
             </form>
@@ -648,11 +721,19 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
           )}
         </div>
       </motion.div>
+    )}
+  </AnimatePresence>
 
       {/* Complete Copyright Notice Modal */}
       <DetailsModal
         isOpen={showDisclaimer}
         onClose={() => setShowDisclaimer(false)}
+      />
+
+      {/* Privacy Policy Modal */}
+      <PrivacyModal
+        isOpen={showPrivacy}
+        onClose={() => setShowPrivacy(false)}
       />
 
       {/* How to Play Guide Modal */}
@@ -694,9 +775,10 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowSandboxWarning(false)}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  className="relative p-1.5 sm:p-2 rounded-xl bg-gradient-to-br from-rose-500/25 to-pink-600/30 hover:from-rose-500/40 hover:to-pink-600/50 border border-rose-500/50 text-rose-300 hover:text-white transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)] active:scale-95 group flex-shrink-0 cursor-pointer"
+                  title="Close"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5] group-hover:rotate-90 transition-transform duration-200" />
                 </button>
               </div>
 

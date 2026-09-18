@@ -10,7 +10,7 @@ create extension if not exists pgcrypto;
 create table if not exists public.profiles (
   id uuid references auth.users on delete cascade primary key,
   username text unique not null,
-  astrite integer not null default 12800 check (astrite >= 0),
+  astrite integer not null default 25600 check (astrite >= 0),
   pity_5star integer not null default 0 check (pity_5star >= 0 and pity_5star <= 80),
   pity_4star integer not null default 0 check (pity_4star >= 0 and pity_4star <= 10),
   guaranteed_limited boolean not null default false,
@@ -179,7 +179,7 @@ begin
   ) values (
     new.id,
     raw_user_name,
-    12800,
+    25600,
     0,
     0,
     false,

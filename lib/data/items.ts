@@ -85,6 +85,14 @@ export const RESONATOR_ARTISTS: Record<string, ResonatorArtistInfo> = {
     name: "ichigo_amo",
     url: "https://x.com/ichigo_amo",
   },
+  mornye: {
+    name: "Aoi Ogata",
+    url: "https://www.artstation.com/aoiogata",
+  },
+  cartethyia: {
+    name: "Misutas0618",
+    url: "https://www.pixiv.net/tags/Cartethyia",
+  },
 };
 
 export function getResonatorArtist(charId: string): ResonatorArtistInfo {

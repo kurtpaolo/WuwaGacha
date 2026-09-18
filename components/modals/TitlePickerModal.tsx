@@ -137,10 +137,10 @@ export const TitlePickerModal: React.FC<TitlePickerModalProps> = ({
                 soundEngine.playClick();
                 onClose();
               }}
-              className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white transition-all group cursor-pointer"
+              className="relative p-2 rounded-xl bg-gradient-to-br from-rose-500/25 to-pink-600/30 hover:from-rose-500/40 hover:to-pink-600/50 border border-rose-500/50 text-rose-300 hover:text-white transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)] active:scale-95 group flex-shrink-0 cursor-pointer"
               title="Close"
             >
-              <X className="w-5 h-5 group-hover:rotate-90 transition-transform duration-200" />
+              <X className="w-5 h-5 stroke-[2.5] group-hover:rotate-90 transition-transform duration-200" />
             </button>
           </div>
 
@@ -208,8 +208,8 @@ export const TitlePickerModal: React.FC<TitlePickerModalProps> = ({
               )}
             </div>
 
-            {/* Category Filter Pills */}
-            <div className="flex items-center flex-wrap gap-1.5 sm:gap-2">
+            {/* Category Filter Pills (Smooth side-by-side scrollable on mobile) */}
+            <div className="flex items-center overflow-x-auto overscroll-x-contain touch-pan-x flex-nowrap scrollbar-none sm:flex-wrap gap-1.5 sm:gap-2 py-1 -my-1 min-w-0">
               {CATEGORIES.map((cat) => {
                 const Icon = cat.icon;
                 const isActive = activeCategory === cat.key;
@@ -221,7 +221,7 @@ export const TitlePickerModal: React.FC<TitlePickerModalProps> = ({
                       soundEngine.playClick();
                       setActiveCategory(cat.key);
                     }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 transition-all whitespace-nowrap active:scale-95 cursor-pointer ${
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 transition-all whitespace-nowrap active:scale-95 cursor-pointer ${
                       isActive
                         ? "bg-yellow-400 text-black shadow-[0_0_15px_rgba(250,204,21,0.35)]"
                         : "bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white"

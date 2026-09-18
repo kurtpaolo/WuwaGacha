@@ -1,7 +1,6 @@
 import { supabase, isSupabaseConfigured } from "./client";
 import { getHourlyRotatedCharacters } from "@/lib/gacha/bannerRotation";
 
-export const MAX_ASTRITE_LIMIT = 160000; // 1,000 pulls max balance
 
 export interface UserProfile {
   id: string;
@@ -29,7 +28,7 @@ export interface UserProfile {
 export const DEFAULT_PROFILE: UserProfile = {
   id: "",
   username: "Player",
-  astrite: 12800, // 80 pulls newbie starting bonus (80 * 160)
+  astrite: 25600, // 160 pulls newbie starting bonus (160 * 160)
   pity_5star: 0,
   pity_4star: 0,
   guaranteed_limited: false,
@@ -97,7 +96,7 @@ export async function fetchUserProfile(
       return {
         id: data.id,
         username: data.username || fallbackUsername,
-        astrite: Math.min(MAX_ASTRITE_LIMIT, Math.max(0, data.astrite ?? 12800)),
+        astrite: Math.max(0, data.astrite ?? 25600),
         pity_5star: Math.min(80, Math.max(0, data.pity_5star ?? 0)),
         pity_4star: Math.min(10, Math.max(0, data.pity_4star ?? 0)),
         guaranteed_limited: Boolean(data.guaranteed_limited),
@@ -115,11 +114,11 @@ export async function fetchUserProfile(
       };
     }
 
-    // If not found, create new profile with 80 pulls (12,800 Astrite)
+    // If not found, create new profile with 160 pulls (25,600 Astrite)
     const newProfile = {
       id: userId,
       username: fallbackUsername,
-      astrite: 12800,
+      astrite: 25600,
       pity_5star: 0,
       pity_4star: 0,
       guaranteed_limited: false,
@@ -225,7 +224,7 @@ export async function updateUserProfile(
     };
 
     if (updates.astrite !== undefined) {
-      payload.astrite = Math.min(MAX_ASTRITE_LIMIT, Math.max(0, updates.astrite));
+      payload.astrite = Math.max(0, updates.astrite);
     }
     if (updates.pity_5star !== undefined) {
       payload.pity_5star = Math.min(80, Math.max(0, updates.pity_5star));

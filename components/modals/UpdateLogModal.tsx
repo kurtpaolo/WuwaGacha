@@ -22,6 +22,10 @@ import {
   Globe,
   ExternalLink,
   Flame,
+  Smartphone,
+  BookOpen,
+  ShieldCheck,
+  Star,
 } from "lucide-react";
 import { soundEngine } from "@/lib/audio/soundEngine";
 
@@ -31,14 +35,14 @@ interface UpdateLogModalProps {
   currentUsername?: string;
 }
 
-type VersionTag = "1.5" | "1.0";
+type VersionTag = "2.0" | "1.5" | "1.0";
 
 export const UpdateLogModal: React.FC<UpdateLogModalProps> = ({
   isOpen,
   onClose,
   currentUsername = "Player",
 }) => {
-  const [selectedVersion, setSelectedVersion] = useState<VersionTag>("1.5");
+  const [selectedVersion, setSelectedVersion] = useState<VersionTag>("2.0");
   const [suggestion, setSuggestion] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
@@ -126,9 +130,10 @@ export const UpdateLogModal: React.FC<UpdateLogModalProps> = ({
                 soundEngine.playClick();
                 onClose();
               }}
-              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border border-white/10 transition-colors"
+              className="relative p-2 rounded-xl bg-gradient-to-br from-rose-500/25 to-pink-600/30 hover:from-rose-500/40 hover:to-pink-600/50 border border-rose-500/50 text-rose-300 hover:text-white transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)] active:scale-95 group flex-shrink-0 cursor-pointer"
+              title="Close"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5 stroke-[2.5] group-hover:rotate-90 transition-transform duration-200" />
             </button>
           </div>
 
@@ -136,7 +141,100 @@ export const UpdateLogModal: React.FC<UpdateLogModalProps> = ({
           <div className="flex flex-1 overflow-hidden min-h-0">
             {/* Left: Scrollable Patch Content */}
             <div className="flex-1 p-4 sm:p-5 overflow-y-auto max-h-[50vh] sm:max-h-[52vh] space-y-3 scrollbar-thin scrollbar-thumb-white/10">
-              {selectedVersion === "1.5" ? (
+              {selectedVersion === "2.0" ? (
+                <>
+                  {/* 20-Minute Banner Rotations & 160 Starter Pulls */}
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-yellow-500/10 via-amber-500/5 to-transparent border border-yellow-500/30 space-y-1">
+                    <div className="flex items-center space-x-2 text-yellow-400">
+                      <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                        20-Minute Banner Resets &amp; 160 Starter Pulls
+                      </h3>
+                    </div>
+                    <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                      Featured banners now rotate every 20 minutes (at :00, :20, and :40). Plus, all new accounts start with 160 free pulls (25,600 Astrite).
+                    </p>
+                  </div>
+
+                  {/* Resonator Detail & Resonance Chain */}
+                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-1">
+                    <div className="flex items-center space-x-2 text-yellow-400">
+                      <Star className="w-3.5 h-3.5 flex-shrink-0 fill-yellow-400/40" />
+                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                        Resonator Detail &amp; Sequence Chain (S0–S6)
+                      </h3>
+                    </div>
+                    <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                      Click any 5★ character in your Inventory to view their full splash art, element, weapon type, and Sequence nodes (S0–S6) that light up as you unlock duplicate wavebands.
+                    </p>
+                  </div>
+
+                  {/* Fast Convene Mode */}
+                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-1">
+                    <div className="flex items-center space-x-2 text-amber-400">
+                      <Zap className="w-3.5 h-3.5 flex-shrink-0" />
+                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                        Fast Convene Mode (Instant 10-Pull Skip)
+                      </h3>
+                    </div>
+                    <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                      Toggle Fast Convene in Settings to skip directly to the 10-pull summary for 3★ and 4★ pulls, while keeping full animations for 5★ drops.
+                    </p>
+                  </div>
+
+                  {/* PWA & Add to Home Screen */}
+                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-1">
+                    <div className="flex items-center space-x-2 text-cyan-400">
+                      <Smartphone className="w-3.5 h-3.5 flex-shrink-0" />
+                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                        Progressive Web App (PWA) &amp; Home Screen
+                      </h3>
+                    </div>
+                    <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                      Install the simulator as a standalone app on your phone or desktop home screen with zero ads and fast loading.
+                    </p>
+                  </div>
+
+                  {/* How to Play Guide & Inventory Rules */}
+                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-1">
+                    <div className="flex items-center space-x-2 text-emerald-400">
+                      <BookOpen className="w-3.5 h-3.5 flex-shrink-0" />
+                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                        Beginner Guide Overhaul
+                      </h3>
+                    </div>
+                    <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                      Updated the &quot;How to Play&quot; guide: clear breakdown of pity, 50/50 guarantees, idle Astrite battery streaks, and duplicate sequence rules.
+                    </p>
+                  </div>
+
+                  {/* Legal Safeguards & Privacy Policy */}
+                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-1">
+                    <div className="flex items-center space-x-2 text-purple-400">
+                      <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0" />
+                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                        Disclaimer &amp; Privacy Policy
+                      </h3>
+                    </div>
+                    <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                      Added clear fan project disclaimers, copyright terms, and a dedicated Privacy Policy modal confirming zero data sales and client-side privacy.
+                    </p>
+                  </div>
+
+                  {/* Navigation & Profile Polish */}
+                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-1">
+                    <div className="flex items-center space-x-2 text-blue-400">
+                      <Briefcase className="w-3.5 h-3.5 flex-shrink-0" />
+                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                        Profile &amp; Inventory Polish
+                      </h3>
+                    </div>
+                    <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                      Simplified profile layout, added avatar picker inside Edit, and made jumping between profile and inventory smooth.
+                    </p>
+                  </div>
+                </>
+              ) : selectedVersion === "1.5" ? (
                 <>
                   {/* Accounts */}
                   <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-1">
@@ -303,13 +401,34 @@ export const UpdateLogModal: React.FC<UpdateLogModalProps> = ({
                 Versions
               </span>
 
+              {/* Version 2.0 Tab */}
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  setSelectedVersion("2.0");
+                }}
+                className={`w-full text-left px-2.5 py-2 rounded-xl border transition-all text-xs font-mono flex flex-col space-y-0.5 cursor-pointer ${
+                  selectedVersion === "2.0"
+                    ? "bg-yellow-400/20 border-yellow-400/60 text-yellow-200 shadow-sm"
+                    : "bg-white/[0.02] hover:bg-white/[0.05] border-white/5 text-gray-400 hover:text-white"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold">v2.0</span>
+                  <span className="text-[9px] px-1 rounded bg-yellow-400 text-black font-sans font-black">
+                    Latest
+                  </span>
+                </div>
+                <span className="text-[10px] opacity-75">Current</span>
+              </button>
+
               {/* Version 1.5 Tab */}
               <button
                 onClick={() => {
                   soundEngine.playClick();
                   setSelectedVersion("1.5");
                 }}
-                className={`w-full text-left px-2.5 py-2 rounded-xl border transition-all text-xs font-mono flex flex-col space-y-0.5 ${
+                className={`w-full text-left px-2.5 py-2 rounded-xl border transition-all text-xs font-mono flex flex-col space-y-0.5 cursor-pointer ${
                   selectedVersion === "1.5"
                     ? "bg-purple-500/20 border-purple-400 text-purple-200 shadow-sm"
                     : "bg-white/[0.02] hover:bg-white/[0.05] border-white/5 text-gray-400 hover:text-white"
@@ -317,11 +436,11 @@ export const UpdateLogModal: React.FC<UpdateLogModalProps> = ({
               >
                 <div className="flex items-center justify-between">
                   <span className="font-bold">v1.5</span>
-                  <span className="text-[9px] px-1 rounded bg-yellow-400/20 text-yellow-300 font-sans font-bold">
-                    Latest
+                  <span className="text-[9px] px-1 rounded bg-purple-500/30 text-purple-300 font-sans font-medium">
+                    Patch
                   </span>
                 </div>
-                <span className="text-[10px] opacity-75">Current</span>
+                <span className="text-[10px] opacity-75">Solaris-3</span>
               </button>
 
               {/* Version 1.0 Tab */}

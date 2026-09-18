@@ -12,7 +12,6 @@ import {
   ConveneResponse,
   executeClientConvene,
   getClientStateData,
-  updateClientCurrency,
   toggleClientSandbox,
   setClientSelectedChar,
   get5050Stats,
@@ -39,6 +38,7 @@ import { ProfileModal } from "@/components/modals/ProfileModal";
 import { PlayerProfileModal } from "@/components/modals/PlayerProfileModal";
 import { UpdateLogModal } from "@/components/modals/UpdateLogModal";
 import { HowToPlayModal } from "@/components/modals/HowToPlayModal";
+import { ExternalRedirectModal } from "@/components/modals/ExternalRedirectModal";
 import {
   getHourlyRotatedCharacters,
   getTimeUntilNextRotation,
@@ -56,7 +56,7 @@ import { getAuthUser, signOut, getStoredAvatarId, PlayerPublicProfile, updateSho
 import { fetchUserProfile, updateUserProfile, flushPendingProfileSync, UserProfile } from "@/lib/supabase/profile";
 import { getPortraitFileName } from "@/lib/data/portraits";
 import { getStoredUserTitle } from "@/lib/data/titles";
-import { fetchUserInventory, saveFeaturedResonatorPull, deleteUserInventoryItems, clearAllUserInventory, UserInventoryItem } from "@/lib/supabase/inventory";
+import { fetchUserInventory, saveFeaturedResonatorPull, UserInventoryItem } from "@/lib/supabase/inventory";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import {
   Sparkles,
@@ -111,8 +111,6 @@ export const ConveneStage: React.FC = () => {
   const [isUpdateLogOpen, setIsUpdateLogOpen] = useState<boolean>(false);
   const [isHowToPlayOpen, setIsHowToPlayOpen] = useState<boolean>(false);
   const [winRateStats, setWinRateStats] = useState<WinRateStats>(DEFAULT_WIN_RATE);
-  const [isPortrait, setIsPortrait] = useState<boolean>(false);
-  const [showOrientationScreen, setShowOrientationScreen] = useState<boolean>(false);
   const [isSwitchingBanner, setIsSwitchingBanner] = useState<boolean>(false);
   const [switchingCharName, setSwitchingCharName] = useState<string>("");
   const [switchingBannerTitle, setSwitchingBannerTitle] = useState<string>("");
@@ -214,50 +212,6 @@ export const ConveneStage: React.FC = () => {
     }
   }, [isSandboxGuest, currentUser?.id]);
 
-  // Live hardware & viewport orientation detection (Portrait vs Landscape)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const checkIsPortrait = () => {
-      if (window.screen?.orientation?.type) {
-        return window.screen.orientation.type.startsWith("portrait");
-      }
-      if (window.matchMedia) {
-        return window.matchMedia("(orientation: portrait)").matches;
-      }
-      return window.innerHeight > window.innerWidth;
-    };
-
-    const initial = checkIsPortrait();
-    setIsPortrait(initial);
-
-    // Only prompt landscape mode on initial load if device is actually in portrait mode
-    if (initial) {
-      setShowOrientationScreen(true);
-    }
-
-    const handleOrientationChange = () => {
-      const port = checkIsPortrait();
-      setIsPortrait(port);
-      // Auto-dismiss orientation warning screen if player turns device to landscape!
-      if (!port) {
-        setShowOrientationScreen(false);
-      }
-    };
-
-    const mql = window.matchMedia ? window.matchMedia("(orientation: portrait)") : null;
-    mql?.addEventListener?.("change", handleOrientationChange);
-    window.screen?.orientation?.addEventListener?.("change", handleOrientationChange);
-    window.addEventListener("resize", handleOrientationChange);
-    window.addEventListener("orientationchange", handleOrientationChange);
-
-    return () => {
-      mql?.removeEventListener?.("change", handleOrientationChange);
-      window.screen?.orientation?.removeEventListener?.("change", handleOrientationChange);
-      window.removeEventListener("resize", handleOrientationChange);
-      window.removeEventListener("orientationchange", handleOrientationChange);
-    };
-  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -314,6 +268,19 @@ export const ConveneStage: React.FC = () => {
           fetchState();
           const inv = await fetchUserInventory(user.id);
           setInventoryList(inv);
+
+          // Auto-open Guide for new accounts on first entrance
+          if (typeof window !== "undefined") {
+            const pendingKey = `wuwa_newbie_guide_pending_${user.id}`;
+            const guideShownKey = `wuwa_guide_shown_${user.id}`;
+            if (localStorage.getItem(pendingKey) === "true" && !localStorage.getItem(guideShownKey)) {
+              localStorage.setItem(guideShownKey, "true");
+              localStorage.removeItem(pendingKey);
+              setTimeout(() => {
+                setIsHowToPlayOpen(true);
+              }, 1200);
+            }
+          }
         } else {
           setClientSimContext(null, false);
           setCurrentUser(null);
@@ -383,7 +350,7 @@ export const ConveneStage: React.FC = () => {
           setSelectedCharId(newRotation[0]);
           setClientSelectedChar(newRotation[0]);
         }
-        setToastMessage("Featured Resonators have rotated for this hour!");
+        setToastMessage("Featured Resonators have rotated!");
         setTimeout(() => setToastMessage(null), 6000);
       }
 
@@ -447,16 +414,8 @@ export const ConveneStage: React.FC = () => {
     }
   }, [currentUser, isSandboxGuest, userProfile?.is_vip, userProfile?.max_login_streak, fetchState]);
 
-  const handleLoginSuccess = useCallback((user: SupabaseUser, profile: UserProfile | null) => {
+  const handleLoginSuccess = useCallback((user: SupabaseUser, profile: UserProfile | null, isNewAccount: boolean = false) => {
     setIsLoggingIn(true);
-    if (typeof window !== "undefined") {
-      const port =
-        window.screen?.orientation?.type?.startsWith("portrait") ??
-        (window.matchMedia ? window.matchMedia("(orientation: portrait)").matches : window.innerHeight > window.innerWidth);
-      if (port) {
-        setShowOrientationScreen(true);
-      }
-    }
     setCurrentUser(user);
     setClientSimContext(user.id, false);
     setUserProfile(profile);
@@ -501,31 +460,23 @@ export const ConveneStage: React.FC = () => {
     }
     fetchUserInventory(user.id).then(setInventoryList);
 
+    // Auto-open Guide for new accounts on first entrance (strictly one time)
+    if (typeof window !== "undefined") {
+      const pendingKey = `wuwa_newbie_guide_pending_${user.id}`;
+      const guideShownKey = `wuwa_guide_shown_${user.id}`;
+      if ((isNewAccount || localStorage.getItem(pendingKey) === "true") && !localStorage.getItem(guideShownKey)) {
+        localStorage.setItem(guideShownKey, "true");
+        localStorage.removeItem(pendingKey);
+        setTimeout(() => {
+          setIsHowToPlayOpen(true);
+        }, 1400);
+      }
+    }
+
     setTimeout(() => {
       setIsLoggingIn(false);
     }, 1200);
   }, [fetchState]);
-
-  const handleDeleteInventoryItems = useCallback(async (characterIds: string[]) => {
-    if (currentUser) {
-      if (characterIds.length >= inventoryList.length && inventoryList.length > 0) {
-        await clearAllUserInventory(currentUser.id);
-      } else {
-        await deleteUserInventoryItems(currentUser.id, characterIds);
-      }
-      const updated = await fetchUserInventory(currentUser.id);
-      setInventoryList(updated);
-
-      // Purge deleted resonators from showcase in profile state, localStorage, and Supabase
-      const currentShowcase = userProfile?.showcase_ids || [];
-      const lowerDeleted = new Set(characterIds.map((id) => id.toLowerCase()));
-      const updatedShowcase = currentShowcase.filter((id) => !lowerDeleted.has(id.toLowerCase()));
-      setUserProfile((prev) => (prev ? { ...prev, showcase_ids: updatedShowcase } : prev));
-      updateShowcaseResonatorIds(currentUser.id, updatedShowcase).catch(() => {});
-    } else {
-      setInventoryList((prev) => prev.filter((i) => !characterIds.includes(i.character_id)));
-    }
-  }, [currentUser, inventoryList.length, userProfile?.showcase_ids]);
 
   const handleOpenInventory = useCallback(async () => {
     soundEngine.playClick();
@@ -777,7 +728,7 @@ export const ConveneStage: React.FC = () => {
           <div className="w-12 h-12 rounded-2xl bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 flex items-center justify-center shadow-[0_0_25px_rgba(250,204,21,0.2)]">
             <Sparkles className="w-6 h-6 animate-spin" />
           </div>
-          <span className="font-mono text-xs text-gray-400 tracking-wider uppercase">Loading Resonance System...</span>
+          <span className="font-mono text-xs text-gray-400 tracking-wider uppercase">Loading...</span>
         </div>
       </div>
     );
@@ -793,14 +744,6 @@ export const ConveneStage: React.FC = () => {
             setIsSandboxGuest(true);
             setClientSimContext(null, true);
             toggleClientSandbox(true);
-            if (typeof window !== "undefined") {
-              const port =
-                window.screen?.orientation?.type?.startsWith("portrait") ??
-                (window.matchMedia ? window.matchMedia("(orientation: portrait)").matches : window.innerHeight > window.innerWidth);
-              if (port) {
-                setShowOrientationScreen(true);
-              }
-            }
             const data = getClientStateData(null, true);
             if (data.user) setUserState(data.user);
             if (data.pity) setPityMap(data.pity as any);
@@ -927,63 +870,6 @@ export const ConveneStage: React.FC = () => {
                   transition={{ repeat: Infinity, duration: 1, ease: "easeInOut" }}
                   className="w-1/2 h-full bg-gradient-to-r from-transparent via-yellow-400 to-transparent"
                 />
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ========================================================================= */}
-      {/* 0. OPENING ORIENTATION NOTICE OVERLAY ("Be on landscape mode...") */}
-      {/* ========================================================================= */}
-      <AnimatePresence>
-        {showOrientationScreen && (
-          <motion.div
-            initial={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.35 }}
-            onClick={() => {
-              soundEngine.playClick();
-              soundEngine.startBGM();
-              setShowOrientationScreen(false);
-            }}
-            className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-6 text-center select-none cursor-pointer backdrop-blur-md"
-          >
-            <div className="flex flex-col items-center space-y-6 max-w-lg">
-              {/* Animated Phone Rotate Icon */}
-              <div className="relative flex items-center justify-center w-24 h-24">
-                <div className="absolute inset-0 rounded-full bg-yellow-400/15 animate-ping pointer-events-none" />
-                <div className="relative p-5 rounded-2xl bg-[#10141d] border border-yellow-400/40 text-yellow-400 shadow-[0_0_35px_rgba(250,204,21,0.25)]">
-                  <svg
-                    className="w-12 h-12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
-                    <line x1="12" y1="18" x2="12.01" y2="18" />
-                    <path d="M19 12c1.5 0 2.5-1 2.5-2.5S20.5 7 19 7" stroke="#facc15" strokeDasharray="2 2" />
-                    <path d="M21 7l-2-2-2 2" stroke="#facc15" />
-                  </svg>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-wider text-white">
-                  Switch to landscape mode for full experience
-                </h2>
-                <p className="text-xs sm:text-sm font-mono text-yellow-400/90 uppercase tracking-widest animate-pulse">
-                  Rotate your device or click anywhere to continue
-                </p>
-              </div>
-
-              <div className="pt-4">
-                <span className="inline-block px-8 py-3 rounded-full bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 text-black font-black uppercase tracking-widest text-xs sm:text-sm shadow-[0_0_25px_rgba(250,204,21,0.6)] animate-pulse">
-                  This project is still in beta so expect some bugs, and delays along the way
-                </span>
               </div>
             </div>
           </motion.div>
@@ -1326,7 +1212,7 @@ export const ConveneStage: React.FC = () => {
         <aside className="w-full landscape:w-36 landscape:sm:w-48 landscape:md:w-56 landscape:lg:w-64 flex flex-row landscape:flex-col z-20 border-b landscape:border-b-0 landscape:border-r border-white/10 bg-[#07090ec9] backdrop-blur-lg flex-shrink-0">
           {/* Rail Header (Landscape only) */}
           <div className="px-3 py-2 border-b border-white/5 text-[10px] font-mono uppercase tracking-widest text-yellow-400 font-bold hidden landscape:flex items-center justify-between">
-            <span>{isSandboxGuest ? "All Banners" : "Hourly Featured"}</span>
+            <span>{isSandboxGuest ? "All Banners" : "Active Rotation"}</span>
             <span
               className="text-[9px] text-gray-400 font-normal"
               title={isSandboxGuest ? "Sandbox Mode - All Banners Active" : rotationTimerText}
@@ -1858,7 +1744,6 @@ export const ConveneStage: React.FC = () => {
             : userProfile?.username || currentUser?.user_metadata?.username || "Player"
         }
         currentUserId={inspectedInventory?.isReadOnly ? undefined : currentUser?.id}
-        onDeleteItems={inspectedInventory?.isReadOnly ? undefined : handleDeleteInventoryItems}
         isLoading={isInventoryLoading}
         isReadOnly={inspectedInventory ? inspectedInventory.isReadOnly : false}
       />
@@ -1872,6 +1757,9 @@ export const ConveneStage: React.FC = () => {
         currentUserId={currentUser?.id}
         currentUsername={userProfile?.username || currentUser?.user_metadata?.username || "Player"}
         currentAvatarId={currentAvatarId}
+        onAvatarChanged={(newAvatarId) => {
+          setCurrentAvatarId(newAvatarId);
+        }}
         initialShowcaseIds={userProfile?.showcase_ids}
         initialCustomTitle={userProfile?.custom_title || currentUser?.user_metadata?.custom_title || getStoredUserTitle(currentUser?.id)}
         astrite={userState?.astrite ?? userProfile?.astrite ?? 0}
@@ -1963,6 +1851,9 @@ export const ConveneStage: React.FC = () => {
         onClose={() => setIsHowToPlayOpen(false)}
       />
 
+      {/* Global External Link Redirect Confirmation Modal */}
+      <ExternalRedirectModal />
+
       {/* Coming Soon Notice Modal */}
       <AnimatePresence>
         {comingSoonNotice && (
@@ -2018,10 +1909,10 @@ export const ConveneStage: React.FC = () => {
 
                   <div className="space-y-2">
                     <h3 className="text-xl font-black uppercase tracking-wider text-white">
-                      This Character Is Yet To Come
+                      Coming Soon
                     </h3>
                     <p className="text-xs text-gray-300 leading-relaxed">
-                      <strong className="text-yellow-400 font-bold">{currentChar.name}</strong> is currently unreleased and will arrive in an upcoming banner. Summoning is not yet available for this resonator.
+                      <strong className="text-yellow-400 font-bold">{currentChar.name}</strong> hasn&apos;t been released yet. Stay tuned for upcoming banners!
                     </p>
                   </div>
 

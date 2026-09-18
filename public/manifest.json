@@ -1,0 +1,24 @@
+﻿{
+  " name\: \WuWa Gacha Simulator\,
+ \short_name\: \WuWa Sim\,
+ \description\: \Wuthering Waves Convene Simulator\,
+ \start_url\: \/\,
+ \display\: \standalone\,
+ \background_color\: \#07090e\,
+ \theme_color\: \#07090e\,
+ \orientation\: \landscape\,
+ \icons\: [
+ {
+ \src\: \/assets/astrite.webp\,
+ \sizes\: \192x192\,
+ \type\: \image/webp\,
+ \purpose\: \any maskable\
+ },
+ {
+ \src\: \/embed_wuwasim.png\,
+ \sizes\: \512x512\,
+ \type\: \image/png\,
+ \purpose\: \any\
+ }
+ ]
+}

@@ -1,7 +1,7 @@
 import charactersData from "@/characters.json";
 
 export const GMT8_OFFSET_MS = 8 * 60 * 60 * 1000;
-const ONE_HOUR_MS = 60 * 60 * 1000;
+export const ROTATION_INTERVAL_MS = 20 * 60 * 1000; // 20-minute cycle (:00, :20, :40)
 
 // Filter playable 5-star limited characters (excluding coming soon or unavailable)
 export const PLAYABLE_LIMITED_5STAR_IDS: string[] = charactersData.limitedResonators
@@ -9,23 +9,30 @@ export const PLAYABLE_LIMITED_5STAR_IDS: string[] = charactersData.limitedResona
   .map((r: any) => r.id);
 
 /**
- * Returns the deterministic index of the current hour in GMT+8.
+ * Returns the deterministic index of the current 20-minute cycle (xx:00, xx:20, xx:40).
  */
-export function getCurrentGmt8HourIndex(nowMs: number = Date.now()): number {
-  return Math.floor((nowMs + GMT8_OFFSET_MS) / ONE_HOUR_MS);
+export function getCurrentRotationIndex(nowMs: number = Date.now()): number {
+  return Math.floor((nowMs + GMT8_OFFSET_MS) / ROTATION_INTERVAL_MS);
 }
 
 /**
- * Returns 3 deterministically chosen limited 5-star character IDs for the current GMT+8 hour.
+ * Alias for backward compatibility. Returns the current rotation cycle index.
+ */
+export function getCurrentGmt8HourIndex(nowMs: number = Date.now()): number {
+  return getCurrentRotationIndex(nowMs);
+}
+
+/**
+ * Returns 3 deterministically chosen limited 5-star character IDs for the current 20-minute cycle.
  * All players globally see the exact same 3 featured banners simultaneously.
  */
 export function getHourlyRotatedCharacters(nowMs: number = Date.now()): string[] {
-  const hourIndex = getCurrentGmt8HourIndex(nowMs);
+  const cycleIndex = getCurrentRotationIndex(nowMs);
   const pool = PLAYABLE_LIMITED_5STAR_IDS;
   if (pool.length <= 3) return pool;
 
   const selected: string[] = [];
-  let seed = hourIndex * 997 + 13;
+  let seed = cycleIndex * 997 + 13;
 
   while (selected.length < 3) {
     // Linear congruential generator for uniform distribution
@@ -41,7 +48,7 @@ export function getHourlyRotatedCharacters(nowMs: number = Date.now()): string[]
 }
 
 /**
- * Calculates time remaining until the next hourly rotation reset.
+ * Calculates time remaining until the next 20-minute rotation reset (xx:00, xx:20, xx:40).
  * Returns { hours, minutes, seconds, formattedText }
  */
 export function getTimeUntilNextRotation(nowMs: number = Date.now()): {
@@ -50,14 +57,15 @@ export function getTimeUntilNextRotation(nowMs: number = Date.now()): {
   seconds: number;
   formattedText: string;
 } {
-  const nextHourMs = (Math.floor((nowMs + GMT8_OFFSET_MS) / ONE_HOUR_MS) + 1) * ONE_HOUR_MS - GMT8_OFFSET_MS;
-  const diffMs = Math.max(0, nextHourMs - nowMs);
+  const nextRotationMs =
+    (Math.floor((nowMs + GMT8_OFFSET_MS) / ROTATION_INTERVAL_MS) + 1) * ROTATION_INTERVAL_MS -
+    GMT8_OFFSET_MS;
+  const diffMs = Math.max(0, nextRotationMs - nowMs);
 
-  const hours = Math.floor(diffMs / ONE_HOUR_MS);
-  const minutes = Math.floor((diffMs % ONE_HOUR_MS) / 60000);
+  const minutes = Math.floor(diffMs / 60000);
   const seconds = Math.floor((diffMs % 60000) / 1000);
 
-  const formattedText = `Banner Reset: ${String(hours).padStart(2, "0")}h ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
+  const formattedText = `Banner Reset: ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
 
-  return { hours, minutes, seconds, formattedText };
+  return { hours: 0, minutes, seconds, formattedText };
 }

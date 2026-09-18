@@ -2,7 +2,19 @@
 
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Settings, Volume2, Music, Sparkles } from "lucide-react";
+import {
+  X,
+  Settings,
+  Volume2,
+  Music,
+  Sparkles,
+  Smartphone,
+  Zap,
+  Check,
+  Share,
+  PlusSquare,
+  HelpCircle,
+} from "lucide-react";
 import { soundEngine } from "@/lib/audio/soundEngine";
 
 interface DevSettingsModalProps {
@@ -20,13 +32,68 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
   const [musicVol, setMusicVol] = useState<number>(() => Math.round(soundEngine.getMusicVolume() * 100));
   const [summonVol, setSummonVol] = useState<number>(() => Math.round(soundEngine.getSummonVolume() * 100));
 
+  // Fast Convene mode state
+  const [fastConvene, setFastConvene] = useState<boolean>(false);
+
+  // Auto-Activate Sequences mode state (default: false / manual)
+  const [autoActivate, setAutoActivate] = useState<boolean>(false);
+
+  // PWA Add to Home Screen states
+  const [isStandalone, setIsStandalone] = useState<boolean>(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showIOSGuide, setShowIOSGuide] = useState<boolean>(false);
+
   useEffect(() => {
-    if (isOpen) {
-      setMasterVol(Math.round(soundEngine.getMasterVolume() * 100));
-      setMusicVol(Math.round(soundEngine.getMusicVolume() * 100));
-      setSummonVol(Math.round(soundEngine.getSummonVolume() * 100));
+    if (typeof window !== "undefined") {
+      setFastConvene(localStorage.getItem("wuwa_fast_convene") === "true");
+      setAutoActivate(localStorage.getItem("wuwa_auto_activate_sequences") === "true");
+
+      const checkStandalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        (window.navigator as any).standalone === true;
+      setIsStandalone(Boolean(checkStandalone));
+
+      const handleBeforeInstall = (e: Event) => {
+        e.preventDefault();
+        setDeferredPrompt(e);
+      };
+      window.addEventListener("beforeinstallprompt", handleBeforeInstall);
+      return () => {
+        window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+      };
     }
   }, [isOpen]);
+
+  const handleToggleFastConvene = (val: boolean) => {
+    soundEngine.playClick();
+    setFastConvene(val);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("wuwa_fast_convene", String(val));
+    }
+  };
+
+  const handleToggleAutoActivate = (val: boolean) => {
+    soundEngine.playClick();
+    setAutoActivate(val);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("wuwa_auto_activate_sequences", String(val));
+      window.dispatchEvent(new Event("wuwa_auto_activate_changed"));
+    }
+  };
+
+  const handleInstallClick = async () => {
+    soundEngine.playClick();
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice;
+      if (choice && choice.outcome === "accepted") {
+        setDeferredPrompt(null);
+        setIsStandalone(true);
+      }
+    } else {
+      setShowIOSGuide((prev) => !prev);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -66,10 +133,14 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
             </div>
 
             <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+              onClick={() => {
+                soundEngine.playClick();
+                onClose();
+              }}
+              className="relative p-2 rounded-xl bg-gradient-to-br from-rose-500/25 to-pink-600/30 hover:from-rose-500/40 hover:to-pink-600/50 border border-rose-500/50 text-rose-300 hover:text-white transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)] active:scale-95 group flex-shrink-0 cursor-pointer"
+              title="Close"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5 stroke-[2.5] group-hover:rotate-90 transition-transform duration-200" />
             </button>
           </div>
 
@@ -153,6 +224,142 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
                   onChange={(e) => handleSummonChange(Number(e.target.value))}
                   className="w-full h-1.5 bg-white/15 rounded-lg appearance-none cursor-pointer accent-yellow-400 hover:accent-yellow-300"
                 />
+              </div>
+            </div>
+
+            {/* ========================================================================= */}
+            {/* 2. GACHA CONVENE SETTINGS */}
+            {/* ========================================================================= */}
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2 border-b border-white/10 pb-2">
+                <Zap className="w-4 h-4 text-yellow-400" />
+                <span className="text-xs font-mono font-bold uppercase tracking-widest text-yellow-400">
+                  Convene Experience
+                </span>
+              </div>
+
+              {/* Fast Convene Toggle */}
+              <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center space-x-2 text-white text-xs font-bold uppercase tracking-wide">
+                      <Zap className="w-3.5 h-3.5 text-yellow-400" />
+                      <span>Fast Convene (Skip 3★/4★)</span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 font-mono">
+                      Instantly reveals 10-pull summary. <strong className="text-yellow-400">5★ character cutscenes are NEVER skipped.</strong>
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleFastConvene(!fastConvene)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      fastConvene ? "bg-yellow-400" : "bg-white/15"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-black shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        fastConvene ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* Auto-Activate Sequences Toggle */}
+              <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center space-x-2 text-white text-xs font-bold uppercase tracking-wide">
+                      <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
+                      <span>Auto-Activate Sequences</span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 font-mono">
+                      Automatically activates Resonance Chain nodes when pulling duplicate 5★ resonators. Default is off (manual activation).
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleAutoActivate(!autoActivate)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      autoActivate ? "bg-yellow-400" : "bg-white/15"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-black shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        autoActivate ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* ========================================================================= */}
+            {/* 3. APP & DEVICE (PWA ADD TO HOME SCREEN) */}
+            {/* ========================================================================= */}
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2 border-b border-white/10 pb-2">
+                <Smartphone className="w-4 h-4 text-yellow-400" />
+                <span className="text-xs font-mono font-bold uppercase tracking-widest text-yellow-400">
+                  App & Device
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="space-y-0.5">
+                    <div className="text-xs font-bold uppercase text-white tracking-wide">
+                      Standalone App Mode
+                    </div>
+                    <p className="text-[11px] text-gray-400 font-mono">
+                      Play full-screen without browser address bars or navigation.
+                    </p>
+                  </div>
+
+                  {isStandalone ? (
+                    <div className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>App Installed</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleInstallClick}
+                      className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-bold uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(250,204,21,0.3)] active:scale-95 cursor-pointer"
+                    >
+                      <Smartphone className="w-3.5 h-3.5" />
+                      <span>Add to Home Screen</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* iOS / Safari Manual Instructions Dropdown */}
+                {showIOSGuide && !isStandalone && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 rounded-xl bg-yellow-400/10 border border-yellow-400/30 space-y-2 text-left"
+                  >
+                    <div className="flex items-center space-x-1.5 text-yellow-400 text-xs font-bold">
+                      <HelpCircle className="w-3.5 h-3.5" />
+                      <span>How to Install on iPhone / iPad / Safari:</span>
+                    </div>
+                    <ol className="text-[11px] text-gray-300 font-mono space-y-1.5 list-decimal list-inside leading-relaxed">
+                      <li>
+                        Tap the <strong className="text-white inline-flex items-center px-1 py-0.5 rounded bg-white/10"><Share className="w-3 h-3 inline mr-1 text-yellow-400" /> Share</strong> button in Safari's bottom toolbar.
+                      </li>
+                      <li>
+                        Scroll down and tap <strong className="text-white inline-flex items-center px-1 py-0.5 rounded bg-white/10"><PlusSquare className="w-3 h-3 inline mr-1 text-yellow-400" /> Add to Home Screen</strong>.
+                      </li>
+                      <li>
+                        Tap <strong className="text-yellow-400">Add</strong> in the top-right corner to launch directly from your home screen.
+                      </li>
+                    </ol>
+                  </motion.div>
+                )}
               </div>
             </div>
           </div>

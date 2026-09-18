@@ -7,14 +7,13 @@ import { UserInventoryItem, MAX_WAVEBAND_COUNT } from "@/lib/supabase/inventory"
 import { updateShowcaseResonatorIds } from "@/lib/supabase/auth";
 import { RESONATORS, getResonatorArtist, RESONATOR_ARTISTS } from "@/lib/data/items";
 import { RarityStars } from "@/components/ui/GameIcons";
+import { requestExternalRedirect } from "@/components/modals/ExternalRedirectModal";
 import {
   X,
   Sparkles,
   Briefcase,
   Search,
-  Trash2,
   Check,
-  AlertTriangle,
   Palette,
   Star,
   ArrowUpDown,
@@ -23,49 +22,71 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { getPortraitFileName } from "@/lib/data/portraits";
+import { ResonatorDetailModal } from "@/components/modals/ResonatorDetailModal";
 
 interface ResonatorInventoryCardProps {
   item: UserInventoryItem;
   isFav: boolean;
-  isSelected: boolean;
-  isDeleteMode: boolean;
   isReadOnly: boolean;
-  onToggleCardSelect: (id: string) => void;
   onToggleFavorite: (id: string) => void;
+  onInspectCard: (item: UserInventoryItem) => void;
 }
 
 const ResonatorInventoryCard: React.FC<ResonatorInventoryCardProps> = React.memo(({
   item,
   isFav,
-  isSelected,
-  isDeleteMode,
   isReadOnly,
-  onToggleCardSelect,
   onToggleFavorite,
+  onInspectCard,
 }) => {
   const res = RESONATORS[item.character_id];
   const artistInfo = getResonatorArtist(item.character_id);
   const hasCustomArtist = Boolean(RESONATOR_ARTISTS[item.character_id.toLowerCase()]);
   const element = res?.element || "Spectro";
-  const isS6 = item.count >= MAX_WAVEBAND_COUNT;
-  const wavebandsUnlocked = Math.max(0, Math.min(6, item.count - 1));
+  const maxWavebands = Math.max(0, Math.min(6, item.count - 1));
+  const [activeSeq, setActiveSeq] = useState<number>(() => {
+    if (typeof window === "undefined") return maxWavebands;
+    if (localStorage.getItem("wuwa_auto_activate_sequences") === "true") return maxWavebands;
+    const saved = localStorage.getItem(`wuwa_seq_activated_${item.character_id}`);
+    return saved !== null ? Math.min(maxWavebands, Math.max(0, parseInt(saved, 10) || 0)) : 0;
+  });
+
+  useEffect(() => {
+    const updateActive = () => {
+      if (typeof window === "undefined") return;
+      if (localStorage.getItem("wuwa_auto_activate_sequences") === "true") {
+        setActiveSeq(maxWavebands);
+        return;
+      }
+      const saved = localStorage.getItem(`wuwa_seq_activated_${item.character_id}`);
+      setActiveSeq(saved !== null ? Math.min(maxWavebands, Math.max(0, parseInt(saved, 10) || 0)) : 0);
+    };
+    window.addEventListener("wuwa_sequence_activated", updateActive);
+    window.addEventListener("wuwa_auto_activate_changed", updateActive);
+    return () => {
+      window.removeEventListener("wuwa_sequence_activated", updateActive);
+      window.removeEventListener("wuwa_auto_activate_changed", updateActive);
+    };
+  }, [item.character_id, maxWavebands]);
+
+  const wavebandsUnlocked = activeSeq;
+  const isS6 = wavebandsUnlocked >= 6;
   const portraitFileName = getPortraitFileName(item.character_id);
 
   return (
     <div
       onClick={() => {
-        if (!isReadOnly && isDeleteMode) onToggleCardSelect(item.character_id);
+        if (onInspectCard) {
+          soundEngine.playClick();
+          onInspectCard(item);
+        }
       }}
       style={{
         contentVisibility: "auto",
         containIntrinsicSize: "280px",
       }}
-      className={`group relative flex flex-col rounded-xl overflow-hidden bg-gradient-to-b from-[#141a26] to-[#0a0d14] border transition-transform duration-100 ${
-        isDeleteMode
-          ? isSelected
-            ? "border-red-500 ring-2 ring-red-500/50 cursor-pointer scale-[0.98]"
-            : "border-white/20 hover:border-white/50 cursor-pointer"
-          : isFav
+      className={`group relative flex flex-col rounded-xl overflow-hidden bg-gradient-to-b from-[#141a26] to-[#0a0d14] border transition-transform duration-100 cursor-pointer ${
+        isFav
           ? "border-yellow-400/70 shadow-[0_0_12px_rgba(250,204,21,0.2)] ring-1 ring-yellow-400/40 hover:scale-[1.02]"
           : isS6
           ? "border-yellow-400/50 shadow-[0_0_8px_rgba(250,204,21,0.15)] ring-1 ring-yellow-400/20 hover:scale-[1.02]"
@@ -89,18 +110,16 @@ const ResonatorInventoryCard: React.FC<ResonatorInventoryCardProps> = React.memo
           }}
         />
 
-        {/* Top Overlay: Element Symbol & Yellow Star with Number Inside */}
-        <div className="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none">
-          {/* Element Symbol (no text) */}
+        {/* Top Overlay: Element Symbol Top Left, Sequence Wavebands Counter Top Right */}
+        <div className="absolute top-2 left-2 right-2 z-10 flex items-center justify-between pointer-events-none">
+          {/* Element Badge */}
           <div
-            className="w-6 h-6 rounded-full p-1 bg-black/85 border border-white/20 shadow-md flex items-center justify-center"
+            className="w-7 h-7 rounded-full p-1 bg-black/80 border border-white/20 shadow-md flex items-center justify-center backdrop-blur-sm"
             title={element}
           >
             <img
               src={`/assets/elements/${element.toLowerCase()}.png`}
               alt={element}
-              loading="lazy"
-              decoding="async"
               className="w-full h-full object-contain"
               onError={(e) => {
                 (e.currentTarget as HTMLElement).style.display = "none";
@@ -108,20 +127,22 @@ const ResonatorInventoryCard: React.FC<ResonatorInventoryCardProps> = React.memo
             />
           </div>
 
-          {/* Yellow Star with Sequence Number Inside */}
+          {/* Sequence Wavebands Badge (Diamond Star) */}
           <div
-            className={`relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center ${
-              isS6 ? "drop-shadow-[0_0_8px_rgba(250,204,21,0.7)]" : ""
+            className={`relative w-8 h-8 flex items-center justify-center ${
+              isS6
+                ? "drop-shadow-[0_0_8px_rgba(250,204,21,0.9)]"
+                : "drop-shadow-[0_0_4px_rgba(250,204,21,0.5)]"
             }`}
-            title={`Sequence S${wavebandsUnlocked}`}
+            title={`Sequence Node S${wavebandsUnlocked}`}
           >
             <svg
               viewBox="0 0 24 24"
-              className="w-full h-full text-yellow-400 fill-yellow-400 overflow-visible"
+              className="w-full h-full text-yellow-400 fill-yellow-400"
             >
               <path
                 d="M12 1.5C12 7.5 16.5 12 22.5 12C16.5 12 12 16.5 12 22.5C12 16.5 7.5 12 1.5 12C7.5 12 12 7.5 12 1.5Z"
-                stroke="rgba(255, 255, 255, 0.45)"
+                stroke="rgba(255, 255, 255, 0.4)"
                 strokeWidth="0.65"
               />
             </svg>
@@ -130,21 +151,6 @@ const ResonatorInventoryCard: React.FC<ResonatorInventoryCardProps> = React.memo
             </span>
           </div>
         </div>
-
-        {/* Circle option at the bottom right of each card when in delete mode */}
-        {!isReadOnly && isDeleteMode && (
-          <div className="absolute bottom-2 right-2 z-20 pointer-events-auto">
-            <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
-                isSelected
-                  ? "bg-red-500 border border-red-300 text-white shadow-[0_0_10px_rgba(239,68,68,0.7)]"
-                  : "bg-black/80 border border-white/50 hover:border-white text-transparent"
-              }`}
-            >
-              {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-            </div>
-          </div>
-        )}
 
         {/* Bottom Art Gradient */}
         <div className="absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-[#0a0d14] to-transparent pointer-events-none" />
@@ -205,7 +211,7 @@ const ResonatorInventoryCard: React.FC<ResonatorInventoryCardProps> = React.memo
                 (e.currentTarget as HTMLElement).blur();
                 soundEngine.playClick();
                 if (artistInfo?.url) {
-                  window.open(artistInfo.url, "_blank", "noopener,noreferrer");
+                  requestExternalRedirect(artistInfo.url, artistInfo.name);
                 }
               }}
               className="w-6 h-6 rounded-md bg-white/[0.04] hover:bg-yellow-400/20 text-gray-400 hover:text-yellow-400 border border-white/10 hover:border-yellow-400/40 flex items-center justify-center transition-all duration-150 active:scale-95 shadow-sm group-hover/owner:scale-105"
@@ -244,7 +250,6 @@ interface InventoryModalProps {
   inventory: UserInventoryItem[];
   username?: string;
   currentUserId?: string;
-  onDeleteItems?: (characterIds: string[]) => Promise<void> | void;
   isLoading?: boolean;
   isReadOnly?: boolean;
 }
@@ -256,7 +261,6 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   inventory,
   username = "Resonator",
   currentUserId,
-  onDeleteItems,
   isLoading,
   isReadOnly = false,
 }) => {
@@ -265,11 +269,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   const [sortMode, setSortMode] = useState<"A-Z" | "Z-A" | "Recent">("A-Z");
   const [isSortOpen, setIsSortOpen] = useState<boolean>(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [isDeleteMode, setIsDeleteMode] = useState<boolean>(false);
-  const [selectedToDelete, setSelectedToDelete] = useState<Set<string>>(new Set());
-  const [showConfirmDelete, setShowConfirmDelete] = useState<boolean>(false);
-  const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [internalLoading, setInternalLoading] = useState<boolean>(true);
+  const [inspectedItem, setInspectedItem] = useState<UserInventoryItem | null>(null);
 
   const sortDropdownRef = useRef<HTMLDivElement | null>(null);
 
@@ -308,10 +309,6 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       }, 700);
       return () => clearTimeout(timer);
     } else {
-      setIsDeleteMode(false);
-      setSelectedToDelete(new Set());
-      setShowConfirmDelete(false);
-      setIsDeleting(false);
       setIsSortOpen(false);
     }
   }, [isOpen]);
@@ -393,51 +390,6 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       });
   }, [inventory, searchQuery, selectedElement, sortMode, favorites]);
 
-  const toggleSelectCard = useCallback((characterId: string) => {
-    soundEngine.playClick();
-    setSelectedToDelete((prev) => {
-      const next = new Set(prev);
-      if (next.has(characterId)) {
-        next.delete(characterId);
-      } else {
-        next.add(characterId);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleConfirmDelete = async () => {
-    soundEngine.playClick();
-    const idsToDelete = Array.from(selectedToDelete);
-    if (onDeleteItems && idsToDelete.length > 0) {
-      setIsDeleting(true);
-      try {
-        await onDeleteItems(idsToDelete);
-        setFavorites((prev) => {
-          const next = new Set(prev);
-          const lowerDeleted = new Set(idsToDelete.map((id) => id.toLowerCase()));
-          prev.forEach((fav) => {
-            if (lowerDeleted.has(fav.toLowerCase())) {
-              next.delete(fav);
-            }
-          });
-          try {
-            const storageKey = `wuwa_inventory_favorites_${username}`;
-            localStorage.setItem(storageKey, JSON.stringify(Array.from(next)));
-          } catch {}
-          return next;
-        });
-      } catch (err) {
-        console.error("Failed to hard delete inventory items:", err);
-      } finally {
-        setIsDeleting(false);
-      }
-    }
-    setSelectedToDelete(new Set());
-    setIsDeleteMode(false);
-    setShowConfirmDelete(false);
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -502,16 +454,27 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 soundEngine.playClick();
                 onClose();
               }}
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border border-white/10 transition-colors self-end sm:self-center"
+              className="relative p-2 rounded-xl bg-gradient-to-br from-rose-500/25 to-pink-600/30 hover:from-rose-500/40 hover:to-pink-600/50 border border-rose-500/50 text-rose-300 hover:text-white transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)] active:scale-95 group flex-shrink-0 cursor-pointer self-end sm:self-center"
+              title="Close"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5 stroke-[2.5] group-hover:rotate-90 transition-transform duration-200" />
             </button>
+          </div>
+
+          {/* Inventory Distinction Notice Bar */}
+          <div className="px-5 sm:px-8 py-2 bg-yellow-500/10 border-b border-yellow-500/20 flex items-center justify-between text-[11px] font-mono text-yellow-300/90 flex-wrap gap-2">
+            <div className="flex items-center space-x-2">
+              <Sparkles className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
+              <span>
+                <strong>Featured 5★ Resonator Vault:</strong> Only featured limited 5★ characters (S0–S6) are saved permanently. 3★/4★ weapons, 4★ characters, and 50/50 standard losses are not stored.
+              </span>
+            </div>
           </div>
 
           {/* Filter, Sorter & Search Bar */}
           <div className="px-5 sm:px-8 py-3 border-b border-white/10 bg-black/40 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-            {/* Category / Element Filter Pills with dedicated Favorites section */}
-            <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+            {/* Category / Element Filter Pills with dedicated Favorites section (Smooth side-by-side scrollable on all devices) */}
+            <div className="flex-1 min-w-0 flex items-center space-x-1.5 overflow-x-auto overscroll-x-contain touch-pan-x flex-nowrap scroll-smooth scrollbar-none py-1 -my-1">
               {["ALL", "FAVORITES", "Spectro", "Havoc", "Fusion", "Aero", "Electro", "Glacio"].map((elem) => {
                 const isFavSection = elem === "FAVORITES";
                 const isSelected = selectedElement === elem;
@@ -603,68 +566,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                   className="w-full pl-8 pr-3 py-1.5 bg-black/60 border border-white/15 focus:border-yellow-400/60 rounded-lg text-xs font-mono text-white placeholder-gray-500 focus:outline-none transition-all"
                 />
               </div>
-
-              {/* Delete Trigger Button (Hidden in Read-Only mode) */}
-              {!isReadOnly && (
-                <button
-                  onClick={() => {
-                    soundEngine.playClick();
-                    if (isDeleteMode) {
-                      setIsDeleteMode(false);
-                      setSelectedToDelete(new Set());
-                    } else {
-                      setIsDeleteMode(true);
-                    }
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center space-x-1.5 transition-all flex-shrink-0 ${
-                    isDeleteMode
-                      ? "bg-red-500/20 text-red-300 border border-red-500/50 hover:bg-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.25)]"
-                      : "bg-white/5 hover:bg-white/10 text-gray-400 hover:text-red-400 border border-white/10"
-                  }`}
-                  title={isDeleteMode ? "Cancel delete" : "Delete resonators from database"}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>{isDeleteMode ? "Cancel" : "Delete"}</span>
-                </button>
-              )}
             </div>
           </div>
-
-          {/* Delete Selection Mode Action Banner */}
-          {!isReadOnly && isDeleteMode && (
-            <div className="px-5 sm:px-8 py-2.5 bg-red-950/40 border-b border-red-500/30 flex items-center justify-between gap-3 text-xs font-mono animate-fadeIn">
-              <div className="flex items-center space-x-3 text-red-200">
-                <span>
-                  Selected: <strong className="text-white font-bold">{selectedToDelete.size}</strong> of {filteredItems.length}
-                </span>
-                <button
-                  onClick={() => {
-                    soundEngine.playClick();
-                    if (selectedToDelete.size === filteredItems.length) {
-                      setSelectedToDelete(new Set());
-                    } else {
-                      setSelectedToDelete(new Set(filteredItems.map((i) => i.character_id)));
-                    }
-                  }}
-                  className="text-gray-400 hover:text-white underline underline-offset-2 transition-colors"
-                >
-                  {selectedToDelete.size === filteredItems.length ? "Deselect All" : "Select All"}
-                </button>
-              </div>
-
-              <button
-                disabled={selectedToDelete.size === 0}
-                onClick={() => {
-                  soundEngine.playClick();
-                  setShowConfirmDelete(true);
-                }}
-                className="px-3.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:hover:bg-red-600 text-white font-bold flex items-center space-x-1.5 shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-all active:scale-95"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Selected ({selectedToDelete.size})</span>
-              </button>
-            </div>
-          )}
 
           {/* Resonators Grid Body OR Polished Inventory Loading State */}
           <div className="p-5 sm:p-8 overflow-y-auto flex-1 min-h-[360px] overscroll-contain relative">
@@ -692,7 +595,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         Loading Inventory
                       </h3>
                       <p className="text-xs font-mono text-yellow-400/80 tracking-wider">
-                        Retrieving Resonator Wavebands...
+                        Loading resonators...
                       </p>
                     </div>
                   </div>
@@ -713,11 +616,9 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                           key={item.character_id}
                           item={item}
                           isFav={favorites.has(item.character_id)}
-                          isSelected={selectedToDelete.has(item.character_id)}
-                          isDeleteMode={isDeleteMode}
                           isReadOnly={isReadOnly}
-                          onToggleCardSelect={toggleSelectCard}
                           onToggleFavorite={toggleFavorite}
+                          onInspectCard={setInspectedItem}
                         />
                       ))}
                     </div>
@@ -741,10 +642,10 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         </h3>
                         <p className="text-xs text-gray-400 leading-relaxed font-mono">
                           {selectedElement === "FAVORITES"
-                            ? "Click the star icon on any resonator card to add them to your favorites for instant access!"
+                            ? "Click the star on any resonator to add them to your favorites."
                             : inventory.length === 0
-                            ? "Convene on limited banners to win featured 5★ resonators. They will automatically be recorded here!"
-                            : "No resonators found matching your current filter criteria."}
+                            ? "Pull on featured banners to obtain 5★ resonators. They will appear here!"
+                            : "No resonators match your filter."}
                         </p>
                       </div>
                     </div>
@@ -755,72 +656,13 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
           </div>
         </motion.div>
 
-        {/* Delete Confirmation Warning Modal */}
-        <AnimatePresence>
-          {showConfirmDelete && (
-            <div
-              className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/95 select-none"
-              onClick={() => !isDeleting && setShowConfirmDelete(false)}
-            >
-              <motion.div
-                initial={{ opacity: 0, scale: 0.92, y: 15 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.92, y: 15 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-                className="relative max-w-sm w-full bg-[#0d111a] border border-red-500/40 rounded-2xl p-6 text-center shadow-[0_0_60px_rgba(239,68,68,0.3)] space-y-5"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="mx-auto w-14 h-14 rounded-full bg-red-500/15 border border-red-500/40 flex items-center justify-center text-red-400 shadow-[0_0_20px_rgba(239,68,68,0.3)]">
-                  <AlertTriangle className="w-7 h-7" />
-                </div>
-
-                <div className="space-y-2">
-                  <h3 className="text-lg font-black uppercase tracking-wider text-white">
-                    Confirm Deletion
-                  </h3>
-                  <p className="text-xs text-gray-300 leading-relaxed font-mono">
-                    Are you sure you want to permanently delete{" "}
-                    <strong className="text-red-400 font-bold">{selectedToDelete.size}</strong>{" "}
-                    resonator(s) from your database inventory?
-                  </p>
-                  <p className="text-[11px] text-red-400/90 font-mono bg-red-950/40 p-2 rounded-lg border border-red-500/20">
-                    ⚠️ Warning: Permanently clears the selected data from the database. This action cannot be undone.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 pt-2">
-                  <button
-                    disabled={isDeleting}
-                    onClick={() => {
-                      soundEngine.playClick();
-                      setShowConfirmDelete(false);
-                    }}
-                    className="py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-gray-300 hover:text-white font-bold uppercase text-xs tracking-wider transition-all disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    disabled={isDeleting}
-                    onClick={handleConfirmDelete}
-                    className="py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black uppercase text-xs tracking-wider transition-all shadow-[0_0_20px_rgba(239,68,68,0.5)] active:scale-95 disabled:opacity-50 flex items-center justify-center space-x-2"
-                  >
-                    {isDeleting ? (
-                      <>
-                        <Sparkles className="w-3.5 h-3.5 animate-spin" />
-                        <span>Deleting...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Delete</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
+        {/* Resonator Detail & Resonance Chain (S0-S6) Modal */}
+        <ResonatorDetailModal
+          isOpen={Boolean(inspectedItem)}
+          item={inspectedItem}
+          onClose={() => setInspectedItem(null)}
+          onBack={() => setInspectedItem(null)}
+        />
       </div>
     </AnimatePresence>
   );

@@ -43,6 +43,7 @@ export const metadata: Metadata = {
     shortcut: "/assets/astrite.webp",
     apple: "/assets/astrite.webp",
   },
+  manifest: "/manifest.json",
 };
 
 import { getSummoningVideoUrl } from "@/lib/video/cutscenesConfig";

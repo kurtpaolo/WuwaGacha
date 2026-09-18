@@ -347,9 +347,40 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     }
   }, [results, playedCutsceneIndices, getCutsceneUrlForItem, startRevealForIndex]);
 
+  // Fast Convene / Skip check: jumps directly to first 5-star cutscene if present, otherwise summary
+  const advanceWithFastConveneOrFirst = useCallback(() => {
+    const isFastConvene =
+      typeof window !== "undefined" &&
+      localStorage.getItem("wuwa_fast_convene") === "true";
+
+    if (isFastConvene && !isOnePull) {
+      let firstFiveStarIdx = -1;
+      for (let i = 0; i < results.length; i++) {
+        if (
+          !playedCutsceneIndices.has(i) &&
+          results[i].rarity === 5 &&
+          getCutsceneUrlForItem(results[i])
+        ) {
+          firstFiveStarIdx = i;
+          break;
+        }
+      }
+
+      if (firstFiveStarIdx !== -1) {
+        isSkippingRef.current = true;
+        startRevealForIndex(firstFiveStarIdx);
+      } else {
+        setPhase("summary");
+      }
+      return;
+    }
+
+    startRevealForIndex(0);
+  }, [isOnePull, results, playedCutsceneIndices, getCutsceneUrlForItem, startRevealForIndex]);
+
   // Initial meteor video ended
   const handleInitialVideoEnded = () => {
-    startRevealForIndex(0);
+    advanceWithFastConveneOrFirst();
   };
 
   // Fallback to local meteor video if CDN load fails
@@ -363,13 +394,30 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
         return;
       }
     }
-    startRevealForIndex(0);
-  }, [meteorVideoUrl, highestRarity, startRevealForIndex]);
+    advanceWithFastConveneOrFirst();
+  }, [meteorVideoUrl, highestRarity, advanceWithFastConveneOrFirst]);
 
   // Skip logic
   const handleSkip = useCallback(() => {
     if (phase === "video") {
-      startRevealForIndex(0);
+      let firstFiveStarIdx = -1;
+      for (let i = 0; i < results.length; i++) {
+        if (
+          !playedCutsceneIndices.has(i) &&
+          results[i].rarity === 5 &&
+          getCutsceneUrlForItem(results[i])
+        ) {
+          firstFiveStarIdx = i;
+          break;
+        }
+      }
+
+      if (firstFiveStarIdx !== -1) {
+        isSkippingRef.current = true;
+        startRevealForIndex(firstFiveStarIdx);
+      } else {
+        setPhase("summary");
+      }
       return;
     }
 
