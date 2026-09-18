@@ -6,9 +6,7 @@
 import {
   buildCutscenesManifest,
   getR2CutsceneUrl,
-  getR2BaseUrl,
   getSummoningVideoUrl,
-  getSummoningVideosToPreload,
 } from "./cutscenesConfig";
 
 export const SUMMONING_VIDEOS = [

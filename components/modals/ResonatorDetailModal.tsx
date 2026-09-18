@@ -163,7 +163,6 @@ export const ResonatorDetailModal: React.FC<ResonatorDetailModalProps> = ({
   // Action: Manually activate sequence up to selected node
   const handleActivateSelected = () => {
     if (selectedNodeIndex > maxAvailableSequence || selectedNodeIndex <= activatedLevel) return;
-    soundEngine.playGoldStinger();
     const newLevel = selectedNodeIndex;
     setActivatedLevel(newLevel);
     if (typeof window !== "undefined") {

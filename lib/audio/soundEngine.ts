@@ -210,6 +210,10 @@ class SoundEngine {
     }
   }
 
+  public getIsBgmPlaying(): boolean {
+    return this.isBgmPlaying;
+  }
+
   public stopBGM() {
     this.isBgmPlaying = false;
     this.isBgmDucked = false;

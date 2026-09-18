@@ -15,7 +15,6 @@ import {
   Camera,
   ArrowLeft,
   ShieldCheck,
-  ChevronDown,
 } from "lucide-react";
 import { soundEngine } from "@/lib/audio/soundEngine";
 import {

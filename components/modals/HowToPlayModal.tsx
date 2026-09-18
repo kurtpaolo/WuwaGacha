@@ -105,15 +105,15 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({
               </p>
               <div className="space-y-1.5 text-[11px] font-mono text-gray-300">
                 <div className="p-2 rounded-lg bg-black/40 border border-white/5">
-                  <span className="text-yellow-400 font-bold">🎯 80-Pull Hard Pity: </span>
+                  <span className="text-yellow-400 font-bold">80-Pull Hard Pity: </span>
                   <span>If you don&apos;t get a 5★ earlier, your 80th pull is <strong>100% guaranteed</strong> to drop a 5★ Resonator.</span>
                 </div>
                 <div className="p-2 rounded-lg bg-black/40 border border-white/5">
-                  <span className="text-cyan-400 font-bold">⚖️ The 50/50 Rule: </span>
+                  <span className="text-cyan-400 font-bold">The 50/50 Rule: </span>
                   <span>When a 5★ drops, there&apos;s a 50% chance it&apos;s the featured banner unit. If you lose, your <strong>next 5★ is 100% guaranteed</strong> to be featured!</span>
                 </div>
                 <div className="p-2 rounded-lg bg-black/40 border border-white/5">
-                  <span className="text-emerald-400 font-bold">🔄 Persistent Pity: </span>
+                  <span className="text-emerald-400 font-bold">Persistent Pity: </span>
                   <span>Your pity count and guarantees carry over across all banner rotations forever.</span>
                 </div>
               </div>

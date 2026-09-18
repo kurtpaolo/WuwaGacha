@@ -23,7 +23,6 @@ export function requestExternalRedirect(url: string, title?: string) {
 export const ExternalRedirectModal: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [targetUrl, setTargetUrl] = useState("");
-  const [targetTitle, setTargetTitle] = useState("");
 
   // 1. Listen for explicit programmatic redirect requests
   useEffect(() => {
@@ -32,7 +31,6 @@ export const ExternalRedirectModal: React.FC = () => {
       if (customEvent.detail && customEvent.detail.url) {
         soundEngine.playClick();
         setTargetUrl(customEvent.detail.url);
-        setTargetTitle(customEvent.detail.title || "");
         setIsOpen(true);
       }
     };
@@ -60,13 +58,7 @@ export const ExternalRedirectModal: React.FC = () => {
             e.stopPropagation();
             soundEngine.playClick();
 
-            const title =
-              anchor.getAttribute("title") ||
-              anchor.innerText?.trim() ||
-              urlObj.hostname;
-
             setTargetUrl(href);
-            setTargetTitle(title);
             setIsOpen(true);
           }
         } catch {

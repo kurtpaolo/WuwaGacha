@@ -157,10 +157,6 @@ const ALL_4_STAR_RESONATORS = [
   "lumi",
 ];
 
-// Cat placeholder weapons
-const ALL_4_STAR_WEAPONS = ["sleepy_cat"];
-const ALL_3_STAR_WEAPONS = ["hapi_cat"];
-
 // Random float generator [0, 1) using crypto when available
 function secureRandom(): number {
   if (typeof window !== "undefined" && window.crypto && window.crypto.getRandomValues) {
@@ -308,13 +304,11 @@ export function executeClientConvene(
     const roll5 = secureRandom();
 
     let pulledItem: ItemData;
-    let rarity: ItemRarity;
     let isGuaranteedRoll = false;
     let is5050Win: boolean | null = null;
 
     if (roll5 < p5Rate) {
       // 5-STAR (Featured Resonator or Standard Resonator 50/50 loss)
-      rarity = 5;
       goldIndices.push(i);
 
       if (guaranteedLimited) {
@@ -372,7 +366,6 @@ export function executeClientConvene(
 
       if (roll4 < p4Rate) {
         // 4-STAR (Featured 4★ Resonator or Standard 4★ / Sleepy Cat placeholder)
-        rarity = 4;
         purpleIndices.push(i);
 
         if (guaranteedFeatured4 || secureRandom() < 0.5) {
@@ -435,7 +428,6 @@ export function executeClientConvene(
         });
       } else {
         // 3-STAR (Hapi Cat placeholder)
-        rarity = 3;
         pulledItem = WEAPONS["hapi_cat"] || {
           id: "hapi_cat",
           name: "Hapi Cat",

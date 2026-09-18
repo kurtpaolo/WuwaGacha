@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -97,9 +97,26 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
 
   if (!isOpen) return null;
 
+  const isMuted = masterVol === 0;
+  const prevMasterVolRef = useRef<number>(masterVol > 0 ? masterVol : 80);
+
   const handleMasterChange = (val: number) => {
+    if (val > 0) {
+      prevMasterVolRef.current = val;
+    }
     setMasterVol(val);
     soundEngine.setMasterVolume(val / 100);
+  };
+
+  const handleToggleMuteAll = () => {
+    soundEngine.playClick();
+    if (isMuted) {
+      const restore = prevMasterVolRef.current > 0 ? prevMasterVolRef.current : 80;
+      handleMasterChange(restore);
+    } else {
+      prevMasterVolRef.current = masterVol > 0 ? masterVol : 80;
+      handleMasterChange(0);
+    }
   };
 
   const handleMusicChange = (val: number) => {
@@ -150,11 +167,34 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
             {/* 1. VOLUME SECTION (AT THE VERY TOP) */}
             {/* ========================================================================= */}
             <div className="space-y-4">
-              <div className="flex items-center space-x-2 border-b border-white/10 pb-2">
-                <Volume2 className="w-4 h-4 text-yellow-400" />
-                <span className="text-xs font-mono font-bold uppercase tracking-widest text-yellow-400">
-                  Audio & Volume
-                </span>
+              <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                <div className="flex items-center space-x-2">
+                  <Volume2 className="w-4 h-4 text-yellow-400" />
+                  <span className="text-xs font-mono font-bold uppercase tracking-widest text-yellow-400">
+                    Audio & Volume
+                  </span>
+                </div>
+
+                {/* Mute All small toggle at the very right of Audio & Volume */}
+                <div className="flex items-center space-x-2">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-gray-400">
+                    Mute All
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleToggleMuteAll}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      isMuted ? "bg-rose-500" : "bg-white/15"
+                    }`}
+                    title={isMuted ? "Unmute Audio" : "Mute All Audio"}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        isMuted ? "translate-x-4" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
 
               {/* Master Volume */}
@@ -244,10 +284,10 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
                   <div className="space-y-0.5">
                     <div className="flex items-center space-x-2 text-white text-xs font-bold uppercase tracking-wide">
                       <Zap className="w-3.5 h-3.5 text-yellow-400" />
-                      <span>Fast Convene (Skip 3★/4★)</span>
+                      <span>Skip Fodder Pulls</span>
                     </div>
                     <p className="text-[11px] text-gray-400 font-mono">
-                      Instantly reveals 10-pull summary. <strong className="text-yellow-400">5★ character cutscenes are NEVER skipped.</strong>
+                      Instantly Skip 3★ and 4★ pulls
                     </p>
                   </div>
 
@@ -276,7 +316,7 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
                       <span>Auto-Activate Sequences</span>
                     </div>
                     <p className="text-[11px] text-gray-400 font-mono">
-                      Automatically activates Resonance Chain nodes when pulling duplicate 5★ resonators. Default is off (manual activation).
+                      Automatically activates Resonance Chain nodes when pulling duplicate 5★ resonators.
                     </p>
                   </div>
 

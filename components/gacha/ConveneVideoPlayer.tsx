@@ -400,6 +400,11 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
   // Skip logic
   const handleSkip = useCallback(() => {
     if (phase === "video") {
+      // Both Gacha Gold (5-star) and Gacha Purple (4-star) summon animations are strictly unskippable
+      if (highestRarity >= 4) {
+        return;
+      }
+
       let firstFiveStarIdx = -1;
       for (let i = 0; i < results.length; i++) {
         if (
@@ -444,6 +449,10 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     }
   }, [
     phase,
+    highestRarity,
+    results,
+    playedCutsceneIndices,
+    getCutsceneUrlForItem,
     startRevealForIndex,
     handleSkipToSummary,
     onFinish,
@@ -452,6 +461,10 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
   // Step-through advance
   const handleAdvance = useCallback(() => {
     if (phase === "video") {
+      // Both Gacha Gold (5-star) and Gacha Purple (4-star) summon animations are strictly unskippable
+      if (highestRarity >= 4) {
+        return;
+      }
       startRevealForIndex(0);
       return;
     }
@@ -483,13 +496,13 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
       onFinish();
       return;
     }
-  }, [phase, results.length, startRevealForIndex, handleSkip4StarCutscene, onFinish]);
+  }, [phase, highestRarity, results.length, startRevealForIndex, handleSkip4StarCutscene, onFinish]);
 
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (phase === "cutscene_5star") {
-        // Completely ignore keyboard during 5-star cutscene (strictly unskippable)
+      if (phase === "cutscene_5star" || (phase === "video" && highestRarity >= 4)) {
+        // Completely ignore keyboard during strictly unskippable video phases (5-star cutscene, gold/purple summon animations)
         return;
       }
 
@@ -503,7 +516,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [phase, handleAdvance, handleSkip]);
+  }, [phase, highestRarity, handleAdvance, handleSkip]);
 
   const currentResult = results[currentIndex] || results[0];
 
@@ -516,7 +529,14 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
       {/* 1. INITIAL METEOR CUTSCENE (GOLD / PURPLE / BLUE) */}
       {/* ========================================================================= */}
       {phase === "video" && (
-        <div className="relative w-full h-full flex items-center justify-center bg-black">
+        <div
+          className="relative w-full h-full flex items-center justify-center bg-black"
+          onClick={(e) => {
+            if (highestRarity >= 4) {
+              e.stopPropagation();
+            }
+          }}
+        >
           <video
             ref={videoRef}
             src={videoSrc}
@@ -526,22 +546,25 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
             muted={effectiveSummonVol === 0}
             onEnded={handleInitialVideoEnded}
             onError={handleInitialVideoError}
-            className={`w-full h-full object-cover transition-all duration-300 ${
+            style={{ transform: "translateZ(0)", willChange: "transform", backfaceVisibility: "hidden" }}
+            className={`w-full h-full object-cover ${
               isBlueRarity ? "hue-rotate-[65deg] saturate-150 brightness-110" : ""
             }`}
           />
 
-          {/* Top-Right In-Game Skip Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleSkip();
-            }}
-            className="absolute top-6 right-8 z-50 flex items-center space-x-2 px-4 py-2 rounded-full bg-black/60 hover:bg-black/80 border border-white/20 text-xs font-display font-black tracking-widest text-white uppercase backdrop-blur-md transition-all hover:scale-105 shadow-[0_0_15px_rgba(0,0,0,0.8)]"
-          >
-            <span>Skip</span>
-            <FastForward className="w-4 h-4 text-yellow-400" />
-          </button>
+          {/* Top-Right In-Game Skip Button (Hidden for strictly unskippable Gold and Purple summon animations) */}
+          {highestRarity < 4 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSkip();
+              }}
+              className="absolute top-6 right-8 z-50 flex items-center space-x-2 px-4 py-2 rounded-full bg-black/60 hover:bg-black/80 border border-white/20 text-xs font-display font-black tracking-widest text-white uppercase backdrop-blur-md transition-all hover:scale-105 shadow-[0_0_15px_rgba(0,0,0,0.8)]"
+            >
+              <span>Skip</span>
+              <FastForward className="w-4 h-4 text-yellow-400" />
+            </button>
+          )}
         </div>
       )}
 
@@ -563,6 +586,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
             muted={effectiveSummonVol === 0}
             onEnded={handleCutsceneEnded}
             onError={handleCutsceneError}
+            style={{ transform: "translateZ(0)", willChange: "transform", backfaceVisibility: "hidden" }}
             className="w-full h-full object-cover"
           />
           {/* Note: Skip button is explicitly HIDDEN during 5-star cutscene */}
@@ -587,6 +611,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
             muted={effectiveSummonVol === 0}
             onEnded={handleCutsceneEnded}
             onError={handleCutsceneError}
+            style={{ transform: "translateZ(0)", willChange: "transform", backfaceVisibility: "hidden" }}
             className="w-full h-full object-cover"
           />
 

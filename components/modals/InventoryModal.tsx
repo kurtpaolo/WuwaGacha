@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { soundEngine } from "@/lib/audio/soundEngine";
-import { UserInventoryItem, MAX_WAVEBAND_COUNT } from "@/lib/supabase/inventory";
+import { UserInventoryItem } from "@/lib/supabase/inventory";
 import { updateShowcaseResonatorIds } from "@/lib/supabase/auth";
 import { RESONATORS, getResonatorArtist, RESONATOR_ARTISTS } from "@/lib/data/items";
 import { RarityStars } from "@/components/ui/GameIcons";

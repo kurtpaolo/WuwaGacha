@@ -24,7 +24,6 @@ import {
 } from "@/lib/gacha/clientSim";
 import {
   AstriteIcon,
-  RarityStars,
 } from "@/components/ui/GameIcons";
 import { preloadSummoningVideos } from "@/lib/video/videoPreloader";
 import { ConveneVideoPlayer } from "@/components/gacha/ConveneVideoPlayer";
@@ -50,10 +49,9 @@ import {
   claimTacetField,
   syncTacetCloudTimestamp,
   TacetFieldStatus,
-  getTacetBatteryHours,
 } from "@/lib/gacha/tacetField";
 import { processLoginStreak, getStoredLoginStreak } from "@/lib/gacha/loginStreak";
-import { getAuthUser, signOut, getStoredAvatarId, PlayerPublicProfile, updateShowcaseResonatorIds } from "@/lib/supabase/auth";
+import { getAuthUser, signOut, getStoredAvatarId, PlayerPublicProfile } from "@/lib/supabase/auth";
 import { fetchUserProfile, updateUserProfile, flushPendingProfileSync, UserProfile } from "@/lib/supabase/profile";
 import { getPortraitFileName } from "@/lib/data/portraits";
 import { getStoredUserTitle } from "@/lib/data/titles";
@@ -66,7 +64,6 @@ import {
   SlidersHorizontal,
   History as HistoryIcon,
   HelpCircle,
-  Plus,
   Briefcase,
   LogOut,
   User,
@@ -100,7 +97,6 @@ export const ConveneStage: React.FC = () => {
   });
   const [userState, setUserState] = useState<any>(null);
   const [pityMap, setPityMap] = useState<Record<string, any>>({});
-  const [loading, setLoading] = useState<boolean>(true);
   const [isPulling, setIsPulling] = useState<boolean>(false);
   const [conveneResult, setConveneResult] = useState<ConveneResponse | null>(null);
 
@@ -208,8 +204,6 @@ export const ConveneStage: React.FC = () => {
       setWinRateStats(get5050Stats(targetUserId, isSandbox));
     } catch (e) {
       console.error("Failed to load client state:", e);
-    } finally {
-      setLoading(false);
     }
   }, [isSandboxGuest, currentUser?.id]);
 

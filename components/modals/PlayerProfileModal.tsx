@@ -8,15 +8,12 @@ import {
   Star,
   Sparkles,
   Briefcase,
-  User,
   Check,
   AlertCircle,
-  RotateCcw,
   Plus,
   ArrowRight,
   ArrowLeft,
   Eye,
-  SlidersHorizontal,
   Users,
   Award,
   Pencil,
@@ -44,7 +41,6 @@ import {
 import {
   UserInventoryItem,
   MAX_WAVEBAND_COUNT,
-  STANDARD_5_STAR_LOSSES,
 } from "@/lib/supabase/inventory";
 import { TitlePickerModal } from "@/components/modals/TitlePickerModal";
 import {
@@ -120,7 +116,6 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
 
   // Search Results List
   const [searchResults, setSearchResults] = useState<PlayerSearchResult[]>([]);
-  const [isSearchListOpen, setIsSearchListOpen] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [visitingPlayerId, setVisitingPlayerId] = useState<string | null>(null);
 
@@ -184,7 +179,6 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
       setSearchInput("");
       setSearchError(null);
       setSearchResults([]);
-      setIsSearchListOpen(false);
       setHasSearched(false);
       setIsEditModalOpen(false);
       return;
@@ -258,7 +252,6 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
     const cleanQuery = searchInput.trim().replace(/^@+/, "");
     if (!cleanQuery) {
       setSearchResults([]);
-      setIsSearchListOpen(false);
       setHasSearched(false);
       setSearchError(null);
       return;
@@ -269,7 +262,6 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
       setSearchResults([]);
       setIsSearching(false);
       setHasSearched(true);
-      setIsSearchListOpen(true);
       setSearchError(null);
       return;
     }
@@ -278,7 +270,6 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
       setIsSearching(true);
       setSearchError(null);
       setHasSearched(true);
-      setIsSearchListOpen(true);
 
       try {
         const res = await searchPlayersList(cleanQuery);
@@ -314,7 +305,6 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
     setSearchError(null);
     setIsSearching(true);
     setHasSearched(true);
-    setIsSearchListOpen(true);
 
     try {
       const res = await searchPlayersList(cleanQuery);
@@ -343,7 +333,6 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
     if (targetPlayer.username.toLowerCase() === currentUsername.toLowerCase()) {
       setVisitedProfile(null);
       setActiveTab("profile");
-      setIsSearchListOpen(false);
       setIsSearching(false);
       setVisitingPlayerId(null);
       return;
@@ -357,7 +346,6 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
         setVisitedProfile(res.profile);
         setNavSource("visit");
         setActiveTab("profile");
-        setIsSearchListOpen(false);
         setSearchError(null);
       }
     } catch (err: any) {
@@ -385,7 +373,6 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
     setNavSource("profile");
     setSearchInput("");
     setSearchError(null);
-    setIsSearchListOpen(false);
     setSearchResults([]);
     setHasSearched(false);
   };
@@ -395,8 +382,6 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
   const activeUsername = visitedProfile ? visitedProfile.username : currentUsername;
   const activeAvatarId = visitedProfile ? visitedProfile.avatar_id : currentAvatarId;
   const activeInventory = visitedProfile ? visitedProfile.inventory : inventory;
-  const activeAstrites = visitedProfile ? visitedProfile.astrite : astrite;
-  const activePity = visitedProfile ? visitedProfile.pity_5star : pity5Star;
 
   // Equipped player title (decoupled from avatar portrait)
   const activeEquippedTitle = useMemo(() => {
@@ -417,7 +402,6 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
 
   // Claim title reward handler
   const handleClaimTitle = async (title: PlayerTitle) => {
-    soundEngine.playGoldStinger();
     const res = await claimTitleReward(currentUserId, title);
     if (res.success) {
       setClaimedTitles(res.claimedTitles);
@@ -723,7 +707,6 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                       type="button"
                       onClick={() => {
                         setSearchInput("");
-                        setIsSearchListOpen(false);
                         setSearchResults([]);
                         setHasSearched(false);
                         setSearchError(null);

@@ -10,7 +10,6 @@ import {
   Lock,
   Sparkles,
   Flame,
-  ShieldAlert,
   Coins,
   Users,
   CheckCircle2,

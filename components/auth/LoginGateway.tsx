@@ -26,7 +26,6 @@ import {
   Check,
   ArrowLeft,
   Infinity,
-  ChevronDown,
   X,
   Layers,
 } from "lucide-react";
