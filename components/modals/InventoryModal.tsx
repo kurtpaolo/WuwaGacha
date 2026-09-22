@@ -114,7 +114,7 @@ const ResonatorInventoryCard: React.FC<ResonatorInventoryCardProps> = React.memo
         <div className="absolute top-2 left-2 right-2 z-10 flex items-center justify-between pointer-events-none">
           {/* Element Badge */}
           <div
-            className="w-7 h-7 rounded-full p-1 bg-black/80 border border-white/20 shadow-md flex items-center justify-center backdrop-blur-sm"
+            className="w-7 h-7 rounded-full p-1 bg-[#0a0f1d] border border-white/20 shadow-md flex items-center justify-center"
             title={element}
           >
             <img
@@ -434,17 +434,29 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       Read-Only
                     </span>
                   )}
+                  {/* Info Icon with hover tooltip for what saves */}
+                  <div className="relative group/info inline-flex items-center">
+                    <button
+                      type="button"
+                      className="w-5 h-5 rounded-full border border-yellow-400/60 bg-yellow-400/15 hover:bg-yellow-400/30 text-yellow-400 flex items-center justify-center transition-all cursor-pointer shadow-[0_0_8px_rgba(250,204,21,0.25)] hover:scale-110 active:scale-95 ml-1"
+                      aria-label="Vault Save Info"
+                    >
+                      <span className="font-serif italic font-black text-xs leading-none">i</span>
+                    </button>
+                    {/* Tooltip on Hover */}
+                    <div className="absolute left-0 sm:left-1/2 -translate-x-0 sm:-translate-x-1/2 top-full mt-2 w-72 sm:w-80 p-3 rounded-xl bg-[#0c1017]/95 border border-yellow-400/40 text-gray-200 shadow-[0_10px_30px_rgba(0,0,0,0.9)] backdrop-blur-md opacity-0 pointer-events-none group-hover/info:opacity-100 group-hover/info:pointer-events-auto transition-all z-50 text-[11px] font-mono leading-relaxed">
+                      <div className="flex items-start space-x-2">
+                        <Sparkles className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="text-yellow-400 block mb-0.5">Featured 5★ Resonator Vault</strong>
+                          <span className="text-gray-300">
+                            Only featured limited 5★ characters (S0–S6) are saved permanently. 3★/4★ weapons, 4★ characters, and 50/50 standard losses are not stored.
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </h2>
-                <p className="text-xs font-mono text-gray-400">
-                  Account: <strong className="text-white">@{username}</strong> • Total Owned:{" "}
-                  <strong className="text-yellow-400">{inventory.length}</strong> Resonators (
-                  <strong className="text-yellow-400">{totalCopies}</strong> total copies)
-                  {!isReadOnly && favorites.size > 0 && (
-                    <>
-                      {" "}• Favorited: <strong className="text-yellow-400 font-bold">{favorites.size}</strong>
-                    </>
-                  )}
-                </p>
               </div>
             </div>
 
@@ -459,16 +471,6 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
             >
               <X className="w-5 h-5 stroke-[2.5] group-hover:rotate-90 transition-transform duration-200" />
             </button>
-          </div>
-
-          {/* Inventory Distinction Notice Bar */}
-          <div className="px-5 sm:px-8 py-2 bg-yellow-500/10 border-b border-yellow-500/20 flex items-center justify-between text-[11px] font-mono text-yellow-300/90 flex-wrap gap-2">
-            <div className="flex items-center space-x-2">
-              <Sparkles className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
-              <span>
-                <strong>Featured 5★ Resonator Vault:</strong> Only featured limited 5★ characters (S0–S6) are saved permanently. 3★/4★ weapons, 4★ characters, and 50/50 standard losses are not stored.
-              </span>
-            </div>
           </div>
 
           {/* Filter, Sorter & Search Bar */}

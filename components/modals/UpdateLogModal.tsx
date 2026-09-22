@@ -14,18 +14,21 @@ import {
   User,
   Coins,
   Gift,
-  Rocket,
   Ban,
   Infinity,
   Award,
-  Zap,
   Globe,
   ExternalLink,
-  Flame,
   Smartphone,
   BookOpen,
   ShieldCheck,
   Star,
+  Swords,
+  Trophy,
+  Crown,
+  Zap,
+  Flame,
+  Rocket,
 } from "lucide-react";
 import { soundEngine } from "@/lib/audio/soundEngine";
 
@@ -35,14 +38,14 @@ interface UpdateLogModalProps {
   currentUsername?: string;
 }
 
-type VersionTag = "2.0" | "1.5" | "1.0";
+type VersionTag = "2.5" | "2.0" | "1.5" | "1.0";
 
 export const UpdateLogModal: React.FC<UpdateLogModalProps> = ({
   isOpen,
   onClose,
   currentUsername = "Player",
 }) => {
-  const [selectedVersion, setSelectedVersion] = useState<VersionTag>("2.0");
+  const [selectedVersion, setSelectedVersion] = useState<VersionTag>("2.5");
   const [suggestion, setSuggestion] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
@@ -98,7 +101,8 @@ export const UpdateLogModal: React.FC<UpdateLogModalProps> = ({
   return (
     <AnimatePresence>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md select-none"
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/95 select-none"
+        style={{ backgroundColor: "#000000f2" }}
         onClick={onClose}
       >
         <motion.div
@@ -106,11 +110,11 @@ export const UpdateLogModal: React.FC<UpdateLogModalProps> = ({
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.97 }}
           transition={{ duration: 0.15, ease: "easeOut" }}
-          className="relative w-full max-w-2xl bg-[#0d1017] border border-purple-500/40 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          className="relative w-full max-w-2xl bg-[#0d1017] border border-purple-500/40 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] sm:max-h-[88dvh]"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="px-4 sm:px-6 py-3 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
+          <div className="px-4 sm:px-6 py-3 border-b border-white/10 bg-white/[0.02] flex items-center justify-between flex-shrink-0">
             <div className="flex items-center space-x-2.5">
               <div className="p-1.5 rounded-lg bg-purple-500/20 border border-purple-400/30 text-purple-300">
                 <Sparkles className="w-4 h-4" />
@@ -140,8 +144,88 @@ export const UpdateLogModal: React.FC<UpdateLogModalProps> = ({
           {/* Main Body: Left Content + Right Versions Sidebar */}
           <div className="flex flex-1 overflow-hidden min-h-0">
             {/* Left: Scrollable Patch Content */}
-            <div className="flex-1 p-4 sm:p-5 overflow-y-auto max-h-[50vh] sm:max-h-[52vh] space-y-3 scrollbar-thin scrollbar-thumb-white/10">
-              {selectedVersion === "2.0" ? (
+            <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-3 scrollbar-thin scrollbar-thumb-white/10">
+              {selectedVersion === "2.5" ? (
+                <>
+                  {/* 3v3 Turn-Based PvP Arena & Combat Engine */}
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-yellow-500/15 via-purple-500/10 to-transparent border border-yellow-500/40 space-y-1">
+                    <div className="flex items-center space-x-2 text-yellow-400">
+                      <Swords className="w-3.5 h-3.5 flex-shrink-0" />
+                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                        3v3 Turn-Based PvP Arena &amp; Speed Timeline
+                      </h3>
+                    </div>
+                    <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                      Deploy 3-character squads in a dynamic 2.5D arena! Resonators act based on SPD turn order. Choose between Basic Attack (+25 Energy), Resonance Skill (+35 Energy), Liberation (Ultimate at 100 Energy), or Guard Stance (50% damage reduction &amp; blocks knockdowns).
+                    </p>
+                  </div>
+
+                  {/* Tower of Adversity (Endless Gauntlet & Scaled Blessings) */}
+                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-1">
+                    <div className="flex items-center space-x-2 text-rose-400">
+                      <Crown className="w-3.5 h-3.5 flex-shrink-0" />
+                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                        Tower of Adversity &amp; Tactical Blessings
+                      </h3>
+                    </div>
+                    <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                      Climb 10-floor gauntlets with persistent squad HP. Draft 1 of 3 balanced Tactical Blessings after each win (e.g. 1% Legendary Crit Rate). Floors 5 &amp; 10 feature a 50% chance for a Mythic Revive blessing, plus auto-reset on party wipeout and a 5-floor paginated browser!
+                    </p>
+                  </div>
+
+                  {/* Daily AI Gym Trials (Lv. 60–100) */}
+                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-1">
+                    <div className="flex items-center space-x-2 text-yellow-400">
+                      <Trophy className="w-3.5 h-3.5 flex-shrink-0" />
+                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                        Daily AI Gym Trials (Lv. 60–100)
+                      </h3>
+                    </div>
+                    <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                      Battle daily AI Gym Bosses across 5 difficulty stages for Astrite and Combat EXP rewards (resets daily at 00:00 GMT+8).
+                    </p>
+                  </div>
+
+                  {/* Live 1v1 Rooms & Player Search */}
+                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-1">
+                    <div className="flex items-center space-x-2 text-blue-400">
+                      <Globe className="w-3.5 h-3.5 flex-shrink-0" />
+                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                        Live 1v1 Rooms &amp; Player Challenge
+                      </h3>
+                    </div>
+                    <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                      Create or join live multiplayer rooms using 4-character room codes. Play Casual or wager Astrite where the winner takes the pot. Challenge friends directly from Plaza or search for any player to challenge their defense team at Lv. 100.
+                    </p>
+                  </div>
+
+                  {/* Plaza (Multiplayer Hub) */}
+                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-1">
+                    <div className="flex items-center space-x-2 text-cyan-400">
+                      <UserCheck className="w-3.5 h-3.5 flex-shrink-0" />
+                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                        Plaza (Multiplayer Hub)
+                      </h3>
+                    </div>
+                    <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                      Hang out in the live multiplayer plaza! Switch channels (10 players max), chat with speech bubbles, view player profiles, open the tactical mini-map, or challenge nearby players directly to 1v1 battle.
+                    </p>
+                  </div>
+
+                  {/* Automated Discord Webhook Broadcasts */}
+                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-1">
+                    <div className="flex items-center space-x-2 text-purple-400">
+                      <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                        Automated Discord Webhook Broadcasts
+                      </h3>
+                    </div>
+                    <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                      Featured banner rotations are automatically announced to Discord channels every :00 and :30 (GMT+8) with rich composite banner images and smart cycle deduplication.
+                    </p>
+                  </div>
+                </>
+              ) : selectedVersion === "2.0" ? (
                 <>
                   {/* 20-Minute Banner Rotations & 160 Starter Pulls */}
                   <div className="p-3 rounded-xl bg-gradient-to-r from-yellow-500/10 via-amber-500/5 to-transparent border border-yellow-500/30 space-y-1">
@@ -301,7 +385,7 @@ export const UpdateLogModal: React.FC<UpdateLogModalProps> = ({
                     </p>
                   </div>
 
-                  {/* Daily Login Streaks & Tacet Field Battery */}
+                  {/* Daily Login Streaks & Free Astrites Battery */}
                   <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-1">
                     <div className="flex items-center space-x-2 text-amber-400">
                       <Flame className="w-3.5 h-3.5 flex-shrink-0" />
@@ -310,7 +394,7 @@ export const UpdateLogModal: React.FC<UpdateLogModalProps> = ({
                       </h3>
                     </div>
                     <p className="text-xs font-mono text-gray-300 leading-relaxed">
-                      Streaks evaluate at 00:00 GMT+8 daily. Reaching 2, 5, 9, and 14 consecutive days permanently unlocks new titles and expands your Tacet Field idle battery from 12h (160 pulls) up to 18h (240 pulls). VIP accounts gain a +50% base bonus, scaling up to 24 hours (320 pulls / 51,200 Astrite)!
+                      Streaks evaluate at 00:00 GMT+8 daily. Reaching 2, 5, 9, and 14 consecutive days permanently unlocks new titles and expands your Free Astrites idle battery from 12h (160 pulls) up to 18h (240 pulls). VIP accounts gain a +50% base bonus, scaling up to 24 hours (320 pulls / 51,200 Astrite)!
                     </p>
                   </div>
 
@@ -401,6 +485,27 @@ export const UpdateLogModal: React.FC<UpdateLogModalProps> = ({
                 Versions
               </span>
 
+              {/* Version 2.5 Tab */}
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  setSelectedVersion("2.5");
+                }}
+                className={`w-full text-left px-2.5 py-2 rounded-xl border transition-all text-xs font-mono flex flex-col space-y-0.5 cursor-pointer ${
+                  selectedVersion === "2.5"
+                    ? "bg-yellow-400/20 border-yellow-400/60 text-yellow-200 shadow-sm"
+                    : "bg-white/[0.02] hover:bg-white/[0.05] border-white/5 text-gray-400 hover:text-white"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold">v2.5</span>
+                  <span className="text-[9px] px-1 rounded bg-yellow-400 text-black font-sans font-black">
+                    Latest
+                  </span>
+                </div>
+                <span className="text-[10px] opacity-75">PvP &amp; Tower</span>
+              </button>
+
               {/* Version 2.0 Tab */}
               <button
                 onClick={() => {
@@ -409,14 +514,14 @@ export const UpdateLogModal: React.FC<UpdateLogModalProps> = ({
                 }}
                 className={`w-full text-left px-2.5 py-2 rounded-xl border transition-all text-xs font-mono flex flex-col space-y-0.5 cursor-pointer ${
                   selectedVersion === "2.0"
-                    ? "bg-yellow-400/20 border-yellow-400/60 text-yellow-200 shadow-sm"
+                    ? "bg-amber-500/20 border-amber-400 text-amber-200 shadow-sm"
                     : "bg-white/[0.02] hover:bg-white/[0.05] border-white/5 text-gray-400 hover:text-white"
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="font-bold">v2.0</span>
-                  <span className="text-[9px] px-1 rounded bg-yellow-400 text-black font-sans font-black">
-                    Latest
+                  <span className="text-[9px] px-1 rounded bg-white/10 text-gray-300 font-sans font-medium">
+                    Patch
                   </span>
                 </div>
                 <span className="text-[10px] opacity-75">Current</span>

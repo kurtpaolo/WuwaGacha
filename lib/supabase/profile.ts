@@ -23,6 +23,12 @@ export interface UserProfile {
   login_streak?: number;
   max_login_streak?: number;
   last_login_date?: string;
+  pvp_wins?: number;
+  pvp_losses?: number;
+  pvp_streak?: number;
+  pvp_max_streak?: number;
+  pvp_points?: number;
+  tower_run_state?: any;
 }
 
 export const DEFAULT_PROFILE: UserProfile = {
@@ -87,6 +93,18 @@ export async function fetchUserProfile(
           localStorage.setItem(`wuwa_avatar_${userId}`, avatarId);
           localStorage.setItem(`wuwa_claimed_titles_${userId}`, JSON.stringify(claimedTitleIds));
           localStorage.setItem(`wuwa_is_vip_${userId}`, String(isVip));
+          if (data.pvp_wins !== undefined && data.pvp_losses !== undefined) {
+            localStorage.setItem(
+              `wuwa_pvp_stats_${userId}`,
+              JSON.stringify({
+                wins: data.pvp_wins || 0,
+                losses: data.pvp_losses || 0,
+                streak: data.pvp_streak || 0,
+                maxStreak: data.pvp_max_streak || 0,
+                battlePoints: data.pvp_points || 0,
+              })
+            );
+          }
           // Purge dangerous shared cross-account keys if present
           localStorage.removeItem("wuwa_active_title");
           localStorage.removeItem("wuwa_active_avatar");
@@ -111,6 +129,11 @@ export async function fetchUserProfile(
         total_5050: data.total_5050 ?? 0,
         last_tacet_claim: data.last_tacet_claim || new Date().toISOString(),
         is_vip: isVip,
+        pvp_wins: data.pvp_wins ?? 0,
+        pvp_losses: data.pvp_losses ?? 0,
+        pvp_streak: data.pvp_streak ?? 0,
+        pvp_max_streak: data.pvp_max_streak ?? 0,
+        pvp_points: data.pvp_points ?? 0,
       };
     }
 
@@ -271,6 +294,21 @@ export async function updateUserProfile(
     if (updates.last_login_date !== undefined) {
       payload.last_login_date = updates.last_login_date;
     }
+    if (updates.pvp_wins !== undefined) {
+      payload.pvp_wins = updates.pvp_wins;
+    }
+    if (updates.pvp_losses !== undefined) {
+      payload.pvp_losses = updates.pvp_losses;
+    }
+    if (updates.pvp_streak !== undefined) {
+      payload.pvp_streak = updates.pvp_streak;
+    }
+    if (updates.pvp_max_streak !== undefined) {
+      payload.pvp_max_streak = updates.pvp_max_streak;
+    }
+    if (updates.pvp_points !== undefined) {
+      payload.pvp_points = updates.pvp_points;
+    }
 
     const { error } = await supabase.from("profiles").update(payload).eq("id", userId);
     if (error) {
@@ -312,4 +350,32 @@ export function getStoredUserMaxStreak(userId?: string | null): number {
     }
   } catch {}
   return 1;
+}
+
+/**
+ * Saves a player's Tower of Adversity run state to Supabase cloud.
+ */
+export async function saveUserTowerState(userId: string, state: any): Promise<boolean> {
+  if (!isSupabaseConfigured() || !userId) return false;
+  try {
+    const { error } = await supabase.rpc("save_player_tower_state", {
+      p_user_id: userId,
+      p_tower_state: state,
+    });
+    if (error) {
+      // Fallback: direct update on profiles table
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ tower_run_state: state, updated_at: new Date().toISOString() })
+        .eq("id", userId);
+      if (updateError) {
+        console.warn("Failed to sync tower state to cloud:", updateError);
+        return false;
+      }
+    }
+    return true;
+  } catch (err) {
+    console.warn("Exception saving tower state to cloud:", err);
+    return false;
+  }
 }

@@ -1,12 +1,15 @@
 "use client";
 
 import React from "react";
+import { ElementType } from "@/lib/data/items";
+import { ElementBadge } from "@/components/ui/GameIcons";
 
 interface CharacterRailItemProps {
   charId: string;
   name: string;
   portraitUrl: string;
   title: string;
+  element?: ElementType;
   isSelected: boolean;
   isUnavailable?: boolean;
   isComingSoon?: boolean;
@@ -18,6 +21,7 @@ export const CharacterRailItem: React.FC<CharacterRailItemProps> = React.memo(({
   name,
   portraitUrl,
   title,
+  element,
   isSelected,
   isUnavailable,
   isComingSoon,
@@ -43,7 +47,7 @@ export const CharacterRailItem: React.FC<CharacterRailItemProps> = React.memo(({
         </>
       )}
 
-      {/* Character Avatar Thumbnail */}
+      {/* Character Avatar Thumbnail (Left) */}
       <div className="relative w-7 h-7 sm:w-8 sm:h-8 md:w-11 md:h-11 rounded-md overflow-hidden bg-black/40 border border-white/10 flex-shrink-0 flex items-center justify-center">
         <img
           src={portraitUrl}
@@ -78,6 +82,13 @@ export const CharacterRailItem: React.FC<CharacterRailItemProps> = React.memo(({
           {isUnavailable ? "Unavailable" : isComingSoon ? "Coming Soon" : title}
         </span>
       </div>
+
+      {/* Element Badge (Top Right) */}
+      {element && (
+        <div className="flex-shrink-0 hidden sm:block">
+          <ElementBadge element={element} size={18} className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+        </div>
+      )}
     </button>
   );
 }, (prev, next) => {
@@ -87,6 +98,7 @@ export const CharacterRailItem: React.FC<CharacterRailItemProps> = React.memo(({
     prev.name === next.name &&
     prev.portraitUrl === next.portraitUrl &&
     prev.title === next.title &&
+    prev.element === next.element &&
     prev.isUnavailable === next.isUnavailable &&
     prev.isComingSoon === next.isComingSoon
   );

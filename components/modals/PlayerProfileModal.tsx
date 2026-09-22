@@ -20,6 +20,8 @@ import {
   Settings,
   Flame,
   Camera,
+  Swords,
+  Trophy,
 } from "lucide-react";
 import { soundEngine } from "@/lib/audio/soundEngine";
 import { RESONATORS } from "@/lib/data/items";
@@ -53,6 +55,7 @@ import {
   claimTitleReward,
 } from "@/lib/data/titles";
 import { getClientHistory, get5050Stats } from "@/lib/gacha/clientSim";
+import { getStoredPvpStats } from "@/lib/battle/pvpService";
 
 interface PlayerProfileModalProps {
   isOpen: boolean;
@@ -80,6 +83,7 @@ interface PlayerProfileModalProps {
   isVip?: boolean;
   loginStreak?: number;
   maxLoginStreak?: number;
+  onOpenPvpArena?: (targetUsername?: string) => void;
 }
 
 export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
@@ -104,6 +108,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
   isVip = false,
   loginStreak = 1,
   maxLoginStreak = 1,
+  onOpenPvpArena,
 }) => {
   // Modal View Tab: 'profile' (viewing a profile) or 'visit' (searching other players)
   const [activeTab, setActiveTab] = useState<"profile" | "visit">("profile");
@@ -482,6 +487,22 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
     return `${((wins5050 / total5050) * 100).toFixed(1)}%`;
   }, [isViewingSelf, winRateFormatted, visitedProfile]);
 
+  // PvP Combat Stats
+  const pvpStats = useMemo(() => {
+    const targetId = isViewingSelf ? (currentUserId || "guest") : (visitedProfile?.id || "guest");
+    const local = getStoredPvpStats(targetId);
+    if (!isViewingSelf && visitedProfile) {
+      return {
+        wins: Math.max(visitedProfile.pvp_wins ?? 0, local.wins ?? 0),
+        losses: Math.max(visitedProfile.pvp_losses ?? 0, local.losses ?? 0),
+        streak: Math.max(visitedProfile.pvp_streak ?? 0, local.streak ?? 0),
+        maxStreak: Math.max(visitedProfile.pvp_max_streak ?? 0, local.maxStreak ?? 0),
+        battlePoints: Math.max(visitedProfile.pvp_points ?? 0, local.battlePoints ?? 0),
+      };
+    }
+    return local;
+  }, [isViewingSelf, currentUserId, visitedProfile, isOpen]);
+
   // Open Edit Profile Modal (Showcase or Avatar tab)
   const handleOpenEditModal = (tab: "showcase" | "avatar" = "showcase") => {
     soundEngine.playClick();
@@ -602,7 +623,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
   return (
     <AnimatePresence>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/95 select-none overflow-y-auto"
+        className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/95 select-none overflow-y-auto"
         onClick={onClose}
       >
         <motion.div
@@ -610,13 +631,13 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 15 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className="relative w-full max-w-4xl max-h-[92dvh] bg-[#0a0d14] border-2 border-purple-500/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto"
+          className="relative w-full max-w-4xl h-[100dvh] sm:h-auto sm:max-h-[92dvh] bg-[#0a0d14] border-0 sm:border-2 border-purple-500/40 rounded-none sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto"
           onClick={(e) => e.stopPropagation()}
         >
           {/* ========================================================================= */}
           {/* Top Bar: Visit Other Players / Back to Profile + Stylized Exit Button     */}
           {/* ========================================================================= */}
-          <div className="px-4 sm:px-6 py-3 border-b border-purple-500/20 bg-black/70 flex items-center justify-between gap-3 flex-shrink-0">
+          <div className="px-4 sm:px-6 py-3 border-b border-purple-500/20 bg-[#0a0d14] flex items-center justify-between gap-3 flex-shrink-0 sticky top-0 z-30 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-3">
             {activeTab === "profile" ? (
               /* Profile Mode Header: Visit Other Players Button (+ Back / My Profile button if inspecting) */
               <div className="flex items-center space-x-2 min-w-0">
@@ -989,12 +1010,25 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                       <button
                         type="button"
                         onClick={() => handleOpenEditModal("showcase")}
-                        className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-purple-600/25 hover:bg-purple-600/45 border border-purple-400/40 text-purple-200 hover:text-white flex items-center space-x-1.5 transition-all shadow-sm active:scale-95 cursor-pointer font-mono font-bold text-xs"
+                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-purple-600/25 hover:bg-purple-600/45 border border-purple-400/40 text-purple-200 hover:text-white flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer"
                         title="Edit Profile"
                       >
-                        <Pencil className="w-3.5 h-3.5 text-purple-300 flex-shrink-0" />
-                        <span>Edit</span>
+                        <Pencil className="w-4 h-4 text-purple-300 flex-shrink-0" />
                       </button>
+
+                      {onOpenPvpArena && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            soundEngine.playClick();
+                            onOpenPvpArena();
+                          }}
+                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/50 text-rose-300 hover:text-white flex items-center justify-center transition-all shadow-[0_0_12px_rgba(244,63,94,0.25)] active:scale-95 cursor-pointer"
+                          title="PvP Battle Arena"
+                        >
+                          <Swords className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                        </button>
+                      )}
 
                       <button
                         type="button"
@@ -1021,6 +1055,23 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                           <Settings className="w-4 h-4 text-gray-300 flex-shrink-0" />
                         </button>
                       )}
+                    </div>
+                  )}
+
+                  {!isViewingSelf && onOpenPvpArena && (
+                    <div className="flex items-center space-x-1.5 sm:space-x-2 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          soundEngine.playClick();
+                          onOpenPvpArena(activeUsername);
+                        }}
+                        className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/50 text-rose-200 hover:text-white flex items-center space-x-1.5 transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)] active:scale-95 cursor-pointer font-mono font-bold text-xs"
+                        title={`Challenge @${activeUsername} to PvP Battle`}
+                      >
+                        <Swords className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                        <span>PvP</span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1199,26 +1250,28 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                   </div>
                 </div>
 
-                {/* 2. Total S6 Resonators (THOSE RESONATORS THAT ARE MAXED) */}
+                {/* 2. Battle Points (BP) */}
                 <div className="bg-black/80 border border-white/10 rounded-xl px-3.5 py-2 flex items-center justify-between">
                   <span className="text-xs sm:text-sm font-bold text-gray-200">
-                    Total S6 Resonators
+                    Battle Points (BP)
                   </span>
-                  <div className="bg-[#050e09] border border-[#00ff66]/30 px-3 py-0.5 rounded-lg shadow-[0_0_10px_rgba(0,255,102,0.25)]">
-                    <span className="text-xs sm:text-sm font-mono font-black text-[#00ff66]">
-                      {totalS6Resonators}
+                  <div className="bg-[#191403] border border-yellow-400/40 px-3 py-0.5 rounded-lg shadow-[0_0_10px_rgba(250,204,21,0.25)] flex items-center space-x-1.5">
+                    <Trophy className="w-3.5 h-3.5 text-yellow-400" />
+                    <span className="text-xs sm:text-sm font-mono font-black text-yellow-400">
+                      {pvpStats.battlePoints.toLocaleString()} BP
                     </span>
                   </div>
                 </div>
 
-                {/* 3. Total Astrite Used */}
+                {/* 3. PvP Record (W / L) */}
                 <div className="bg-black/80 border border-white/10 rounded-xl px-3.5 py-2 flex items-center justify-between">
                   <span className="text-xs sm:text-sm font-bold text-gray-200">
-                    Total Astrite Used
+                    PvP Record (W / L)
                   </span>
-                  <div className="bg-[#050e09] border border-[#00ff66]/30 px-3 py-0.5 rounded-lg shadow-[0_0_10px_rgba(0,255,102,0.25)]">
-                    <span className="text-xs sm:text-sm font-mono font-black text-[#00ff66]">
-                      {calculatedAstriteUsed.toLocaleString()}
+                  <div className="bg-[#04141f] border border-cyan-500/40 px-3 py-0.5 rounded-lg shadow-[0_0_10px_rgba(6,182,212,0.25)] flex items-center space-x-1.5">
+                    <Swords className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="text-xs sm:text-sm font-mono font-black text-cyan-400">
+                      {pvpStats.wins}W - {pvpStats.losses}L
                     </span>
                   </div>
                 </div>
@@ -1235,15 +1288,21 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                   </div>
                 </div>
 
-                {/* 5. 50/50 Winrate */}
+                {/* 5. Win Streak */}
                 <div className="bg-black/80 border border-white/10 rounded-xl px-3.5 py-2 flex items-center justify-between">
                   <span className="text-xs sm:text-sm font-bold text-gray-200">
-                    50/50 Win Rate
+                    Win Streak
                   </span>
-                  <div className="bg-[#050e09] border border-[#00ff66]/30 px-3 py-0.5 rounded-lg shadow-[0_0_10px_rgba(0,255,102,0.25)]">
-                    <span className="text-xs sm:text-sm font-mono font-black text-[#00ff66]">
-                      {calculatedWinRate}
+                  <div className="bg-[#1c0808] border border-rose-500/40 px-3 py-0.5 rounded-lg shadow-[0_0_10px_rgba(244,63,94,0.25)] flex items-center space-x-1.5">
+                    <Flame className="w-3.5 h-3.5 text-rose-400 fill-rose-400/30 animate-pulse" />
+                    <span className="text-xs sm:text-sm font-mono font-black text-rose-400">
+                      {pvpStats.streak} {pvpStats.streak === 1 ? "win" : "wins"}
                     </span>
+                    {pvpStats.maxStreak > pvpStats.streak && (
+                      <span className="text-[10px] font-mono text-gray-400">
+                        (best {pvpStats.maxStreak})
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -1297,18 +1356,18 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
       {/* ========================================================================= */}
       {isEditModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/95 select-none"
+          className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/95 select-none"
           onClick={() => setIsEditModalOpen(false)}
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="relative w-full max-w-2xl bg-[#0c1017] border border-purple-500/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]"
+            className="relative w-full max-w-2xl h-[100dvh] sm:h-auto sm:max-h-[88vh] bg-[#0c1017] border-0 sm:border border-purple-500/40 rounded-none sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="px-5 py-4 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
+            <div className="px-5 py-4 border-b border-white/10 bg-[#0c1017] flex items-center justify-between flex-shrink-0 sticky top-0 z-20 pt-[max(0.75rem,env(safe-area-inset-top))] sm:py-4">
               <div className="flex items-center space-x-2.5">
                 <Sparkles className="w-5 h-5 text-purple-400" />
                 <h3 className="text-base font-black uppercase tracking-wider text-white">

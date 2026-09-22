@@ -306,11 +306,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className="relative w-full max-w-lg bg-[#0c1017] border border-white/15 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          className="relative w-full max-w-lg bg-[#0c1017] border border-white/15 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] sm:max-h-[90dvh]"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/[0.02]">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/[0.02] flex-shrink-0">
             <div className="flex items-center space-x-3">
               {onBack && (
                 <button

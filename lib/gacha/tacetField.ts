@@ -1,4 +1,4 @@
-// Tacet Field Idle Astrite Accumulator
+// Free Astrites Idle Accumulator
 // Generates 160 Astrite (1 pull) every 4.5 minutes (4m 30s).
 // Base Cap: 25,600 Astrite (160 pulls / 12.0 hours).
 // Streak Tiers (+20 pulls / +3,200 ✦ / +1.5h each):
@@ -151,7 +151,7 @@ export interface TacetFieldStatus {
 }
 
 /**
- * Calculates current accumulated Astrite in the Tacet Field for the active user.
+ * Calculates current accumulated Astrite in the Free Astrites bank for the active user.
  * Dynamically factors in permanent maxLoginStreak and VIP (+50% bonus).
  */
 export function getTacetFieldStatus(
@@ -218,7 +218,7 @@ export function claimTacetField(
 }
 
 /**
- * Synchronizes local Tacet Field timer with cloud timestamp from Supabase profile.
+ * Synchronizes local Free Astrites timer with cloud timestamp from Supabase profile.
  */
 export function syncTacetCloudTimestamp(userId?: string | null, cloudTimestampIso?: string): void {
   if (typeof window === "undefined" || !userId || !cloudTimestampIso) return;

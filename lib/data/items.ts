@@ -93,6 +93,22 @@ export const RESONATOR_ARTISTS: Record<string, ResonatorArtistInfo> = {
     name: "Misutas0618",
     url: "https://www.pixiv.net/tags/Cartethyia",
   },
+  camellya: {
+    name: "Tunmengtun",
+    url: "https://x.com/Tunmengtun",
+  },
+  changli: {
+    name: "NicholasF0425",
+    url: "https://x.com/NicholasF0425",
+  },
+  phoebe: {
+    name: "kurohush",
+    url: "https://x.com/kurohush",
+  },
+  zhezhi: {
+    name: "kurohush",
+    url: "https://x.com/kurohush",
+  },
 };
 
 export function getResonatorArtist(charId: string): ResonatorArtistInfo {

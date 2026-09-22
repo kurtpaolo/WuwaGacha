@@ -1,7 +1,7 @@
 import charactersData from "@/characters.json";
 
 export const GMT8_OFFSET_MS = 8 * 60 * 60 * 1000;
-export const ROTATION_INTERVAL_MS = 20 * 60 * 1000; // 20-minute cycle (:00, :20, :40)
+export const ROTATION_INTERVAL_MS = 30 * 60 * 1000; // Half-hourly cycle (:00, :30)
 
 // Filter playable 5-star limited characters (excluding coming soon or unavailable)
 export const PLAYABLE_LIMITED_5STAR_IDS: string[] = charactersData.limitedResonators
@@ -9,7 +9,7 @@ export const PLAYABLE_LIMITED_5STAR_IDS: string[] = charactersData.limitedResona
   .map((r: any) => r.id);
 
 /**
- * Returns the deterministic index of the current 20-minute cycle (xx:00, xx:20, xx:40).
+ * Returns the deterministic index of the current 30-minute cycle (xx:00, xx:30).
  */
 export function getCurrentRotationIndex(nowMs: number = Date.now()): number {
   return Math.floor((nowMs + GMT8_OFFSET_MS) / ROTATION_INTERVAL_MS);
@@ -48,7 +48,7 @@ export function getHourlyRotatedCharacters(nowMs: number = Date.now()): string[]
 }
 
 /**
- * Calculates time remaining until the next 20-minute rotation reset (xx:00, xx:20, xx:40).
+ * Calculates time remaining until the next 30-minute rotation reset (xx:00, xx:30).
  * Returns { hours, minutes, seconds, formattedText }
  */
 export function getTimeUntilNextRotation(nowMs: number = Date.now()): {

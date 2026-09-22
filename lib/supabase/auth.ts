@@ -799,6 +799,11 @@ export interface PlayerPublicProfile {
   is_vip?: boolean;
   login_streak?: number;
   max_login_streak?: number;
+  pvp_wins?: number;
+  pvp_losses?: number;
+  pvp_streak?: number;
+  pvp_max_streak?: number;
+  pvp_points?: number;
 }
 
 export interface PlayerSearchResult {
@@ -937,6 +942,11 @@ export async function searchPlayerProfile(
             is_vip: Boolean(rpcData.is_vip),
             login_streak: rpcData.login_streak ?? 1,
             max_login_streak: rpcData.max_login_streak ?? rpcData.login_streak ?? 1,
+            pvp_wins: rpcData.pvp_wins ?? 0,
+            pvp_losses: rpcData.pvp_losses ?? 0,
+            pvp_streak: rpcData.pvp_streak ?? 0,
+            pvp_max_streak: rpcData.pvp_max_streak ?? 0,
+            pvp_points: rpcData.pvp_points ?? 0,
           },
         };
       }
@@ -1008,6 +1018,11 @@ export async function searchPlayerProfile(
         is_vip: Boolean(profileData.is_vip),
         login_streak: profileData.login_streak ?? 1,
         max_login_streak: profileData.max_login_streak ?? profileData.login_streak ?? 1,
+        pvp_wins: profileData.pvp_wins ?? 0,
+        pvp_losses: profileData.pvp_losses ?? 0,
+        pvp_streak: profileData.pvp_streak ?? 0,
+        pvp_max_streak: profileData.pvp_max_streak ?? 0,
+        pvp_points: profileData.pvp_points ?? 0,
       },
     };
   } catch (err: any) {

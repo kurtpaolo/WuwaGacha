@@ -24,11 +24,11 @@ export const DetailsModal: React.FC<DetailsModalProps> = ({ isOpen, onClose }) =
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className="relative w-full max-w-3xl bg-[#0c0f16] border border-white/15 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]"
+          className="relative w-full max-w-3xl bg-[#0c0f16] border border-white/15 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] sm:max-h-[88dvh]"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 sm:px-8 py-5 border-b border-white/10 bg-white/[0.02]">
+          <div className="flex items-center justify-between px-6 sm:px-8 py-4 sm:py-5 border-b border-white/10 bg-white/[0.02] flex-shrink-0">
             <div className="flex items-center space-x-3">
               <div className="p-2.5 rounded-xl bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.2)]">
                 <Shield className="w-5 h-5 text-yellow-400" />
@@ -56,7 +56,7 @@ export const DetailsModal: React.FC<DetailsModalProps> = ({ isOpen, onClose }) =
           </div>
 
           {/* Body Content */}
-          <div className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-5 text-xs sm:text-sm text-gray-300 leading-relaxed font-sans overscroll-contain">
+          <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-8 space-y-5 text-xs sm:text-sm text-gray-300 leading-relaxed font-sans overscroll-contain">
             {/* 1. Primary Highlight Banner: Unofficial Fan Project */}
             <div className="p-5 sm:p-6 rounded-xl bg-gradient-to-br from-yellow-500/15 via-black/50 to-amber-500/5 border border-yellow-400/40 space-y-3 shadow-[0_0_25px_rgba(250,204,21,0.08)]">
               <div className="flex items-center space-x-2.5 text-yellow-400 font-black text-base sm:text-lg uppercase tracking-wider font-display">

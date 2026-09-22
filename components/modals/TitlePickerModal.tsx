@@ -104,7 +104,7 @@ export const TitlePickerModal: React.FC<TitlePickerModalProps> = ({
   return (
     <AnimatePresence>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/95 select-none overflow-y-auto"
+        className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/95 select-none overflow-y-auto"
         onClick={onClose}
       >
         <motion.div
@@ -112,11 +112,11 @@ export const TitlePickerModal: React.FC<TitlePickerModalProps> = ({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className="relative w-full max-w-4xl max-h-[92dvh] bg-[#0c1017] border-2 border-yellow-500/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto"
+          className="relative w-full max-w-4xl h-[100dvh] sm:h-auto sm:max-h-[92dvh] bg-[#0c1017] border-0 sm:border-2 border-yellow-500/40 rounded-none sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Top Bar */}
-          <div className="px-4 sm:px-6 py-3.5 border-b border-white/10 bg-black/60 flex items-center justify-between gap-3">
+          <div className="px-4 sm:px-6 py-3.5 border-b border-white/10 bg-[#0c1017] flex items-center justify-between gap-3 flex-shrink-0 sticky top-0 z-30 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-3.5">
             <div className="flex items-center space-x-2.5">
               <div className="p-2 rounded-xl bg-yellow-400/15 border border-yellow-400/40 text-yellow-300 shadow-[0_0_12px_rgba(250,204,21,0.3)]">
                 <Award className="w-5 h-5" />
@@ -153,14 +153,14 @@ export const TitlePickerModal: React.FC<TitlePickerModalProps> = ({
             </span>
           </div>
 
-          {/* Tacet Field Battery Storage Perk Banner */}
+          {/* Free Astrites Battery Storage Perk Banner */}
           <div className="px-4 sm:px-6 py-2 bg-black/70 border-b border-amber-500/25 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
             <div className="flex items-center space-x-2">
               <div className="p-1 rounded-md bg-amber-400/20 text-amber-300">
                 <Flame className="w-3.5 h-3.5" />
               </div>
               <span className="text-gray-300">
-                Tacet Field Battery: <strong className="text-amber-400 font-bold">{streakInfo.batteryHours}h Storage</strong>
+                Free Astrites Battery: <strong className="text-amber-400 font-bold">{streakInfo.batteryHours}h Storage</strong>
                 {streakInfo.bonus.bonusPulls > 0 && (
                   <span className="text-gray-400 ml-1">(+{streakInfo.bonus.bonusPulls} pulls / +{streakInfo.bonus.bonusHours}h)</span>
                 )}

@@ -349,6 +349,434 @@ class SoundEngine {
       this.playBlueStinger();
     }
   }
+
+  // =========================================================================
+  // COMBAT & LIBERATION SFX PUNCHES (SYNTHESIZED WEB AUDIO API)
+  // =========================================================================
+
+  /**
+   * Visceral physical punch impact with punch transient, noise crunch, and sub-thump.
+   */
+  public playHitPunch(options?: { isCrit?: boolean; isHeavy?: boolean }) {
+    if (this.getEffectiveSummonVolume() <= 0) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGain) return;
+
+    const now = this.ctx.currentTime;
+    const isCrit = options?.isCrit ?? false;
+    const isHeavy = options?.isHeavy ?? false;
+    const volScale = isHeavy ? 1.3 : isCrit ? 1.15 : 0.9;
+
+    // 1. Sub-thump body
+    const thumpOsc = this.ctx.createOscillator();
+    const thumpGain = this.ctx.createGain();
+    thumpOsc.type = "sine";
+    thumpOsc.frequency.setValueAtTime(isCrit ? 180 : 140, now);
+    thumpOsc.frequency.exponentialRampToValueAtTime(35, now + 0.14);
+    thumpGain.gain.setValueAtTime(0.45 * volScale, now);
+    thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+
+    thumpOsc.connect(thumpGain);
+    thumpGain.connect(this.sfxGain);
+    thumpOsc.start(now);
+    thumpOsc.stop(now + 0.16);
+
+    // 2. Impact crack noise burst (white noise buffer)
+    try {
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.06);
+      const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      const noiseSource = this.ctx.createBufferSource();
+      noiseSource.buffer = noiseBuffer;
+
+      const noiseFilter = this.ctx.createBiquadFilter();
+      noiseFilter.type = "bandpass";
+      noiseFilter.frequency.setValueAtTime(isCrit ? 2200 : 1400, now);
+      noiseFilter.Q.setValueAtTime(2.2, now);
+
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.3 * volScale, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+      noiseSource.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(this.sfxGain);
+      noiseSource.start(now);
+      noiseSource.stop(now + 0.08);
+    } catch {
+      // Ignore noise buffer creation errors on older environments
+    }
+
+    // 3. Critical strike metallic / glass chime crackle
+    if (isCrit) {
+      const critOsc = this.ctx.createOscillator();
+      const critGain = this.ctx.createGain();
+      critOsc.type = "triangle";
+      critOsc.frequency.setValueAtTime(880, now);
+      critOsc.frequency.exponentialRampToValueAtTime(1320, now + 0.04);
+      critOsc.frequency.exponentialRampToValueAtTime(440, now + 0.18);
+      critGain.gain.setValueAtTime(0.25 * volScale, now);
+      critGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+      critOsc.connect(critGain);
+      critGain.connect(this.sfxGain);
+      critOsc.start(now);
+      critOsc.stop(now + 0.2);
+    }
+  }
+
+  /**
+   * Elemental flavor impact audio (Glacio, Fusion, Electro, Aero, Spectro, Havoc).
+   */
+  public playElementalHit(element: string, isSuper: boolean = false) {
+    if (this.getEffectiveSummonVolume() <= 0) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGain) return;
+
+    const now = this.ctx.currentTime;
+    const mult = isSuper ? 1.3 : 1.0;
+
+    switch (element) {
+      case "Glacio": {
+        // Crystalline ice shatter: series of 3 high-pitch crystalline tones
+        [1760, 2637, 3520].forEach((freq, i) => {
+          if (!this.ctx || !this.sfxGain) return;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, now + i * 0.015);
+          osc.frequency.exponentialRampToValueAtTime(freq * 0.8, now + i * 0.015 + 0.15);
+          gain.gain.setValueAtTime(0.18 * mult, now + i * 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.015 + 0.18);
+          osc.connect(gain);
+          gain.connect(this.sfxGain);
+          osc.start(now + i * 0.015);
+          osc.stop(now + i * 0.015 + 0.18);
+        });
+        break;
+      }
+      case "Fusion": {
+        // Fiery explosive rumble & thermal blast
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(160, now);
+        osc.frequency.exponentialRampToValueAtTime(45, now + 0.25);
+        gain.gain.setValueAtTime(0.3 * mult, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+        osc.start(now);
+        osc.stop(now + 0.28);
+        break;
+      }
+      case "Electro": {
+        // Rapid high-voltage spark zap
+        [330, 880, 1320, 660].forEach((freq, i) => {
+          if (!this.ctx || !this.sfxGain) return;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = "square";
+          osc.frequency.setValueAtTime(freq, now + i * 0.02);
+          gain.gain.setValueAtTime(0.12 * mult, now + i * 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.02 + 0.06);
+          osc.connect(gain);
+          gain.connect(this.sfxGain);
+          osc.start(now + i * 0.02);
+          osc.stop(now + i * 0.02 + 0.06);
+        });
+        break;
+      }
+      case "Aero": {
+        // Sonic wind blade scythe whoosh
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(650, now);
+        osc.frequency.exponentialRampToValueAtTime(220, now + 0.18);
+        gain.gain.setValueAtTime(0.26 * mult, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+        osc.start(now);
+        osc.stop(now + 0.2);
+        break;
+      }
+      case "Spectro": {
+        // Celestial luminous harmonic chime
+        [587.33, 880.0, 1479.98].forEach((freq, i) => {
+          if (!this.ctx || !this.sfxGain) return;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, now + i * 0.03);
+          gain.gain.setValueAtTime(0.2 * mult, now + i * 0.03);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.03 + 0.35);
+          osc.connect(gain);
+          gain.connect(this.sfxGain);
+          osc.start(now + i * 0.03);
+          osc.stop(now + i * 0.03 + 0.35);
+        });
+        break;
+      }
+      case "Havoc": {
+        // Abyssal gravity void distortion crunch
+        const osc1 = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc1.type = "triangle";
+        osc2.type = "sawtooth";
+        osc1.frequency.setValueAtTime(95, now);
+        osc1.frequency.exponentialRampToValueAtTime(32, now + 0.3);
+        osc2.frequency.setValueAtTime(102, now); // Detuned for dissonance
+        osc2.frequency.exponentialRampToValueAtTime(36, now + 0.3);
+        gain.gain.setValueAtTime(0.32 * mult, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(this.sfxGain);
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + 0.32);
+        osc2.stop(now + 0.32);
+        break;
+      }
+    }
+  }
+
+  /**
+   * Dramatic Resonance Liberation activation cinematic sound:
+   * - Energy charge sweep up -> time-stop whoosh -> explosive bass release!
+   */
+  public playLiberationActivation(element: string = "Spectro") {
+    if (this.getEffectiveSummonVolume() <= 0) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGain) return;
+
+    const now = this.ctx.currentTime;
+
+    // 1. Rising Energy Charge Whine (0s - 0.4s)
+    const chargeOsc = this.ctx.createOscillator();
+    const chargeGain = this.ctx.createGain();
+    chargeOsc.type = "sine";
+    chargeOsc.frequency.setValueAtTime(70, now);
+    chargeOsc.frequency.exponentialRampToValueAtTime(480, now + 0.4);
+    chargeGain.gain.setValueAtTime(0.1, now);
+    chargeGain.gain.exponentialRampToValueAtTime(0.5, now + 0.35);
+    chargeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+    chargeOsc.connect(chargeGain);
+    chargeGain.connect(this.sfxGain);
+    chargeOsc.start(now);
+    chargeOsc.stop(now + 0.45);
+
+    // 2. High-pitch resonant shimmer
+    const shimmerOsc = this.ctx.createOscillator();
+    const shimmerGain = this.ctx.createGain();
+    shimmerOsc.type = "triangle";
+    shimmerOsc.frequency.setValueAtTime(600, now);
+    shimmerOsc.frequency.exponentialRampToValueAtTime(1800, now + 0.38);
+    shimmerGain.gain.setValueAtTime(0.08, now);
+    shimmerGain.gain.exponentialRampToValueAtTime(0.35, now + 0.35);
+    shimmerGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+    shimmerOsc.connect(shimmerGain);
+    shimmerGain.connect(this.sfxGain);
+    shimmerOsc.start(now);
+    shimmerOsc.stop(now + 0.45);
+
+    // 3. Explosive Sub-Bass Drop (at 0.4s)
+    const boomOsc = this.ctx.createOscillator();
+    const boomGain = this.ctx.createGain();
+    boomOsc.type = "triangle";
+    boomOsc.frequency.setValueAtTime(200, now + 0.4);
+    boomOsc.frequency.exponentialRampToValueAtTime(32, now + 1.2);
+    boomGain.gain.setValueAtTime(0.7, now + 0.4);
+    boomGain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+
+    boomOsc.connect(boomGain);
+    boomGain.connect(this.sfxGain);
+    boomOsc.start(now + 0.4);
+    boomOsc.stop(now + 1.2);
+
+    // 4. Element specific resonance stinger at detonation
+    setTimeout(() => {
+      this.playElementalHit(element, true);
+    }, 400);
+  }
+
+  /**
+   * Victorious Persona-style "1 MORE!" brass/synth fanfare.
+   */
+  public playOneMoreStinger() {
+    if (this.getEffectiveSummonVolume() <= 0) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGain) return;
+
+    const now = this.ctx.currentTime;
+    // Triumphant Eb Major arpeggio + fanfare
+    const freqs = [311.13, 392.0, 466.16, 622.25];
+    freqs.forEach((freq, idx) => {
+      if (!this.ctx || !this.sfxGain) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, now + idx * 0.045);
+
+      gain.gain.setValueAtTime(0.32, now + idx * 0.045);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.045 + 0.7);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now + idx * 0.045);
+      osc.stop(now + idx * 0.045 + 0.7);
+    });
+  }
+
+  /**
+   * Resonator Grit shield deflection clang when enduring a fatal hit with 1 HP.
+   */
+  public playResonatorGrit() {
+    if (this.getEffectiveSummonVolume() <= 0) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGain) return;
+
+    const now = this.ctx.currentTime;
+
+    // Metallic clang
+    [540, 890, 1420].forEach((freq) => {
+      if (!this.ctx || !this.sfxGain) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.85, now + 0.3);
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+      osc.start(now);
+      osc.stop(now + 0.45);
+    });
+  }
+
+  /**
+   * Swift airy whoosh when an attack misses or is agilely dodged.
+   */
+  public playMissWhoosh() {
+    if (this.getEffectiveSummonVolume() <= 0) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGain) return;
+
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(360, now);
+    osc.frequency.exponentialRampToValueAtTime(95, now + 0.2);
+
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+
+    osc.start(now);
+    osc.stop(now + 0.2);
+  }
+
+  /**
+   * Crisp anime blade slash whoosh when a Resonator approaches and strikes.
+   */
+  public playSlashWhoosh(element?: string) {
+    if (this.getEffectiveSummonVolume() <= 0) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGain) return;
+
+    const now = this.ctx.currentTime;
+
+    // Filtered noise blade slice
+    try {
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.16);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const output = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(element === "Glacio" ? 3200 : element === "Fusion" ? 1400 : 2200, now);
+      filter.Q.setValueAtTime(3.0, now);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.24, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain);
+
+      noise.start(now);
+      noise.stop(now + 0.15);
+    } catch {
+      // Fallback sine if buffer fails
+    }
+
+    // High velocity whistle sweep
+    const osc = this.ctx.createOscillator();
+    const oscGain = this.ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(element === "Electro" ? 1200 : 780, now);
+    osc.frequency.exponentialRampToValueAtTime(160, now + 0.18);
+
+    oscGain.gain.setValueAtTime(0.18, now);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+    osc.connect(oscGain);
+    oscGain.connect(this.sfxGain);
+
+    osc.start(now);
+    osc.stop(now + 0.18);
+  }
+
+  /**
+   * Restorative ascending harmonic chime when a Resonator receives healing.
+   */
+  public playHealChime() {
+    if (this.getEffectiveSummonVolume() <= 0) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGain) return;
+
+    const now = this.ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+    notes.forEach((freq, i) => {
+      if (!this.ctx || !this.sfxGain) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now + i * 0.05);
+
+      gain.gain.setValueAtTime(0.18, now + i * 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.05 + 0.45);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now + i * 0.05);
+      osc.stop(now + i * 0.05 + 0.45);
+    });
+  }
 }
 
 export const soundEngine = new SoundEngine();

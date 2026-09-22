@@ -427,3 +427,11 @@ public/cutscenes/*.webm
 public/assets/videos/*.mp4
 public/assets/videos/*.webm
 
+# Scratch scripts, data pipelines & temporary artifacts (prevents Vercel deployment bloat)
+scratch/
+scripts/
+*.py
+*.bat
+scratch_*.png
+binan_*_map.png
+

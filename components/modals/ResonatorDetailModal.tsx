@@ -10,12 +10,17 @@ import {
   ArrowLeft,
   Award,
   Palette,
+  TrendingUp,
+  Swords,
 } from "lucide-react";
 import { soundEngine } from "@/lib/audio/soundEngine";
 import { UserInventoryItem } from "@/lib/supabase/inventory";
 import { RESONATORS, ElementType, getResonatorArtist } from "@/lib/data/items";
+import { getCharacterFocalPoint } from "@/lib/data/focalPoints";
 import { RarityStars } from "@/components/ui/GameIcons";
 import { requestExternalRedirect } from "@/components/modals/ExternalRedirectModal";
+import { getResonatorLevel, setResonatorLevel } from "@/lib/battle/pvpService";
+import { ResonatorInfoModal } from "./ResonatorInfoModal";
 
 interface ResonatorDetailModalProps {
   isOpen: boolean;
@@ -92,6 +97,25 @@ export const ResonatorDetailModal: React.FC<ResonatorDetailModalProps> = ({
 }) => {
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number>(1);
   const [activatedLevel, setActivatedLevel] = useState<number>(0);
+  const [resLevel, setResLevel] = useState<number>(() => {
+    return item ? getResonatorLevel(item.character_id) : 1;
+  });
+  const [isKitModalOpen, setIsKitModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (item && isOpen) {
+      setResLevel(getResonatorLevel(item.character_id));
+    }
+  }, [item, isOpen]);
+
+  const handleLevelUp = () => {
+    if (!item) return;
+    soundEngine.playClick();
+    const nextLevel = Math.min(100, resLevel + 10);
+    if (nextLevel === resLevel) return;
+    setResonatorLevel(item.character_id, nextLevel);
+    setResLevel(nextLevel);
+  };
 
   // Character Data & Capabilities
   const res = item ? RESONATORS[item.character_id] || RESONATORS[item.character_id.toLowerCase()] : null;
@@ -104,6 +128,7 @@ export const ResonatorDetailModal: React.FC<ResonatorDetailModalProps> = ({
   const artistInfo = item ? getResonatorArtist(item.character_id) : null;
   const artistName = artistInfo?.name || "Kuro Games";
   const resoImageSrc = item ? `/assets/resonance/${charKey}.jpg` : "";
+  const charFocal = item ? getCharacterFocalPoint(charKey || item.character_id) : null;
 
   const elemStyle = ELEMENT_COLORS[element] || ELEMENT_COLORS.Spectro;
 
@@ -180,7 +205,8 @@ export const ResonatorDetailModal: React.FC<ResonatorDetailModalProps> = ({
   return (
     <AnimatePresence>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/85 backdrop-blur-md select-none overflow-y-auto"
+        className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/95 select-none overflow-y-auto"
+        style={{ backgroundColor: "#000000f2" }}
         onClick={onClose}
       >
         <motion.div
@@ -242,7 +268,14 @@ export const ResonatorDetailModal: React.FC<ResonatorDetailModalProps> = ({
                 key={item.character_id}
                 src={resoImageSrc}
                 alt={displayName}
-                className="w-full h-full object-cover object-top sm:object-center"
+                style={
+                  charFocal
+                    ? ({
+                        "--char-focal": `${charFocal.x}% ${charFocal.y}%`,
+                      } as React.CSSProperties)
+                    : undefined
+                }
+                className="reso-detail-art-img w-full h-full object-cover object-center"
                 onError={(e) => {
                   const target = e.currentTarget as HTMLImageElement;
                   const splashFallback =
@@ -272,7 +305,7 @@ export const ResonatorDetailModal: React.FC<ResonatorDetailModalProps> = ({
                     requestExternalRedirect(artistInfo.url, artistName);
                   }
                 }}
-                className="group flex items-center h-8 px-2 rounded-full bg-black/70 hover:bg-black/85 border border-white/15 hover:border-yellow-400/60 backdrop-blur-md text-gray-300 hover:text-white transition-all duration-300 shadow-lg active:scale-95 cursor-pointer overflow-hidden"
+                className="group flex items-center h-8 px-2 rounded-full bg-[#0a0f1d] hover:bg-[#121a30] border border-white/15 hover:border-yellow-400/60 text-gray-300 hover:text-white transition-all duration-300 shadow-lg active:scale-95 cursor-pointer overflow-hidden"
                 title={artistName}
               >
                 <Palette className="w-4 h-4 text-yellow-400 flex-shrink-0 group-hover:scale-110 transition-transform" />
@@ -453,27 +486,53 @@ export const ResonatorDetailModal: React.FC<ResonatorDetailModalProps> = ({
             {/* Bottom-Left: Element Badge, 5 Stars, Resonator Name */}
             <div className="pointer-events-auto flex flex-col items-start space-y-1 sm:space-y-1.5">
               <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                {/* Element Badge */}
+                {/* Element Badge: Icon Only */}
                 <div
-                  className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full ${elemStyle.badge} border ${elemStyle.border} flex items-center space-x-1 sm:space-x-1.5 backdrop-blur-md shadow-md bg-black/60`}
+                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full ${elemStyle.badge} border ${elemStyle.border} flex items-center justify-center shadow-md bg-[#0a0f1d] shrink-0`}
+                  title={element}
                 >
                   <img
                     src={`/assets/elements/${element.toLowerCase()}.png`}
                     alt={element}
-                    className="w-3 sm:w-3.5 h-3 sm:h-3.5 object-contain"
+                    className="w-4 h-4 sm:w-4.5 sm:h-4.5 object-contain"
                     onError={(e) => {
                       (e.currentTarget as HTMLElement).style.display = "none";
                     }}
                   />
-                  <span className={`text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider ${elemStyle.text}`}>
-                    {element}
-                  </span>
                 </div>
 
                 {/* 5 Stars */}
-                <div className="px-2 py-0.5 sm:py-1 rounded-full bg-black/60 border border-white/15 flex items-center backdrop-blur-md shadow-md">
+                <div className="px-2 py-1 rounded-full bg-[#0a0f1d] border border-white/15 flex items-center shadow-md shrink-0">
                   <RarityStars rarity={5} size={11} />
                 </div>
+
+                {/* Level Up Button */}
+                <button
+                  type="button"
+                  onClick={handleLevelUp}
+                  className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-500/20 to-yellow-500/20 hover:from-amber-500/30 hover:to-yellow-500/30 border border-amber-400/40 text-amber-300 hover:text-white font-mono font-bold text-xs flex items-center space-x-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+                  title="Upgrade Level (+10)"
+                >
+                  <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Lv. {resLevel}</span>
+                  {resLevel < 100 && (
+                    <span className="text-[10px] text-yellow-400 font-black">+10</span>
+                  )}
+                </button>
+
+                {/* Kit Breakdown Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundEngine.playClick();
+                    setIsKitModalOpen(true);
+                  }}
+                  className="px-2.5 py-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/40 text-purple-300 hover:text-white font-mono font-bold text-xs flex items-center space-x-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+                  title="View Skills & Team Sync Kit"
+                >
+                  <Swords className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Kit Breakdown</span>
+                </button>
               </div>
 
               {/* Character Name */}
@@ -483,7 +542,7 @@ export const ResonatorDetailModal: React.FC<ResonatorDetailModalProps> = ({
             </div>
 
             {/* Bottom-Right: Sequence Node Control Bar */}
-            <div className="w-full sm:w-auto min-w-[270px] sm:min-w-[300px] md:w-[330px] p-2.5 sm:p-3 rounded-2xl bg-black/75 backdrop-blur-md border border-white/15 flex items-center justify-between gap-2 pointer-events-auto shadow-2xl flex-shrink-0">
+            <div className="w-full sm:w-auto min-w-[270px] sm:min-w-[300px] md:w-[330px] p-2.5 sm:p-3 rounded-2xl bg-[#0a0f1d] border border-white/15 flex items-center justify-between gap-2 pointer-events-auto shadow-2xl flex-shrink-0">
               <div className="flex items-center space-x-2 sm:space-x-2.5 flex-shrink-0">
                 <div
                   className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-mono font-black text-xs sm:text-sm flex-shrink-0 ${
@@ -496,8 +555,33 @@ export const ResonatorDetailModal: React.FC<ResonatorDetailModalProps> = ({
                 >
                   S{selectedNodeIndex}
                 </div>
-                <h3 className="text-xs sm:text-sm font-mono font-black uppercase tracking-wide text-white whitespace-nowrap">
-                  Sequence Node {selectedNodeIndex}
+                <h3
+                  className="text-[11px] sm:text-xs md:text-sm font-mono font-black uppercase tracking-wide text-white whitespace-nowrap truncate"
+                  title={
+                    selectedNodeIndex === 1
+                      ? "+5% ATK Boost"
+                      : selectedNodeIndex === 2
+                      ? "+5% HP & DEF"
+                      : selectedNodeIndex === 3
+                      ? "+15 Start Energy"
+                      : selectedNodeIndex === 4
+                      ? "+5% ATK & +Heal"
+                      : selectedNodeIndex === 5
+                      ? "+5% ATK & +5% Crit"
+                      : "+15% Ult DMG [MAX]"
+                  }
+                >
+                  {selectedNodeIndex === 1
+                    ? "+5% ATK Boost"
+                    : selectedNodeIndex === 2
+                    ? "+5% HP & DEF"
+                    : selectedNodeIndex === 3
+                    ? "+15 Start Energy"
+                    : selectedNodeIndex === 4
+                    ? "+5% ATK & +Heal"
+                    : selectedNodeIndex === 5
+                    ? "+5% ATK & +5% Crit"
+                    : "+15% Ult DMG [MAX]"}
                 </h3>
               </div>
 
@@ -529,6 +613,23 @@ export const ResonatorDetailModal: React.FC<ResonatorDetailModalProps> = ({
         </div>
       </motion.div>
     </div>
+
+    {/* Kit Breakdown Modal */}
+    <ResonatorInfoModal
+      isOpen={isKitModalOpen}
+      onClose={() => setIsKitModalOpen(false)}
+      resonator={
+        res ||
+        ({
+          id: item.character_id,
+          name: displayName,
+          rarity: 5,
+          element: element,
+          type: "character",
+          weaponType: "Broadblade",
+        } as any)
+      }
+    />
   </AnimatePresence>
   );
 };

@@ -55,15 +55,31 @@ body {
     height: 100% !important;
     padding-right: 0 !important;
   }
-  .splash-art-img {
+  .splash-art-img,
+  .reso-detail-art-img {
     transform: none !important;
     margin: 0 auto !important;
     height: 100% !important;
     max-height: 100% !important;
     width: 100% !important;
     object-fit: cover !important;
-    object-position: center top !important;
+    object-position: var(--char-focal, center top) !important;
     opacity: 0.95 !important;
+  }
+  video.cutscene-video {
+    object-fit: cover !important;
+    object-position: var(--cutscene-focal, 53% 50%) !important;
+  }
+}
+
+/* Mobile phone viewport positioning for modal artworks & cutscene videos */
+@media (max-width: 639px) {
+  .reso-detail-art-img {
+    object-position: var(--char-focal, center top) !important;
+  }
+  video.cutscene-video {
+    object-fit: cover !important;
+    object-position: var(--cutscene-focal, 53% 50%) !important;
   }
 }
 

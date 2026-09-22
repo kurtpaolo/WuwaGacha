@@ -46,6 +46,12 @@ alter table public.profiles add column if not exists is_vip boolean not null def
 alter table public.profiles add column if not exists login_streak integer not null default 1;
 alter table public.profiles add column if not exists max_login_streak integer not null default 1;
 alter table public.profiles add column if not exists last_login_date text;
+alter table public.profiles add column if not exists pvp_wins integer not null default 0;
+alter table public.profiles add column if not exists pvp_losses integer not null default 0;
+alter table public.profiles add column if not exists pvp_streak integer not null default 0;
+alter table public.profiles add column if not exists pvp_max_streak integer not null default 0;
+alter table public.profiles add column if not exists pvp_points integer not null default 0;
+alter table public.profiles add column if not exists tower_run_state jsonb;
 alter table public.profiles drop constraint if exists profiles_astrite_check;
 alter table public.profiles add constraint profiles_astrite_check check (astrite >= 0);
 
@@ -593,6 +599,21 @@ begin
 end;
 $$;
 
+-- Securely saves a player's Tower of Adversity run state
+create or replace function public.save_player_tower_state(
+  p_user_id uuid,
+  p_tower_state jsonb
+) returns jsonb language plpgsql security definer as $$
+begin
+  update public.profiles
+  set tower_run_state = p_tower_state,
+      updated_at = now()
+  where id = p_user_id;
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
 -- Grant execution permissions
 grant execute on function public.get_user_security_question(text) to authenticated, anon;
 grant execute on function public.reset_password_with_security_answer(text, text, text) to authenticated, anon;
@@ -605,5 +626,6 @@ grant execute on function public.claim_player_title(uuid, text, integer) to auth
 grant execute on function public.save_user_security_question(uuid, text, text) to authenticated, anon;
 grant execute on function public.grant_vip(text) to authenticated, anon;
 grant execute on function public.revoke_vip(text) to authenticated, anon;
+grant execute on function public.save_player_tower_state(uuid, jsonb) to authenticated, anon;
 
 

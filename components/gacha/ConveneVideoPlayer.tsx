@@ -5,8 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { soundEngine } from "@/lib/audio/soundEngine";
 import { ItemRarity } from "@/lib/data/items";
 import { RollResultItem } from "@/lib/gacha/clientSim";
-import { ElementBadge, RarityStars, AstriteIcon } from "@/components/ui/GameIcons";
-import { FastForward } from "lucide-react";
+import { FastForward, Shield, Check, AlertTriangle } from "lucide-react";
 import {
   getPreloadedVideoUrl,
   preloadSingleVideo,
@@ -18,6 +17,8 @@ import {
   getSummoningVideoUrl,
   getLocalSummoningVideoFallback,
 } from "@/lib/video/cutscenesConfig";
+import { getVideoFocalPoint } from "@/lib/data/focalPoints";
+import { RarityStars, ElementBadge, AstriteIcon } from "@/components/ui/GameIcons";
 
 interface ConveneVideoPlayerProps {
   results: RollResultItem[];
@@ -93,6 +94,48 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cutsceneVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Cutscene Freeze Watchdog: monitors playhead progress (currentTime)
+  // If video is supposed to play but currentTime remains unchanged for 10 straight seconds, trigger recovery
+  const [isCutsceneFrozen, setIsCutsceneFrozen] = useState<boolean>(false);
+  const lastPlayheadTimeRef = useRef<number>(-1);
+  const lastPlayheadWallClockRef = useRef<number>(Date.now());
+
+  useEffect(() => {
+    if (phase !== "cutscene_5star" && phase !== "cutscene_4star") {
+      setIsCutsceneFrozen(false);
+      return;
+    }
+
+    lastPlayheadTimeRef.current = -1;
+    lastPlayheadWallClockRef.current = Date.now();
+    setIsCutsceneFrozen(false);
+
+    const interval = setInterval(() => {
+      const vid = cutsceneVideoRef.current;
+      if (!vid) return;
+
+      const currentT = vid.currentTime;
+      if (currentT > 0 && currentT !== lastPlayheadTimeRef.current) {
+        // Video is progressing normally! Reset stall clock
+        lastPlayheadTimeRef.current = currentT;
+        lastPlayheadWallClockRef.current = Date.now();
+        setIsCutsceneFrozen(false);
+      } else {
+        const stalledSeconds = (Date.now() - lastPlayheadWallClockRef.current) / 1000;
+        // If stalled for > 3.5s and paused, attempt kickstart play
+        if (stalledSeconds >= 3.5 && vid.paused) {
+          vid.play().catch(() => {});
+        }
+        // If frozen for 10 seconds on the exact same frame
+        if (stalledSeconds >= 10) {
+          setIsCutsceneFrozen(true);
+        }
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [phase, cutsceneUrl]);
 
   // Sync background music state with summon phase
   useEffect(() => {
@@ -253,6 +296,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
   // If it's another character with a cutscene, it will play their cutscene.
   // If at the end of the pulls, move directly to summary!
   const handleCutsceneEnded = useCallback(() => {
+    setIsCutsceneFrozen(false);
     setCutsceneUrl(null);
     const currIdx = currentIndexRef.current;
 
@@ -519,6 +563,36 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
   }, [phase, highestRarity, handleAdvance, handleSkip]);
 
   const currentResult = results[currentIndex] || results[0];
+  const cutsceneFocalX = useMemo(() => {
+    return getVideoFocalPoint(currentResult?.item?.id, cutsceneUrl || undefined);
+  }, [currentResult?.item?.id, cutsceneUrl]);
+
+  // Dynamic focal point timing:
+  // For the first 2.25 seconds, the intro waveform is shifted 3% to the left (53% 50%) for perfect framing.
+  // Exactly at >= 2.25s when the character reveals, it shifts to the calibrated character focal axis.
+  const INTRO_CUTSCENE_FOCAL = "53% 50%";
+
+  useEffect(() => {
+    if (phase !== "cutscene_5star" && phase !== "cutscene_4star") return;
+
+    let animId: number;
+    const checkTime = () => {
+      const vid = cutsceneVideoRef.current;
+      if (vid) {
+        if (vid.currentTime >= 2.25) {
+          vid.style.setProperty("--cutscene-focal", `${cutsceneFocalX}% 50%`);
+        } else {
+          vid.style.setProperty("--cutscene-focal", INTRO_CUTSCENE_FOCAL);
+        }
+      }
+      animId = requestAnimationFrame(checkTime);
+    };
+
+    animId = requestAnimationFrame(checkTime);
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+  }, [phase, cutsceneFocalX, cutsceneUrl]);
 
   return (
     <div
@@ -559,7 +633,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
                 e.stopPropagation();
                 handleSkip();
               }}
-              className="absolute top-6 right-8 z-50 flex items-center space-x-2 px-4 py-2 rounded-full bg-black/60 hover:bg-black/80 border border-white/20 text-xs font-display font-black tracking-widest text-white uppercase backdrop-blur-md transition-all hover:scale-105 shadow-[0_0_15px_rgba(0,0,0,0.8)]"
+              className="absolute top-6 right-8 z-50 flex items-center space-x-2 px-4 py-2 rounded-full bg-[#0a0e17]/90 hover:bg-[#121826] border border-white/20 text-xs font-display font-black tracking-widest text-white uppercase transition-all hover:scale-105 shadow-[0_0_15px_rgba(0,0,0,0.8)]"
             >
               <span>Skip</span>
               <FastForward className="w-4 h-4 text-yellow-400" />
@@ -584,12 +658,100 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
             playsInline
             preload="auto"
             muted={effectiveSummonVol === 0}
-            onEnded={handleCutsceneEnded}
+            onEnded={() => {
+              setIsCutsceneFrozen(false);
+              handleCutsceneEnded();
+            }}
             onError={handleCutsceneError}
-            style={{ transform: "translateZ(0)", willChange: "transform", backfaceVisibility: "hidden" }}
-            className="w-full h-full object-cover"
+            onPlaying={() => {
+              lastPlayheadWallClockRef.current = Date.now();
+              if (isCutsceneFrozen) setIsCutsceneFrozen(false);
+            }}
+            onTimeUpdate={(e) => {
+              const vid = e.currentTarget;
+              // Near-end completion watchdog: eliminates audio/video stream duration mismatch hang
+              if (vid.duration > 0 && vid.currentTime >= vid.duration - 0.2) {
+                setIsCutsceneFrozen(false);
+                handleCutsceneEnded();
+                return;
+              }
+              lastPlayheadTimeRef.current = vid.currentTime;
+              lastPlayheadWallClockRef.current = Date.now();
+              if (isCutsceneFrozen) setIsCutsceneFrozen(false);
+
+              if (vid.currentTime >= 2.25) {
+                vid.style.setProperty("--cutscene-focal", `${cutsceneFocalX}% 50%`);
+              } else {
+                vid.style.setProperty("--cutscene-focal", INTRO_CUTSCENE_FOCAL);
+              }
+            }}
+            style={{
+              transform: "translateZ(0)",
+              willChange: "transform",
+              backfaceVisibility: "hidden",
+              ["--cutscene-focal" as any]: INTRO_CUTSCENE_FOCAL,
+            }}
+            className="cutscene-video w-full h-full object-cover"
           />
           {/* Note: Skip button is explicitly HIDDEN during 5-star cutscene */}
+        </div>
+      )}
+
+      {/* 2C. 10-SECOND CUTSCENE FREEZE RECOVERY MODAL (FAIL-SAFE) */}
+      {isCutsceneFrozen && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-fade-in"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="max-w-md w-full bg-[#0c1017] border-2 border-amber-400/60 rounded-2xl p-6 shadow-[0_0_50px_rgba(251,191,36,0.3)] flex flex-col items-center space-y-4">
+            <div className="w-14 h-14 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-300 flex items-center justify-center shadow-[0_0_20px_rgba(251,191,36,0.3)]">
+              <Shield className="w-7 h-7 text-amber-400" />
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex items-center justify-center space-x-1.5 text-emerald-400 text-xs font-mono font-bold">
+                <Check className="w-4 h-4" />
+                <span>Resonator Data 100% Secured</span>
+              </div>
+              <h3 className="text-lg font-black font-display uppercase tracking-wider text-white">
+                Cutscene Playback Stalled
+              </h3>
+              <p className="text-xs font-mono text-gray-300 leading-relaxed">
+                The cutscene video encountered a network buffering stall, but your convene pull has already been safely saved to your account.
+              </p>
+            </div>
+
+            {/* Obtained Resonator Card */}
+            <div className="w-full p-3 rounded-xl bg-white/5 border border-white/10 flex items-center space-x-3 text-left">
+              <div className="w-12 h-12 rounded-xl overflow-hidden border border-yellow-400/60 bg-black/60 flex-shrink-0">
+                <img
+                  src={getItemThumbnail(currentResult)}
+                  alt={getItemName(currentResult)}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] font-mono text-yellow-400 font-bold uppercase">
+                  You Obtained
+                </span>
+                <h4 className="text-sm font-bold text-white truncate font-display">
+                  {getItemName(currentResult)}
+                </h4>
+                <RarityStars rarity={currentResult.rarity} />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsCutsceneFrozen(false);
+                handleCutsceneEnded();
+              }}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-400 hover:from-yellow-300 hover:to-amber-300 text-black font-black uppercase text-xs font-mono tracking-wider shadow-[0_0_20px_rgba(250,204,21,0.4)] transition-all hover:scale-102 active:scale-95 cursor-pointer"
+            >
+              Continue to Convene
+            </button>
+          </div>
         </div>
       )}
 
@@ -611,13 +773,26 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
             muted={effectiveSummonVol === 0}
             onEnded={handleCutsceneEnded}
             onError={handleCutsceneError}
-            style={{ transform: "translateZ(0)", willChange: "transform", backfaceVisibility: "hidden" }}
-            className="w-full h-full object-cover"
+            onTimeUpdate={(e) => {
+              const vid = e.currentTarget;
+              if (vid.currentTime >= 2.25) {
+                vid.style.setProperty("--cutscene-focal", `${cutsceneFocalX}% 50%`);
+              } else {
+                vid.style.setProperty("--cutscene-focal", INTRO_CUTSCENE_FOCAL);
+              }
+            }}
+            style={{
+              transform: "translateZ(0)",
+              willChange: "transform",
+              backfaceVisibility: "hidden",
+              ["--cutscene-focal" as any]: INTRO_CUTSCENE_FOCAL,
+            }}
+            className="cutscene-video w-full h-full object-cover"
           />
 
           {/* Top HUD for 4-Star: Item Counter & Skip Buttons */}
           <div className="absolute top-6 left-8 right-8 z-50 flex items-center justify-between pointer-events-auto">
-            <div className="px-3.5 py-1.5 rounded-full bg-black/60 border border-white/10 text-xs font-mono text-gray-300 backdrop-blur-md">
+            <div className="px-3.5 py-1.5 rounded-full bg-[#0a0e17]/90 border border-white/10 text-xs font-mono text-gray-300">
               <span className="text-purple-400 font-bold">{currentIndex + 1}</span> / {results.length}
             </div>
 
@@ -627,7 +802,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
                   e.stopPropagation();
                   handleSkip4StarCutscene();
                 }}
-                className="flex items-center space-x-2 px-4 py-2 rounded-full bg-black/60 hover:bg-black/80 border border-purple-500/30 text-xs font-display font-black tracking-widest text-white uppercase backdrop-blur-md transition-all hover:scale-105 shadow-[0_0_15px_rgba(0,0,0,0.8)]"
+                className="flex items-center space-x-2 px-4 py-2 rounded-full bg-[#0a0e17]/90 hover:bg-[#121826] border border-purple-500/30 text-xs font-display font-black tracking-widest text-white uppercase transition-all hover:scale-105 shadow-[0_0_15px_rgba(0,0,0,0.8)]"
               >
                 <span>Skip</span>
                 <FastForward className="w-4 h-4 text-purple-300" />
@@ -639,7 +814,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
                     e.stopPropagation();
                     handleSkipToSummary();
                   }}
-                  className="flex items-center space-x-2 px-4 py-2 rounded-full bg-black/60 hover:bg-black/80 border border-white/20 text-xs font-display font-black tracking-widest text-white uppercase backdrop-blur-md transition-all hover:scale-105 shadow-[0_0_15px_rgba(0,0,0,0.8)]"
+                  className="flex items-center space-x-2 px-4 py-2 rounded-full bg-[#0a0e17]/90 hover:bg-[#121826] border border-white/20 text-xs font-display font-black tracking-widest text-white uppercase transition-all hover:scale-105 shadow-[0_0_15px_rgba(0,0,0,0.8)]"
                 >
                   <span>Skip to Summary</span>
                   <FastForward className="w-4 h-4 text-yellow-400" />
@@ -670,7 +845,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
 
           {/* Top HUD: Item Counter & Skip to Summary Button */}
           <div className="absolute top-6 left-8 right-8 z-40 flex items-center justify-between pointer-events-auto">
-            <div className="px-3.5 py-1.5 rounded-full bg-black/50 border border-white/10 text-xs font-mono text-gray-300 backdrop-blur-md">
+            <div className="px-3.5 py-1.5 rounded-full bg-[#0a0e17]/90 border border-white/10 text-xs font-mono text-gray-300">
               <span className="text-yellow-400 font-bold">{currentIndex + 1}</span> / {results.length}
             </div>
 
@@ -679,7 +854,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
                 e.stopPropagation();
                 handleSkip();
               }}
-              className="flex items-center space-x-2 px-4 py-2 rounded-full bg-black/60 hover:bg-black/80 border border-white/20 text-xs font-display font-black tracking-widest text-white uppercase backdrop-blur-md transition-all hover:scale-105 shadow-[0_0_15px_rgba(0,0,0,0.8)]"
+              className="flex items-center space-x-2 px-4 py-2 rounded-full bg-[#0a0e17]/90 hover:bg-[#121826] border border-white/20 text-xs font-display font-black tracking-widest text-white uppercase transition-all hover:scale-105 shadow-[0_0_15px_rgba(0,0,0,0.8)]"
             >
               <span>Skip to Summary</span>
               <FastForward className="w-4 h-4 text-yellow-400" />

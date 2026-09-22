@@ -28,7 +28,8 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({
   return (
     <AnimatePresence>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md select-none"
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/95 select-none"
+        style={{ backgroundColor: "#000000f2" }}
         onClick={onClose}
       >
         <motion.div
@@ -36,11 +37,11 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.97 }}
           transition={{ duration: 0.15, ease: "easeOut" }}
-          className="relative w-full max-w-2xl bg-[#0d1017] border border-yellow-500/40 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          className="relative w-full max-w-2xl bg-[#0d1017] border border-yellow-500/40 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] sm:max-h-[88dvh]"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="px-5 sm:px-6 py-3.5 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
+          <div className="px-5 sm:px-6 py-3.5 border-b border-white/10 bg-white/[0.02] flex items-center justify-between flex-shrink-0">
             <div className="flex items-center space-x-2.5">
               <div className="p-1.5 rounded-lg bg-yellow-500/20 border border-yellow-400/30 text-yellow-300">
                 <HelpCircle className="w-4 h-4" />
@@ -68,7 +69,7 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({
           </div>
 
           {/* Body: Scrollable Cards in Logical Sequence */}
-          <div className="p-4 sm:p-6 overflow-y-auto max-h-[68vh] space-y-3.5 scrollbar-thin scrollbar-thumb-white/10">
+          <div className="p-4 sm:p-6 flex-1 min-h-0 overflow-y-auto space-y-3.5 scrollbar-thin scrollbar-thumb-white/10">
             {/* 1. Welcome & 160 Free Starter Pulls */}
             <div className="p-3.5 rounded-xl bg-gradient-to-r from-yellow-500/10 via-amber-500/5 to-transparent border border-yellow-500/30 space-y-2">
               <div className="flex items-center space-x-2 text-yellow-400">
@@ -119,16 +120,16 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({
               </div>
             </div>
 
-            {/* 3. 20-Minute Banner Rotations (:00, :20, :40) */}
+            {/* 3. Half-Hourly Banner Rotations (:00, :30) */}
             <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
               <div className="flex items-center space-x-2 text-yellow-300">
                 <Clock className="w-4 h-4 flex-shrink-0" />
                 <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
-                  3. 20-Minute Banner Rotations (:00, :20, :40)
+                  3. Half-Hourly Banner Rotations (:00, :30)
                 </h3>
               </div>
               <p className="text-xs font-mono text-gray-300 leading-relaxed">
-                Featured banners rotate every <strong>20 minutes</strong> globally at <strong>xx:00, xx:20, and xx:40</strong> with 3 featured limited 5★ Resonators. Click any character avatar on the banner rail to roll for whoever you want!
+                Featured banners rotate every <strong>30 minutes</strong> globally at <strong>xx:00 and xx:30</strong> with 3 featured limited 5★ Resonators. Click any character avatar on the banner rail to roll for whoever you want!
               </p>
             </div>
 

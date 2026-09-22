@@ -24,21 +24,29 @@ import {
 } from "@/lib/gacha/clientSim";
 import {
   AstriteIcon,
+  ElementBadge,
+  RarityStars,
 } from "@/components/ui/GameIcons";
 import { preloadSummoningVideos } from "@/lib/video/videoPreloader";
 import { ConveneVideoPlayer } from "@/components/gacha/ConveneVideoPlayer";
 import { CharacterRailItem } from "@/components/gacha/CharacterRailItem";
-import { HistoryModal } from "@/components/modals/HistoryModal";
+import { ResonatorInfoModal } from "@/components/modals/ResonatorInfoModal";
 import { DetailsModal } from "@/components/modals/DetailsModal";
 import { DevSettingsModal } from "@/components/modals/DevSettingsModal";
 import { LoginGateway } from "@/components/auth/LoginGateway";
 import { InventoryModal } from "@/components/modals/InventoryModal";
+import { PvPArenaModal } from "@/components/battle/PvPArenaModal";
+import { PvpDisconnectNoticeModal } from "@/components/battle/PvpDisconnectNoticeModal";
+import { PendingPvpNotice, getPendingPvpNotice, clearPendingPvpNotice } from "@/lib/battle/pvpService";
 import { ProfileModal } from "@/components/modals/ProfileModal";
 import { PlayerProfileModal } from "@/components/modals/PlayerProfileModal";
 import { UpdateLogModal } from "@/components/modals/UpdateLogModal";
 import { HowToPlayModal } from "@/components/modals/HowToPlayModal";
 import { ExternalRedirectModal } from "@/components/modals/ExternalRedirectModal";
 import { SlowDownModal } from "@/components/modals/SlowDownModal";
+import { SessionDisplacedModal } from "@/components/modals/SessionDisplacedModal";
+import { JinzhouPlaza } from "@/components/plaza/JinzhouPlaza";
+import { useSessionDisplacement } from "@/lib/auth/sessionDisplacement";
 import {
   getHourlyRotatedCharacters,
   getTimeUntilNextRotation,
@@ -51,10 +59,11 @@ import {
   TacetFieldStatus,
 } from "@/lib/gacha/tacetField";
 import { processLoginStreak, getStoredLoginStreak } from "@/lib/gacha/loginStreak";
-import { getAuthUser, signOut, getStoredAvatarId, PlayerPublicProfile } from "@/lib/supabase/auth";
+import { getAuthUser, signOut, getStoredAvatarId, PlayerPublicProfile, searchPlayerProfile } from "@/lib/supabase/auth";
 import { fetchUserProfile, updateUserProfile, flushPendingProfileSync, UserProfile } from "@/lib/supabase/profile";
 import { getPortraitFileName } from "@/lib/data/portraits";
 import { getStoredUserTitle } from "@/lib/data/titles";
+import { getCharacterFocalPoint } from "@/lib/data/focalPoints";
 import { fetchUserInventory, saveFeaturedResonatorPull, UserInventoryItem } from "@/lib/supabase/inventory";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import {
@@ -62,7 +71,7 @@ import {
   AlertCircle,
   Clock,
   SlidersHorizontal,
-  History as HistoryIcon,
+  Settings,
   HelpCircle,
   Briefcase,
   LogOut,
@@ -71,9 +80,21 @@ import {
   Shield,
   Infinity as InfinityIcon,
   Crown,
+  Swords,
+  Gamepad2,
+  Trophy,
+  Radio,
+  Search,
+  ChevronRight,
+  X,
+  Compass,
 } from "lucide-react";
 
 export type BannerMode = "character_limited";
+
+export interface ConveneStageProps {
+  onReturnToPlaza?: () => void;
+}
 
 const DEFAULT_WIN_RATE: WinRateStats = {
   total5050: 0,
@@ -85,8 +106,21 @@ const DEFAULT_WIN_RATE: WinRateStats = {
   avgPity5Star: 0,
 };
 
-export const ConveneStage: React.FC = () => {
+export function formatAstriteCount(num: number): string {
+  if (num >= 1_000_000) {
+    const val = (num / 1_000_000).toFixed(1);
+    return (val.endsWith(".0") ? val.slice(0, -2) : val) + "M";
+  }
+  if (num >= 1_000) {
+    const val = (num / 1_000).toFixed(1);
+    return (val.endsWith(".0") ? val.slice(0, -2) : val) + "k";
+  }
+  return num.toLocaleString();
+}
+
+export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) => {
   // Active states
+  const [activeView, setActiveView] = useState<"plaza" | "convene">("plaza");
   const bannerMode: BannerMode = "character_limited";
   const [activeHourlyCharacters, setActiveHourlyCharacters] = useState<string[]>(() =>
     getHourlyRotatedCharacters()
@@ -102,7 +136,7 @@ export const ConveneStage: React.FC = () => {
 
   // Modals & Client-side Mount Flag
   const [mounted, setMounted] = useState<boolean>(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
+  const [isResonatorInfoOpen, setIsResonatorInfoOpen] = useState<boolean>(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState<boolean>(false);
   const [isDevOpen, setIsDevOpen] = useState<boolean>(false);
   const [isUpdateLogOpen, setIsUpdateLogOpen] = useState<boolean>(false);
@@ -112,6 +146,12 @@ export const ConveneStage: React.FC = () => {
   const [switchingCharName, setSwitchingCharName] = useState<string>("");
   const [switchingBannerTitle, setSwitchingBannerTitle] = useState<string>("");
   const switchTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 1s Entrance Cooldown for Game Modes / Arena (identical to banner switch)
+  const [isEnteringGameMode, setIsEnteringGameMode] = useState<boolean>(false);
+  const [enteringGameModeTitle, setEnteringGameModeTitle] = useState<string>("");
+  const enteringGameModeTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const isPullingRef = useRef<boolean>(false);
   const pendingCashBackRef = useRef<number>(0);
   const [comingSoonNotice, setComingSoonNotice] = useState<boolean>(false);
@@ -124,7 +164,7 @@ export const ConveneStage: React.FC = () => {
   // Sandbox Mode (Guest Test Mode)
   const [isSandboxGuest, setIsSandboxGuest] = useState<boolean>(false);
 
-  // Hourly Banner Rotation & Tacet Field Idle Accumulator (GMT+8)
+  // Hourly Banner Rotation & Free Astrites Idle Accumulator (GMT+8)
   const [rotationTimerText, setRotationTimerText] = useState<string>(
     () => getTimeUntilNextRotation().formattedText
   );
@@ -148,6 +188,13 @@ export const ConveneStage: React.FC = () => {
   const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState<boolean>(false);
   const [isPlayerProfileOpen, setIsPlayerProfileOpen] = useState<boolean>(false);
+  const [isPvpArenaOpen, setIsPvpArenaOpen] = useState<boolean>(false);
+  const [isGamesMenuOpen, setIsGamesMenuOpen] = useState<boolean>(false);
+  const [pvpInitialTab, setPvpInitialTab] = useState<"gym" | "tower" | "live" | "search">("gym");
+  const [pvpOpponentUsername, setPvpOpponentUsername] = useState<string | undefined>(undefined);
+  const [pvpRoomCode, setPvpRoomCode] = useState<string | undefined>(undefined);
+  const [pvpBet, setPvpBet] = useState<number | undefined>(undefined);
+  const [pvpIsHost, setPvpIsHost] = useState<boolean | undefined>(undefined);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState<boolean>(false);
   const [isAccountNavigatedFromProfile, setIsAccountNavigatedFromProfile] = useState<boolean>(false);
   const [isInventoryNavigatedFromProfile, setIsInventoryNavigatedFromProfile] = useState<boolean>(false);
@@ -159,6 +206,27 @@ export const ConveneStage: React.FC = () => {
   } | null>(null);
   const [currentAvatarId, setCurrentAvatarId] = useState<string>("shorekeeper");
   const profileDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Pending PvP disconnect / forfeit notice
+  const [pendingPvpNotice, setPendingPvpNotice] = useState<PendingPvpNotice | null>(null);
+
+  useEffect(() => {
+    const uid = isSandboxGuest ? "guest" : currentUser?.id;
+    const notice = getPendingPvpNotice(uid);
+    if (notice) {
+      setPendingPvpNotice(notice);
+    }
+  }, [currentUser?.id, isSandboxGuest]);
+
+  const handleAcknowledgePvpNotice = () => {
+    const uid = isSandboxGuest ? "guest" : currentUser?.id;
+    clearPendingPvpNotice(uid);
+    setPendingPvpNotice(null);
+  };
+
+  // Cross-tab and Cross-device session authority ("Account logged in elsewhere")
+  const activeSessionUserId = isSandboxGuest ? null : currentUser?.id;
+  const { isDisplaced, preferThisSession } = useSessionDisplacement(activeSessionUserId);
 
   // Close profile dropdown on outside click
   useEffect(() => {
@@ -347,6 +415,20 @@ export const ConveneStage: React.FC = () => {
         }
         setToastMessage("Featured Resonators have rotated!");
         setTimeout(() => setToastMessage(null), 6000);
+
+        // Auto-broadcast new half-hourly banner rotation to Discord webhooks
+        const cycleKey = `wuwa_broadcast_cycle_${currentHour}`;
+        if (typeof window !== "undefined" && !sessionStorage.getItem(cycleKey)) {
+          sessionStorage.setItem(cycleKey, "true");
+          fetch("/api/banner/broadcast", { method: "POST" })
+            .then((r) => r.json())
+            .then((data) => {
+              if (data.dispatched > 0) {
+                console.log(`[Auto-Broadcast] Sent rotation update to ${data.dispatched} webhook(s).`);
+              }
+            })
+            .catch(() => {});
+        }
       }
 
       setTacetStatus(
@@ -363,6 +445,24 @@ export const ConveneStage: React.FC = () => {
     return () => clearInterval(interval);
   }, [selectedCharId, isSandboxGuest, currentUser?.id, userProfile?.is_vip, userProfile?.max_login_streak]);
 
+  // Auto-sync current banner rotation to Discord webhooks on initial load if not yet notified
+  useEffect(() => {
+    if (isSandboxGuest) return;
+    const currentHour = getCurrentGmt8HourIndex();
+    const cycleKey = `wuwa_broadcast_cycle_${currentHour}`;
+    if (typeof window !== "undefined" && !sessionStorage.getItem(cycleKey)) {
+      sessionStorage.setItem(cycleKey, "true");
+      fetch("/api/banner/broadcast", { method: "POST" })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.dispatched > 0) {
+            console.log(`[Auto-Broadcast] Dispatched banner rotation to ${data.dispatched} webhook(s).`);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isSandboxGuest]);
+
   // Re-sync Tacet status immediately when user or sandbox status changes
   useEffect(() => {
     setTacetStatus(
@@ -376,7 +476,7 @@ export const ConveneStage: React.FC = () => {
     );
   }, [currentUser?.id, isSandboxGuest, userProfile?.is_vip, userProfile?.max_login_streak]);
 
-  // Claim accumulated Astrite from Tacet Field
+  // Claim accumulated Astrite from Free Astrites bank
   const handleClaimTacetField = useCallback(() => {
     soundEngine.playClick();
     const claimed = claimTacetField(
@@ -404,10 +504,12 @@ export const ConveneStage: React.FC = () => {
           userProfile?.max_login_streak
         )
       );
-      setToastMessage(`+${claimed.toLocaleString()} Free Astrite Claimed!`);
-      setTimeout(() => setToastMessage(null), 4000);
+      if (activeView !== "plaza") {
+        setToastMessage(`+${claimed.toLocaleString()} Free Astrite Claimed!`);
+        setTimeout(() => setToastMessage(null), 4000);
+      }
     }
-  }, [currentUser, isSandboxGuest, userProfile?.is_vip, userProfile?.max_login_streak, fetchState]);
+  }, [currentUser, isSandboxGuest, userProfile?.is_vip, userProfile?.max_login_streak, fetchState, activeView]);
 
   const handleLoginSuccess = useCallback((user: SupabaseUser, profile: UserProfile | null, isNewAccount: boolean = false) => {
     setIsLoggingIn(true);
@@ -543,6 +645,7 @@ export const ConveneStage: React.FC = () => {
   useEffect(() => {
     return () => {
       if (switchTimerRef.current) clearTimeout(switchTimerRef.current);
+      if (enteringGameModeTimerRef.current) clearTimeout(enteringGameModeTimerRef.current);
     };
   }, []);
 
@@ -567,6 +670,11 @@ export const ConveneStage: React.FC = () => {
       currentChar?.stillUrl?.includes("_v2")
     ),
     [currentChar]
+  );
+
+  const charFocal = useMemo(
+    () => getCharacterFocalPoint(selectedCharId || currentChar?.id),
+    [selectedCharId, currentChar?.id]
   );
 
   // Handle selecting a limited character from the rail
@@ -596,6 +704,29 @@ export const ConveneStage: React.FC = () => {
       updateUserProfile(currentUser.id, { selected_char_id: charId });
     }
   }, [selectedCharId, currentUser, isSandboxGuest, userState?.isSandbox]);
+
+  // Handle launching a game mode with a 1s entrance cooldown ("Loading...")
+  const handleLaunchGameMode = useCallback(
+    (tab: "gym" | "tower" | "live" | "search", title: string, opponentUsername?: string) => {
+      soundEngine.playClick();
+      setIsGamesMenuOpen(false);
+      setPvpInitialTab(tab);
+      if (opponentUsername) {
+        setPvpOpponentUsername(opponentUsername);
+      }
+      setEnteringGameModeTitle(title);
+      setIsEnteringGameMode(true);
+
+      if (enteringGameModeTimerRef.current) {
+        clearTimeout(enteringGameModeTimerRef.current);
+      }
+      enteringGameModeTimerRef.current = setTimeout(() => {
+        setIsEnteringGameMode(false);
+        setIsPvpArenaOpen(true);
+      }, 1000);
+    },
+    []
+  );
 
   // Perform Convene Pull (1 or 10) with cloud sync for won 5-stars
   const handlePull = useCallback(async (count: 1 | 10) => {
@@ -928,27 +1059,176 @@ export const ConveneStage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Dynamic Element Atmospheric Glow Background */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div
-          className="absolute inset-0 transition-opacity duration-1000"
-          style={{
-            background: `radial-gradient(ellipse at 70% 45%, ${currentPreset.accentColor}24 0%, #06080e 72%)`,
+      {/* ========================================================================= */}
+      {/* 0C. ENTERING GAME MODE / ARENA TRANSITION OVERLAY */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {isEnteringGameMode && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-6 text-center select-none pointer-events-auto"
+            style={{ backgroundColor: "#000000" }}
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0, y: 8 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 1.02, opacity: 0, y: -6 }}
+              transition={{ duration: 0.18 }}
+              className="flex flex-col items-center space-y-5 max-w-md"
+            >
+              {/* Animated Combat Reticle */}
+              <div className="relative flex items-center justify-center w-20 h-20">
+                <div className="absolute inset-0 rounded-full bg-rose-500/15 animate-ping pointer-events-none" />
+                <div className="relative p-4 rounded-2xl bg-[#10141d] border border-rose-500/40 text-rose-400 shadow-[0_0_35px_rgba(244,63,94,0.25)] flex items-center justify-center">
+                  <Swords className="w-9 h-9 animate-pulse" />
+                </div>
+              </div>
+
+              {/* Title & Subtext */}
+              <div className="space-y-1.5">
+                <span className="text-xs sm:text-sm font-mono tracking-widest text-rose-400 font-bold uppercase drop-shadow-[0_0_10px_rgba(244,63,94,0.3)]">
+                  {enteringGameModeTitle || "Combat Arena"}
+                </span>
+                <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-wider text-white drop-shadow-[0_2px_15px_rgba(255,255,255,0.2)]">
+                  Loading...
+                </h2>
+                <p className="text-xs sm:text-sm font-mono tracking-wider text-gray-400">
+                  Initializing Combat Matrix
+                </p>
+              </div>
+
+              {/* Sleek Animated Tech Progress Beam */}
+              <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden relative shadow-inner">
+                <motion.div
+                  initial={{ x: "-100%" }}
+                  animate={{ x: "100%" }}
+                  transition={{ repeat: Infinity, duration: 0.75, ease: "easeInOut" }}
+                  className="w-1/2 h-full bg-gradient-to-r from-rose-500 via-amber-400 to-rose-500 rounded-full shadow-[0_0_12px_rgba(244,63,94,0.8)]"
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* JINZHOU PLAZA (2D RETRO MMO LANDING HUB) */}
+      {/* ========================================================================= */}
+      <JinzhouPlaza
+        currentUser={currentUser}
+        userProfile={userProfile}
+        currentAvatarId={currentAvatarId}
+        userState={userState}
+        isSandboxGuest={isSandboxGuest}
+        isVisible={activeView === "plaza"}
+        onNavigate={(view) => {
+            if (view === "convene") {
+              soundEngine.playClick();
+              setActiveView("convene");
+            } else if (view === "arena") {
+              soundEngine.playClick();
+              setIsGamesMenuOpen(true);
+            }
           }}
+          onOpenInventory={handleOpenInventory}
+          onOpenProfile={(targetUsername) => {
+            soundEngine.playClick();
+            if (targetUsername && targetUsername !== (userProfile?.username || currentUser?.user_metadata?.username)) {
+              searchPlayerProfile(targetUsername).then((res) => {
+                if (res.profile) {
+                  setVisitedPlayerProfile(res.profile);
+                } else {
+                  setVisitedPlayerProfile({
+                    id: `view_${targetUsername}`,
+                    username: targetUsername,
+                    avatar_id: "shorekeeper",
+                    custom_title: undefined,
+                    astrite: 0,
+                    pity_5star: 0,
+                    total_pulls: 0,
+                    is_vip: false,
+                    login_streak: 1,
+                    max_login_streak: 1,
+                    showcase_ids: [],
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                  } as any);
+                }
+                setIsPlayerProfileOpen(true);
+              });
+            } else {
+              setVisitedPlayerProfile(null);
+              setIsPlayerProfileOpen(true);
+            }
+          }}
+          onLaunchPvPChallenge={(roomCode, bet, opponentUsername, isHost) => {
+            setPvpRoomCode(roomCode);
+            setPvpBet(bet);
+            setPvpIsHost(isHost);
+            setPvpOpponentUsername(opponentUsername);
+            setIsPvpArenaOpen(true);
+          }}
+          onOpenAccount={() => {
+            soundEngine.playClick();
+            setIsAccountNavigatedFromProfile(false);
+            setIsAccountModalOpen(true);
+          }}
+          onOpenSettings={() => {
+            soundEngine.playClick();
+            setIsDevOpen(true);
+          }}
+          onSignOut={handleSignOut}
+          onExitSandbox={handleExitSandbox}
+          onClaimTacetField={handleClaimTacetField}
+          tacetStatus={tacetStatus}
         />
-        {/* Subtle Tech Grid overlay */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff04_1px,transparent_1px),linear-gradient(to_bottom,#ffffff04_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-60" />
-      </div>
+
+      {/* ========================================================================= */}
+      {/* CONVENE STAGE & BANNER ROTATION */}
+      {/* ========================================================================= */}
+      {activeView === "convene" && (
+        <>
+          {/* Dynamic Element Atmospheric Glow Background */}
+          <div className="absolute inset-0 pointer-events-none">
+            <div
+              className="absolute inset-0 transition-opacity duration-1000"
+              style={{
+                background: `radial-gradient(ellipse at 70% 45%, ${currentPreset.accentColor}24 0%, #06080e 72%)`,
+              }}
+            />
+            {/* Subtle Tech Grid overlay */}
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff04_1px,transparent_1px),linear-gradient(to_bottom,#ffffff04_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-60" />
+          </div>
 
       {/* ========================================================================= */}
       {/* 1. TOP HEADER HUD */}
       {/* ========================================================================= */}
-      <header className="relative z-20 flex items-center justify-between px-2 sm:px-6 py-1.5 sm:py-3 border-b border-white/10 bg-black/40 backdrop-blur-md gap-1 sm:gap-3">
+      <header className="relative z-20 flex items-center justify-between px-2.5 sm:px-6 py-2 sm:py-3 border-b border-white/10 bg-black/50 backdrop-blur-md gap-1.5 sm:gap-3">
         {/* Top Left: Title "you a gacha addict" & Update Logs */}
-        <div className="flex items-center space-x-1 sm:space-x-2">
+        <div className="flex items-center space-x-1.5 sm:space-x-2">
           <h1 className="font-black tracking-wider text-xs sm:text-base md:text-lg uppercase text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)] whitespace-nowrap hidden portrait:hidden landscape:min-[640px]:inline">
             you a gacha addict
           </h1>
+
+          {/* Return to Plaza Hub Button */}
+          <button
+            onClick={() => {
+              soundEngine.playClick();
+              if (onReturnToPlaza) {
+                onReturnToPlaza();
+              } else {
+                setActiveView("plaza");
+              }
+            }}
+            className="h-[38px] sm:h-[40px] px-2.5 sm:px-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/40 text-amber-300 hover:text-white text-[11px] sm:text-xs font-mono font-bold tracking-wider flex items-center space-x-1.5 transition-all shadow-sm hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
+            title="Return to Jinzhou Plaza Hub"
+          >
+            <Compass className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-amber-300" />
+            <span className="hidden sm:inline">Plaza Hub</span>
+          </button>
 
           {/* Update Log Button */}
           <button
@@ -956,11 +1236,11 @@ export const ConveneStage: React.FC = () => {
               soundEngine.playClick();
               setIsUpdateLogOpen(true);
             }}
-            className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/35 border border-purple-400/40 text-purple-300 hover:text-white text-[10px] sm:text-xs font-mono font-bold tracking-wider flex items-center space-x-1 transition-all shadow-sm active:scale-95 cursor-pointer"
+            className="h-[38px] sm:h-[40px] px-2.5 sm:px-3.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/35 border border-purple-400/40 text-purple-300 hover:text-white text-[11px] sm:text-xs font-mono font-bold tracking-wider flex items-center space-x-1.5 transition-all shadow-sm hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
             title="View Updates & Submit Suggestions"
           >
-            <Sparkles className="w-3.5 h-3.5 text-purple-300" />
-            <span className="hidden md:inline">Updates</span>
+            <Sparkles className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-purple-300" />
+            <span className="hidden sm:inline">Updates</span>
           </button>
 
           {/* How to Play / Guide Button */}
@@ -969,24 +1249,24 @@ export const ConveneStage: React.FC = () => {
               soundEngine.playClick();
               setIsHowToPlayOpen(true);
             }}
-            className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-yellow-500/20 hover:bg-yellow-500/35 border border-yellow-400/40 text-yellow-300 hover:text-white text-[10px] sm:text-xs font-mono font-bold tracking-wider flex items-center space-x-1 transition-all shadow-sm active:scale-95 cursor-pointer"
+            className="h-[38px] sm:h-[40px] px-2.5 sm:px-3.5 rounded-xl bg-yellow-500/20 hover:bg-yellow-500/35 border border-yellow-400/40 text-yellow-300 hover:text-white text-[11px] sm:text-xs font-mono font-bold tracking-wider flex items-center space-x-1.5 transition-all shadow-sm hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
             title="Game Guide & Rules"
           >
-            <HelpCircle className="w-3.5 h-3.5 text-yellow-400" />
-            <span className="hidden md:inline">Guide</span>
+            <HelpCircle className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-yellow-400" />
+            <span className="hidden sm:inline">Guide</span>
           </button>
         </div>
 
-        {/* Top Right: Tacet Field Idle Astrite, Astrite Counter & Settings */}
-        <div className="flex items-center space-x-1 sm:space-x-2">
-          {/* VIP Status Rectangle (Positioned to the left of Tacet Field) */}
+        {/* Top Right: Free Astrites Idle Accumulator, Astrite Counter & Settings */}
+        <div className="flex items-center space-x-1.5 sm:space-x-2">
+          {/* VIP Status Rectangle (Positioned to the left of Free Astrites) */}
           {userProfile?.is_vip && (
             <div
-              className="flex items-center space-x-1 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-lg border border-amber-400/50 bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-500/20 text-amber-300 backdrop-blur-sm shadow-[0_0_15px_rgba(251,191,36,0.3)] select-none cursor-default"
-              title="VIP Status Active: +50% Tacet Field Storage (+80 Pulls / +6h). Up to 24h capacity (51,200 Astrite / 320 pulls) with all streaks!"
+              className="h-[38px] sm:h-[40px] px-2.5 sm:px-3 rounded-xl border border-amber-400/50 bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-500/20 text-amber-300 backdrop-blur-sm shadow-[0_0_15px_rgba(251,191,36,0.3)] select-none cursor-default flex items-center space-x-1.5"
+              title="VIP Status Active: +50% Free Astrites Storage (+80 Pulls / +6h). Up to 24h capacity (51,200 Astrite / 320 pulls) with all streaks!"
             >
-              <Crown className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-              <span className="hidden sm:inline text-[10px] sm:text-xs font-mono font-black tracking-wider uppercase text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">
+              <Crown className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-amber-400 animate-pulse" />
+              <span className="hidden sm:inline text-[11px] sm:text-xs font-mono font-black tracking-wider uppercase text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">
                 VIP
               </span>
             </div>
@@ -997,11 +1277,11 @@ export const ConveneStage: React.FC = () => {
             <button
               onClick={handleClaimTacetField}
               disabled={tacetStatus.accumulated === 0}
-              className={`flex items-center space-x-1 sm:space-x-1.5 px-1.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border backdrop-blur-sm shadow-inner transition-all group ${
+              className={`h-[38px] sm:h-[40px] px-2 sm:px-3 rounded-xl border backdrop-blur-sm shadow-inner transition-all flex items-center space-x-1.5 group ${
                 tacetStatus.isMaxed
-                  ? "bg-gradient-to-r from-yellow-500/30 via-amber-500/25 to-yellow-500/30 border-yellow-400 text-yellow-300 shadow-[0_0_20px_rgba(250,204,21,0.45)] animate-pulse cursor-pointer"
+                  ? "bg-gradient-to-r from-yellow-500/30 via-amber-500/25 to-yellow-500/30 border-yellow-400 text-yellow-300 shadow-[0_0_20px_rgba(250,204,21,0.45)] animate-pulse cursor-pointer hover:scale-105 active:scale-95"
                   : tacetStatus.accumulated > 0
-                  ? "bg-white/5 hover:bg-white/10 border-yellow-400/40 text-yellow-300 cursor-pointer"
+                  ? "bg-white/5 hover:bg-white/10 border-yellow-400/40 text-yellow-300 cursor-pointer hover:scale-105 active:scale-95"
                   : "bg-white/5 border-white/10 text-gray-500 cursor-not-allowed opacity-70"
               }`}
               title={
@@ -1011,17 +1291,17 @@ export const ConveneStage: React.FC = () => {
               }
             >
               <Sparkles
-                className={`w-3.5 h-3.5 ${
+                className={`w-4 h-4 sm:w-[18px] sm:h-[18px] ${
                   tacetStatus.isMaxed ? "text-yellow-300 animate-spin" : "text-yellow-400"
                 }`}
               />
-              <span className="text-[10px] sm:text-xs font-mono font-bold hidden landscape:md:inline">
+              <span className="text-[11px] sm:text-xs font-mono font-bold hidden landscape:md:inline">
                 <span>Free Astrite: </span>
                 <strong className="text-white">{tacetStatus.accumulated.toLocaleString()}</strong>
                 <span className="hidden lg:inline">/{tacetStatus.maxCap.toLocaleString()}</span>
               </span>
               {tacetStatus.accumulated > 0 && (
-                <span className="px-1.5 py-0.5 rounded bg-yellow-400/20 text-yellow-300 border border-yellow-400/40 text-[9px] font-mono font-black uppercase tracking-wider group-hover:bg-yellow-400 group-hover:text-black transition-colors">
+                <span className="px-1.5 py-0.5 rounded-md bg-yellow-400/20 text-yellow-300 border border-yellow-400/40 text-[9px] font-mono font-black uppercase tracking-wider group-hover:bg-yellow-400 group-hover:text-black transition-colors">
                   Claim
                 </span>
               )}
@@ -1029,13 +1309,22 @@ export const ConveneStage: React.FC = () => {
           )}
 
           {/* Astrite Counter (Unlimited Replenish removed) */}
-          <div className="flex items-center space-x-1 sm:space-x-1.5 px-2 sm:px-3 py-1 sm:py-1.5 bg-white/5 border border-white/10 rounded-lg backdrop-blur-sm shadow-inner">
-            <AstriteIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <div
+            className="h-[38px] sm:h-[40px] px-2.5 sm:px-3.5 bg-white/5 border border-white/10 rounded-xl backdrop-blur-sm shadow-inner flex items-center space-x-1.5 cursor-default select-none"
+            title={
+              mounted && userState?.astrite !== undefined
+                ? isSandboxGuest
+                  ? "Infinite Astrite (Sandbox Mode)"
+                  : `${userState.astrite.toLocaleString()} Astrite`
+                : "0 Astrite"
+            }
+          >
+            <AstriteIcon className="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
             <span className="font-mono text-xs sm:text-sm font-bold text-gray-100" suppressHydrationWarning>
               {mounted && userState?.astrite !== undefined
                 ? isSandboxGuest
                   ? "∞"
-                  : userState.astrite.toLocaleString()
+                  : formatAstriteCount(userState.astrite)
                 : "0"}
             </span>
           </div>
@@ -1044,26 +1333,37 @@ export const ConveneStage: React.FC = () => {
           {!isSandboxGuest && (
             <button
               onClick={handleOpenInventory}
-              className="hidden md:flex p-1.5 sm:p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-yellow-400/40 text-gray-300 hover:text-yellow-400 transition-all"
+              className="hidden md:flex h-[38px] sm:h-[40px] w-[38px] sm:w-[40px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-yellow-400/40 text-gray-300 hover:text-yellow-400 transition-all hover:scale-105 active:scale-95 cursor-pointer"
               title="Inventory"
             >
-              <Briefcase className="w-4 h-4" />
+              <Briefcase className="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
             </button>
           )}
+
+          {/* PvP Arena Button */}
+          <button
+            onClick={() => {
+              handleLaunchGameMode("gym", "Combat Arena");
+            }}
+            className="hidden sm:flex h-[38px] sm:h-[40px] w-[38px] sm:w-[40px] items-center justify-center rounded-xl bg-rose-500/15 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 hover:text-white transition-all shadow-[0_0_12px_rgba(244,63,94,0.2)] hover:scale-105 active:scale-95 cursor-pointer"
+            title="PvP Battle Arena"
+          >
+            <Swords className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-rose-400" />
+          </button>
 
           {/* Sandbox Guest Mode Controls or User Account Dropdown */}
           {isSandboxGuest ? (
             <div className="flex items-center space-x-1.5 sm:space-x-2 pl-1.5 sm:pl-2 border-l border-white/15">
-              <div className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[10px] sm:text-xs font-mono font-bold">
-                <InfinityIcon className="w-3.5 h-3.5" />
+              <div className="flex items-center space-x-1.5 h-[38px] sm:h-[40px] px-2.5 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[11px] sm:text-xs font-mono font-bold">
+                <InfinityIcon className="w-4 h-4" />
                 <span className="hidden sm:inline">SANDBOX</span>
               </div>
               <button
                 onClick={handleExitSandbox}
-                className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black font-black uppercase text-[10px] sm:text-xs font-mono tracking-wider transition-all shadow-[0_0_15px_rgba(250,204,21,0.3)] active:scale-95 cursor-pointer"
+                className="flex items-center space-x-1.5 h-[38px] sm:h-[40px] px-3 rounded-xl bg-yellow-400 hover:bg-yellow-300 text-black font-black uppercase text-[11px] sm:text-xs font-mono tracking-wider transition-all shadow-[0_0_15px_rgba(250,204,21,0.3)] hover:scale-105 active:scale-95 cursor-pointer"
                 title="Exit Sandbox Mode and return to Login"
               >
-                <LogOut className="w-3.5 h-3.5" />
+                <LogOut className="w-4 h-4" />
                 <span>Exit</span>
               </button>
             </div>
@@ -1076,14 +1376,14 @@ export const ConveneStage: React.FC = () => {
                 soundEngine.playClick();
                 setIsProfileDropdownOpen((prev) => !prev);
               }}
-              className={`flex items-center space-x-1.5 p-1 sm:px-2 sm:py-1 rounded-lg border text-xs sm:text-sm font-mono transition-all duration-150 active:scale-95 ${
+              className={`h-[38px] sm:h-[40px] px-2 sm:px-2.5 rounded-xl border text-xs sm:text-sm font-mono transition-all duration-150 flex items-center space-x-1.5 hover:scale-105 active:scale-95 ${
                 isProfileDropdownOpen
                   ? "bg-yellow-400/15 border-yellow-400/60 text-white shadow-[0_0_15px_rgba(250,204,21,0.3)]"
                   : "bg-white/5 hover:bg-white/10 border-white/10 hover:border-yellow-400/40 text-gray-200 hover:text-white"
               }`}
               title="Account Menu"
             >
-              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full overflow-hidden border border-yellow-400/60 shadow-[0_0_8px_rgba(250,204,21,0.3)] flex-shrink-0 bg-black/60">
+              <div className="w-6 h-6 rounded-full overflow-hidden border border-yellow-400/60 shadow-[0_0_8px_rgba(250,204,21,0.3)] flex-shrink-0 bg-black/60">
                 <img
                   src={`/assets/inventory_portraits/${getPortraitFileName(currentAvatarId)}`}
                   alt="Avatar"
@@ -1097,7 +1397,7 @@ export const ConveneStage: React.FC = () => {
                 />
               </div>
               <ChevronDown
-                className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${
+                className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
                   isProfileDropdownOpen ? "rotate-180 text-yellow-400" : ""
                 }`}
               />
@@ -1161,10 +1461,24 @@ export const ConveneStage: React.FC = () => {
                       setIsProfileDropdownOpen(false);
                       setIsAccountModalOpen(true);
                     }}
-                    className="w-full flex items-center space-x-2.5 px-3.5 py-2 text-xs font-mono font-bold text-gray-200 hover:text-white hover:bg-yellow-400/10 transition-all text-left border-t border-white/5"
+                    className="w-full flex items-center space-x-2.5 px-3.5 py-2 text-xs font-mono font-bold text-gray-200 hover:text-white hover:bg-yellow-400/10 transition-all text-left border-t border-white/5 cursor-pointer"
                   >
                     <SlidersHorizontal className="w-3.5 h-3.5 text-yellow-400" />
                     <span>Account</span>
+                  </button>
+
+                  {/* Settings Option (Audio, Graphics, Auto-activation, etc.) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundEngine.playClick();
+                      setIsProfileDropdownOpen(false);
+                      setIsDevOpen(true);
+                    }}
+                    className="w-full flex items-center space-x-2.5 px-3.5 py-2 text-xs font-mono font-bold text-gray-200 hover:text-white hover:bg-yellow-400/10 transition-all text-left border-t border-white/5 cursor-pointer"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-yellow-400" />
+                    <span>Settings</span>
                   </button>
 
                   {/* Sign Out Option */}
@@ -1174,7 +1488,7 @@ export const ConveneStage: React.FC = () => {
                       setIsProfileDropdownOpen(false);
                       handleSignOut();
                     }}
-                    className="w-full flex items-center space-x-2.5 px-3.5 py-2 text-xs font-mono font-bold text-rose-300 hover:text-rose-200 hover:bg-rose-500/15 transition-all text-left border-t border-white/5"
+                    className="w-full flex items-center space-x-2.5 px-3.5 py-2 text-xs font-mono font-bold text-rose-300 hover:text-rose-200 hover:bg-rose-500/15 transition-all text-left border-t border-white/5 cursor-pointer"
                   >
                     <LogOut className="w-3.5 h-3.5 text-rose-400" />
                     <span>Sign Out</span>
@@ -1185,17 +1499,19 @@ export const ConveneStage: React.FC = () => {
           </div>
         )}
 
-          {/* Settings Trigger */}
-          <button
-            onClick={() => {
-              soundEngine.playClick();
-              setIsDevOpen(true);
-            }}
-            className="p-1.5 sm:p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white transition-all"
-            title="Settings"
-          >
-            <SlidersHorizontal className="w-4 h-4" />
-          </button>
+          {/* Settings Trigger for Sandbox Guests only */}
+          {isSandboxGuest && (
+            <button
+              onClick={() => {
+                soundEngine.playClick();
+                setIsDevOpen(true);
+              }}
+              className="h-[38px] sm:h-[40px] w-[38px] sm:w-[40px] flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white transition-all hover:scale-105 active:scale-95 cursor-pointer ml-1.5"
+              title="Settings"
+            >
+              <Settings className="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
+            </button>
+          )}
         </div>
       </header>
 
@@ -1218,7 +1534,7 @@ export const ConveneStage: React.FC = () => {
           </div>
 
           {/* 1. Portrait Mode: Top Banner Choices, Sized Equally Left-to-Right, Icon-Only */}
-          <div className="flex landscape:hidden w-full min-w-0 overflow-hidden px-2 py-1.5 bg-[#07090ec9] border-b border-white/10 backdrop-blur-md">
+          <div className="flex landscape:hidden w-full min-w-0 overflow-hidden px-2.5 py-2 bg-[#07090ec9] border-b border-white/10 backdrop-blur-md">
             {isSandboxGuest ? (
               /* Sandbox Mode: Scrollable equal icon buttons (left to right) */
               <div
@@ -1241,7 +1557,7 @@ export const ConveneStage: React.FC = () => {
                       key={charId}
                       type="button"
                       onClick={() => handleSelectCharacter(charId)}
-                      className={`relative flex-shrink-0 flex items-center justify-center w-12 h-11 sm:w-14 sm:h-12 rounded-xl border transition-all duration-150 active:scale-95 ${
+                      className={`relative flex-shrink-0 flex items-center justify-center w-12 h-12 sm:w-14 sm:h-12 rounded-xl border transition-all duration-150 active:scale-95 ${
                         isSelected
                           ? "bg-gradient-to-b from-yellow-500/30 to-yellow-500/10 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.35)]"
                           : "bg-white/[0.03] hover:bg-white/[0.08] border-white/10"
@@ -1249,7 +1565,7 @@ export const ConveneStage: React.FC = () => {
                       title={`${char.name} • ${preset.title}`}
                     >
                       <div
-                        className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg overflow-hidden border ${
+                        className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg overflow-hidden border ${
                           isSelected
                             ? "border-yellow-400 shadow-[0_0_6px_rgba(250,204,21,0.5)]"
                             : "border-white/15 opacity-80"
@@ -1276,6 +1592,7 @@ export const ConveneStage: React.FC = () => {
                   const preset = LIMITED_BANNER_PRESETS[charId];
                   if (!char || !preset) return null;
                   const isSelected = bannerMode === "character_limited" && selectedCharId === charId;
+                  const element = char.element || preset.element;
                   const portraitUrl =
                     char.portraitUrl ||
                     char.stillUrl ||
@@ -1287,7 +1604,7 @@ export const ConveneStage: React.FC = () => {
                       key={charId}
                       type="button"
                       onClick={() => handleSelectCharacter(charId)}
-                      className={`relative flex items-center justify-center py-1.5 sm:py-2 rounded-xl border transition-all duration-150 active:scale-95 ${
+                      className={`relative flex items-center justify-center py-2 sm:py-2.5 rounded-xl border transition-all duration-150 active:scale-95 ${
                         isSelected
                           ? "bg-gradient-to-b from-yellow-500/30 via-yellow-500/15 to-transparent border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.35)]"
                           : "bg-white/[0.03] hover:bg-white/[0.08] border-white/10 hover:border-white/20"
@@ -1296,7 +1613,7 @@ export const ConveneStage: React.FC = () => {
                     >
                       {/* Character Icon */}
                       <div
-                        className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg overflow-hidden border transition-all ${
+                        className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg overflow-hidden border transition-all ${
                           isSelected
                             ? "border-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)] scale-105"
                             : "border-white/15 opacity-75 group-hover:opacity-100"
@@ -1308,6 +1625,13 @@ export const ConveneStage: React.FC = () => {
                           className="w-full h-full object-cover object-top"
                         />
                       </div>
+
+                      {/* Element Badge (Top Right) */}
+                      {element && (
+                        <div className="absolute top-1 right-1 z-10">
+                          <ElementBadge element={element} size={15} className="w-4 h-4" />
+                        </div>
+                      )}
 
                       {/* Bottom Active Indicator Line */}
                       {isSelected && (
@@ -1343,6 +1667,7 @@ export const ConveneStage: React.FC = () => {
                       "/assets/characters/changli_portrait.png"
                     }
                     title={preset.title}
+                    element={char.element || preset.element}
                     isSelected={isSelected}
                     isUnavailable={preset.isUnavailable}
                     isComingSoon={preset.isComingSoon}
@@ -1352,7 +1677,7 @@ export const ConveneStage: React.FC = () => {
               })}
             </div>
           ) : (
-            /* ACCOUNT MODE: 3 Tall Cards using Inventory Splash Art (Zero Dead Space) */
+            /* ACCOUNT MODE: 3 Tall Cards with Full Splash Art, Small Element Type at Top-Left, and Active Badge at Top-Right */
             <div className="hidden landscape:flex flex-1 flex-col gap-2 p-2 min-h-0 justify-start sm:justify-between overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
               {displayedCharacters.slice(0, 3).map((charId) => {
                 const char = RESONATORS[charId];
@@ -1361,6 +1686,7 @@ export const ConveneStage: React.FC = () => {
 
                 const isSelected = bannerMode === "character_limited" && selectedCharId === charId;
                 const portraitFile = getPortraitFileName(charId);
+                const element = char.element || preset.element;
 
                 return (
                   <button
@@ -1390,7 +1716,14 @@ export const ConveneStage: React.FC = () => {
                       }`}
                     />
 
-                    {/* Active / Status Tag */}
+                    {/* Small Element Type (Top Left) */}
+                    {element && (
+                      <div className="absolute top-2 left-2 z-10">
+                        <ElementBadge element={element} size={20} className="w-5 h-5 sm:w-5.5 sm:h-5.5 shadow-md" />
+                      </div>
+                    )}
+
+                    {/* Active / Status Tag (Top Right) */}
                     <div className="absolute top-2 right-2 z-10">
                       {isSelected ? (
                         <span className="px-2 py-0.5 rounded-full bg-yellow-400 text-black text-[9px] font-black uppercase font-mono tracking-wider shadow-[0_0_10px_rgba(250,204,21,0.8)]">
@@ -1407,7 +1740,7 @@ export const ConveneStage: React.FC = () => {
                       ) : null}
                     </div>
 
-                    {/* Character Name & Banner Info */}
+                    {/* Character Name & Banner Info (Bottom) */}
                     <div className="relative z-10 flex flex-col min-w-0">
                       <span className="text-[10px] font-mono text-yellow-400/90 font-semibold truncate uppercase tracking-wider drop-shadow-sm">
                         {preset.title}
@@ -1424,7 +1757,22 @@ export const ConveneStage: React.FC = () => {
         </aside>
 
         {/* Center Stage: Framed Banner Presentation (Matches reference mockup box) */}
-        <section className="relative flex-1 m-1.5 sm:m-3 md:m-3.5 rounded-2xl border border-white/10 bg-[#07090e] shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col justify-between p-3 sm:p-6 md:p-8 min-h-0">
+        <section className="relative flex-1 m-2 sm:m-3 md:m-3.5 rounded-2xl border border-white/10 bg-[#07090e] shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col justify-between p-3.5 sm:p-6 md:p-8 min-h-0">
+          {/* Top-Right Info Button (Resonator Info: Guide-style Question Mark Icon) */}
+          <div className="absolute top-3 right-3 sm:top-5 sm:right-5 z-30 pointer-events-auto">
+            <button
+              type="button"
+              onClick={() => {
+                soundEngine.playClick();
+                setIsResonatorInfoOpen(true);
+              }}
+              className="group p-1.5 sm:p-2 rounded-full bg-[#120e04]/90 hover:bg-[#1a1406] border-2 border-yellow-500/85 hover:border-yellow-400 text-yellow-400 hover:text-yellow-300 transition-all hover:scale-110 active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.3)] hover:shadow-[0_0_22px_rgba(250,204,21,0.5)] backdrop-blur-md cursor-pointer flex items-center justify-center"
+              title={`Resonator Info - ${currentChar?.name || "Resonator"}`}
+            >
+              <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 group-hover:text-yellow-300 transition-colors" />
+            </button>
+          </div>
+
           {/* Banner Meta Info (Top Left of Stage) */}
           <div className="relative z-20 max-w-xl space-y-2 sm:space-y-3 pointer-events-auto">
             <AnimatePresence initial={false}>
@@ -1456,42 +1804,6 @@ export const ConveneStage: React.FC = () => {
                   <Clock className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-[#fef08a] shrink-0" />
                   <span>{isSandboxGuest ? "Sandbox: All Banners Open" : rotationTimerText}</span>
                 </div>
-
-                {/* 4. Guarantee rules (Collapsed on small screens to prioritize splash art & pity) */}
-                <div className="pt-0.5 space-y-0.5 text-[11px] sm:text-sm md:text-base text-white/95 font-medium leading-relaxed drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)] hidden sm:block">
-                  <p>
-                    Every <span className="text-[#fef08a] font-bold">10</span> Convenes guarantees a 4-Star or above item.
-                  </p>
-                  <p>
-                    A 5-Star Character is guaranteed within <span className="text-[#fef08a] font-bold">80</span> Convenes.
-                  </p>
-                </div>
-
-                {/* Rate-up 4-Stars Display (Historically paired rate-ups) */}
-                <div className="pt-1 sm:pt-3 flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-3">
-                  <span className="text-[10px] sm:text-xs font-mono uppercase text-white font-bold drop-shadow-md inline">
-                    Rate-Up 4★:
-                  </span>
-                  <div className="flex items-center space-x-1.5 sm:space-x-2 flex-wrap gap-y-1">
-                    {currentPreset.featured4StarIds.map((fId) => {
-                      const fRes = RESONATORS[fId];
-                      return (
-                        <div
-                          key={fId}
-                          className="flex items-center space-x-1 sm:space-x-1.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-md bg-purple-950/50 border border-purple-500/40 text-purple-200 text-[10px] sm:text-xs font-mono shadow-sm backdrop-blur-sm"
-                        >
-                          <img
-                            src={fRes?.portraitUrl || `/assets/characters/${fId}_portrait.png`}
-                            alt={fRes?.name || fId}
-                            className="w-3.5 h-3.5 sm:w-5 sm:h-5 rounded-full object-cover"
-                          />
-                          <span className="font-bold hidden min-[480px]:inline">{fRes ? fRes.name : fId}</span>
-                          <span className="text-purple-400 text-[9px] sm:text-[10px] font-bold">4★</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
               </motion.div>
             </AnimatePresence>
           </div>
@@ -1520,6 +1832,13 @@ export const ConveneStage: React.FC = () => {
                   }
                   alt={currentChar.name}
                   decoding="async"
+                  style={
+                    charFocal
+                      ? ({
+                          "--char-focal": `${charFocal.x}% ${charFocal.y}%`,
+                        } as React.CSSProperties)
+                      : undefined
+                  }
                   className={`splash-art-img h-full w-full select-none pointer-events-none ${
                     isV2
                       ? "object-cover object-center drop-shadow-[0_15px_35px_rgba(0,0,0,0.85)]"
@@ -1581,63 +1900,66 @@ export const ConveneStage: React.FC = () => {
       {/* ========================================================================= */}
       {/* 3. BOTTOM FOOTER HUD (DETAILS, HISTORY & DUAL CONVENE BUTTONS) */}
       {/* ========================================================================= */}
-      <footer className="relative z-20 flex flex-row items-center justify-between px-2 sm:px-6 md:px-8 py-1.5 sm:py-3 border-t border-white/10 bg-black/60 backdrop-blur-md gap-1.5 sm:gap-4 flex-shrink-0">
-        {/* Left: Notice, History & Inventory Buttons */}
-        <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
+      <footer className="relative z-20 flex flex-row items-center justify-between px-2.5 sm:px-6 md:px-8 py-2 sm:py-3 border-t border-white/10 bg-black/75 backdrop-blur-md gap-2 sm:gap-4 flex-shrink-0">
+        {/* Left: Notice, Inventory & Games Buttons */}
+        <div className="flex items-center space-x-1.5 sm:space-x-2 flex-shrink-0">
           <button
             onClick={() => {
               soundEngine.playClick();
               setIsDetailsOpen(true);
             }}
-            className="flex items-center space-x-1 p-1.5 sm:px-3 sm:py-1.5 rounded bg-white/5 hover:bg-white/15 border border-white/15 text-[11px] sm:text-xs font-display font-bold uppercase tracking-wider text-gray-300 hover:text-white transition-all hover:scale-105 whitespace-nowrap"
+            className="h-[38px] sm:h-[40px] px-2.5 sm:px-3.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/15 text-[11px] sm:text-xs font-display font-bold uppercase tracking-wider text-gray-300 hover:text-white transition-all hover:scale-105 active:scale-95 whitespace-nowrap flex items-center space-x-1.5 cursor-pointer"
             title="Disclaimer"
           >
-            <Shield className="w-3.5 h-3.5 text-yellow-400" />
+            <Shield className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-yellow-400" />
             <span className="hidden sm:inline">Disclaimer</span>
           </button>
 
           <button
-            onClick={() => setIsHistoryOpen(true)}
-            className="flex items-center space-x-1 p-1.5 sm:px-3 sm:py-1.5 rounded bg-white/5 hover:bg-white/15 border border-white/15 text-[11px] sm:text-xs font-display font-bold uppercase tracking-wider text-gray-300 hover:text-white transition-all hover:scale-105 whitespace-nowrap"
-            title="Convene History"
+            onClick={handleOpenInventory}
+            className="h-[38px] sm:h-[40px] px-2.5 sm:px-3.5 rounded-xl bg-yellow-400/10 hover:bg-yellow-400/20 border border-yellow-400/40 text-[11px] sm:text-xs font-display font-bold uppercase tracking-wider text-yellow-400 hover:text-yellow-300 transition-all hover:scale-105 active:scale-95 whitespace-nowrap cursor-pointer flex items-center space-x-1.5"
+            title="Open Inventory"
           >
-            <HistoryIcon className="w-3.5 h-3.5 text-yellow-400" />
-            <span className="hidden sm:inline">History</span>
+            <Briefcase className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-yellow-400" />
+            <span className="hidden sm:inline">Inventory</span>
           </button>
 
           <button
-            onClick={handleOpenInventory}
-            className="flex items-center space-x-1 p-1.5 sm:px-3 sm:py-1.5 rounded bg-yellow-400/10 hover:bg-yellow-400/20 border border-yellow-400/40 text-[11px] sm:text-xs font-display font-bold uppercase tracking-wider text-yellow-400 hover:text-yellow-300 transition-all hover:scale-105 whitespace-nowrap"
-            title="Open Inventory"
+            onClick={() => {
+              soundEngine.playClick();
+              setIsGamesMenuOpen(true);
+            }}
+            className="h-[38px] sm:h-[40px] px-2.5 sm:px-3.5 rounded-xl bg-gradient-to-r from-purple-600/20 to-rose-500/20 hover:from-purple-600/30 hover:to-rose-500/30 border border-purple-400/40 text-[11px] sm:text-xs font-display font-bold uppercase tracking-wider text-purple-200 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(168,85,247,0.25)] whitespace-nowrap cursor-pointer flex items-center space-x-1.5"
+            title="Game Modes & Battle"
           >
-            <Briefcase className="w-3.5 h-3.5 text-yellow-400" />
-            <span className="hidden sm:inline">Inventory</span>
+            <Gamepad2 className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-purple-400" />
+            <span className="hidden sm:inline">Games</span>
           </button>
         </div>
 
         {/* Right: Exact Dual Pill-shaped Convene Buttons with Astrite */}
-        <div className="flex items-center space-x-1.5 sm:space-x-4 flex-shrink-0">
+        <div className="flex items-center space-x-2 sm:space-x-4 flex-shrink-0">
           {/* Convene 1 */}
           <button
             disabled={isPulling}
             onClick={() => handlePull(1)}
-            className="group relative flex flex-col items-center justify-center px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full bg-[#171d2b] hover:bg-[#202738] border border-white/25 hover:border-yellow-400/60 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none min-w-[56px] sm:min-w-[130px] shadow-md"
+            className="group relative flex flex-col items-center justify-center px-4 sm:px-6 py-2 sm:py-2.5 rounded-full bg-[#171d2b] hover:bg-[#202738] border border-white/25 hover:border-yellow-400/60 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none min-w-[64px] sm:min-w-[130px] shadow-md"
           >
-            <span className="font-display text-xs sm:text-xs font-black uppercase tracking-widest text-white group-hover:text-yellow-400 transition-colors whitespace-nowrap">
+            <span className="font-display text-xs sm:text-xs font-black uppercase tracking-wider text-white group-hover:text-yellow-400 transition-colors whitespace-nowrap">
               {currentPreset?.isUnavailable ? (
                 "Unavailable"
               ) : currentPreset?.isComingSoon ? (
                 "Soon"
               ) : (
                 <>
-                  <span className="portrait:inline landscape:sm:hidden">1x</span>
+                  <span className="portrait:inline landscape:sm:hidden">1X</span>
                   <span className="hidden landscape:sm:inline">Convene 1</span>
                 </>
               )}
             </span>
             <div className="hidden landscape:flex items-center space-x-1 sm:space-x-1.5 mt-0.5">
-              <AstriteIcon className="w-2.5 h-2.5 sm:w-4 sm:h-4" />
-              <span className="font-mono text-[9px] sm:text-xs font-bold text-gray-200">160</span>
+              <AstriteIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="font-mono text-[10px] sm:text-xs font-bold text-gray-200">160</span>
             </div>
           </button>
 
@@ -1645,27 +1967,29 @@ export const ConveneStage: React.FC = () => {
           <button
             disabled={isPulling}
             onClick={() => handlePull(10)}
-            className="group relative flex flex-col items-center justify-center px-3.5 sm:px-8 py-1.5 sm:py-2.5 rounded-full bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 hover:from-yellow-300 hover:via-amber-300 hover:to-yellow-400 text-black border border-yellow-300 shadow-[0_0_22px_rgba(250,204,21,0.55)] font-bold transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none min-w-[62px] sm:min-w-[160px]"
+            className="group relative flex flex-col items-center justify-center px-4.5 sm:px-8 py-2 sm:py-2.5 rounded-full bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 hover:from-yellow-300 hover:via-amber-300 hover:to-yellow-400 text-black border border-yellow-300 shadow-[0_0_22px_rgba(250,204,21,0.55)] font-bold transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none min-w-[72px] sm:min-w-[160px]"
           >
-            <span className="font-display text-xs sm:text-xs font-black uppercase tracking-widest text-black whitespace-nowrap">
+            <span className="font-display text-xs sm:text-xs font-black uppercase tracking-wider text-black whitespace-nowrap">
               {currentPreset?.isUnavailable ? (
                 "Unavailable"
               ) : currentPreset?.isComingSoon ? (
                 "Soon"
               ) : (
                 <>
-                  <span className="portrait:inline landscape:sm:hidden">10x</span>
+                  <span className="portrait:inline landscape:sm:hidden">10X</span>
                   <span className="hidden landscape:sm:inline">Convene 10</span>
                 </>
               )}
             </span>
             <div className="hidden landscape:flex items-center space-x-1 sm:space-x-1.5 mt-0.5">
-              <AstriteIcon className="w-2.5 h-2.5 sm:w-4 sm:h-4" />
-              <span className="font-mono text-[9px] sm:text-xs font-black text-black">1,600</span>
+              <AstriteIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="font-mono text-[10px] sm:text-xs font-black text-black">1,600</span>
             </div>
           </button>
         </div>
       </footer>
+    </>
+  )}
 
       {/* ========================================================================= */}
       {/* 4. ACTIVE CONVENE VIDEO & REVEAL OVERLAY */}
@@ -1698,12 +2022,15 @@ export const ConveneStage: React.FC = () => {
       {/* ========================================================================= */}
       {/* 5. POPUP MODALS */}
       {/* ========================================================================= */}
-      <HistoryModal
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        userId={isSandboxGuest ? null : currentUser?.id}
-        isSandbox={isSandboxGuest}
-      />
+      {/* Resonator Intel & Kit Modal */}
+      {isResonatorInfoOpen && (
+        <ResonatorInfoModal
+          isOpen={isResonatorInfoOpen}
+          onClose={() => setIsResonatorInfoOpen(false)}
+          resonator={currentChar}
+          preset={currentPreset}
+        />
+      )}
 
       <DetailsModal
         isOpen={isDetailsOpen}
@@ -1754,6 +2081,7 @@ export const ConveneStage: React.FC = () => {
         currentAvatarId={currentAvatarId}
         onAvatarChanged={(newAvatarId) => {
           setCurrentAvatarId(newAvatarId);
+          setUserProfile((prev: any) => (prev ? { ...prev, avatar_id: newAvatarId } : prev));
         }}
         initialShowcaseIds={userProfile?.showcase_ids}
         initialCustomTitle={userProfile?.custom_title || currentUser?.user_metadata?.custom_title || getStoredUserTitle(currentUser?.id)}
@@ -1792,7 +2120,244 @@ export const ConveneStage: React.FC = () => {
           setIsAccountNavigatedFromProfile(true);
           setIsAccountModalOpen(true);
         }}
+        onOpenPvpArena={(targetUsername) => {
+          handleLaunchGameMode("search", "Player Challenge", targetUsername);
+        }}
       />
+
+      <PvPArenaModal
+        isOpen={isPvpArenaOpen}
+        onClose={() => {
+          setIsPvpArenaOpen(false);
+          setPvpOpponentUsername(undefined);
+          setPvpRoomCode(undefined);
+          setPvpBet(undefined);
+          setPvpIsHost(undefined);
+        }}
+        onBackToGames={() => {
+          setIsPvpArenaOpen(false);
+          setIsGamesMenuOpen(true);
+        }}
+        currentUserId={isSandboxGuest ? undefined : currentUser?.id}
+        currentUsername={userProfile?.username || currentUser?.user_metadata?.username || "Player"}
+        currentAvatarId={currentAvatarId}
+        inventory={inventoryList}
+        showcaseIds={userProfile?.showcase_ids}
+        initialOpponentUsername={pvpOpponentUsername}
+        initialTab={pvpInitialTab}
+        initialRoomCode={pvpRoomCode}
+        initialBet={pvpBet}
+        initialIsHost={pvpIsHost}
+        userAstrite={userState?.astrite ?? 0}
+        isSessionDisplaced={isDisplaced}
+        onAstriteReward={(reward) => {
+          const updated = grantClientCurrency(reward, currentUser?.id, isSandboxGuest);
+          if (currentUser && !isSandboxGuest) {
+            updateUserProfile(currentUser.id, {
+              astrite: updated.astrite,
+            }).catch(() => {});
+          }
+          setUserState((prev: any) => ({
+            ...prev,
+            astrite: updated.astrite,
+          }));
+          fetchState();
+          setToastMessage(`✨ Victory Reward: +${reward} Astrite!`);
+          setTimeout(() => setToastMessage(null), 4000);
+        }}
+        onAstriteChange={(delta) => {
+          const updated = grantClientCurrency(delta, currentUser?.id, isSandboxGuest);
+          if (currentUser && !isSandboxGuest) {
+            updateUserProfile(currentUser.id, {
+              astrite: updated.astrite,
+            }).catch(() => {});
+          }
+          setUserState((prev: any) => ({
+            ...prev,
+            astrite: updated.astrite,
+          }));
+          fetchState();
+          if (delta < 0) {
+            setToastMessage(`⚔️ Match Bet Placed: ${Math.abs(delta)} Astrite`);
+          } else if (delta > 0) {
+            setToastMessage(`🏆 Victory Pot Claimed: +${delta} Astrite!`);
+          }
+          setTimeout(() => setToastMessage(null), 4000);
+        }}
+      />
+
+      <PvpDisconnectNoticeModal
+        notice={pendingPvpNotice}
+        onAcknowledge={handleAcknowledgePvpNotice}
+      />
+
+      {/* Game Mode Selection Popup Modal */}
+      <AnimatePresence>
+        {isGamesMenuOpen && (
+          <div
+            className="fixed inset-0 z-[110] flex flex-col items-center justify-center p-2 sm:p-5 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-black/95 backdrop-blur-md select-none overflow-y-auto"
+            onClick={() => {
+              soundEngine.playClick();
+              setIsGamesMenuOpen(false);
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 15 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="relative max-w-2xl w-full max-h-[85dvh] sm:max-h-[88dvh] bg-[#0c1017] border border-purple-500/40 rounded-2xl shadow-[0_0_60px_rgba(0,0,0,0.9),0_0_30px_rgba(168,85,247,0.25)] flex flex-col overflow-hidden text-gray-200 my-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Pinned Sticky Header - Always 100% visible on all mobile & desktop viewports */}
+              <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-3.5 border-b border-white/10 bg-[#0a0d17]/95 sticky top-0 z-30 flex-shrink-0">
+                <div className="flex items-center space-x-2.5">
+                  <div className="p-2 rounded-xl bg-purple-500/20 border border-purple-400/40 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+                    <Gamepad2 className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-bold text-white font-display flex items-center space-x-2">
+                      <span>Combat &amp; Game Modes</span>
+                    </h3>
+                    <p className="text-[11px] sm:text-xs font-mono text-gray-400">
+                      Choose a game mode to deploy your Resonator team
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundEngine.playClick();
+                    setIsGamesMenuOpen(false);
+                  }}
+                  className="group p-2 sm:p-2.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/35 text-purple-200 hover:text-white transition-all border border-purple-400/40 hover:border-purple-400/70 active:scale-95 cursor-pointer flex-shrink-0 min-w-[38px] min-h-[38px] flex items-center justify-center shadow-[0_0_12px_rgba(168,85,247,0.25)]"
+                  title="Close Games Menu"
+                >
+                  <X className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5] text-purple-200 group-hover:text-white group-hover:rotate-90 transition-transform duration-200" />
+                </button>
+              </div>
+
+              {/* Scrollable Game Modes Body */}
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 scrollbar-thin scrollbar-thumb-white/15">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* 1. Gym Trials */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleLaunchGameMode("gym", "Gym Trials");
+                    }}
+                    className="p-3.5 sm:p-4 rounded-xl border border-yellow-500/30 bg-gradient-to-br from-yellow-950/20 via-black/40 to-black/60 hover:border-yellow-400/70 hover:bg-yellow-950/30 transition-all text-left group shadow-sm flex flex-col justify-between space-y-3"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="p-2 rounded-xl bg-yellow-400/15 border border-yellow-400/30 text-yellow-400 group-hover:scale-105 transition-transform">
+                        <Trophy className="w-5 h-5" />
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-yellow-400/15 text-yellow-300 border border-yellow-400/30 text-[9px] font-mono font-bold">
+                        DAILY BOUNTY
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-white group-hover:text-yellow-300 transition-colors flex items-center space-x-1.5">
+                        <span>Gym Trials</span>
+                        <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </h4>
+                      <p className="text-xs text-gray-300 leading-relaxed font-mono">
+                        Battle every playable Resonator as a boss across 5 difficulty stages (Lv. 40–100). Earn daily Astrite bounties and Combat EXP!
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 2. Tower of Adversity */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleLaunchGameMode("tower", "Tower of Adversity");
+                    }}
+                    className="p-3.5 sm:p-4 rounded-xl border border-purple-500/30 bg-gradient-to-br from-purple-950/20 via-black/40 to-black/60 hover:border-purple-400/70 hover:bg-purple-950/30 transition-all text-left group shadow-sm flex flex-col justify-between space-y-3"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="p-2 rounded-xl bg-purple-500/15 border border-purple-400/30 text-purple-400 group-hover:scale-105 transition-transform">
+                        <Crown className="w-5 h-5 text-purple-400" />
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[9px] font-mono font-bold">
+                        ROGUE-LITE
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors flex items-center space-x-1.5">
+                        <span>Tower of Adversity</span>
+                        <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </h4>
+                      <p className="text-xs text-gray-300 leading-relaxed font-mono">
+                        Ascend infinite perilous floors with locked squad and persistent HP. Draft 3 blessings after each floor and see how far you can last!
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 3. Live 1v1 Arena */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleLaunchGameMode("live", "Live 1v1 Arena");
+                    }}
+                    className="p-3.5 sm:p-4 rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/20 via-black/40 to-black/60 hover:border-emerald-400/70 hover:bg-emerald-950/30 transition-all text-left group shadow-sm flex flex-col justify-between space-y-3"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-emerald-400 group-hover:scale-105 transition-transform">
+                        <Radio className="w-5 h-5" />
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[9px] font-mono font-bold">
+                        MULTIPLAYER
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-white group-hover:text-emerald-300 transition-colors flex items-center space-x-1.5">
+                        <span>Live 1v1 Arena</span>
+                        <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </h4>
+                      <p className="text-xs text-gray-300 leading-relaxed font-mono">
+                        Real-time peer battles with custom room codes, 60s team prep phase, fixed Lv. 100 normalization, and optional Astrite betting pots.
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 4. Player Challenge */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleLaunchGameMode("search", "Player Challenge");
+                    }}
+                    className="p-3.5 sm:p-4 rounded-xl border border-rose-500/30 bg-gradient-to-br from-rose-950/20 via-black/40 to-black/60 hover:border-rose-400/70 hover:bg-rose-950/30 transition-all text-left group shadow-sm flex flex-col justify-between space-y-3"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="p-2 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 group-hover:scale-105 transition-transform">
+                        <Search className="w-5 h-5" />
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30 text-[9px] font-mono font-bold">
+                        ASYNC PVP
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-white group-hover:text-rose-300 transition-colors flex items-center space-x-1.5">
+                        <span>Player Challenge</span>
+                        <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </h4>
+                      <p className="text-xs text-gray-300 leading-relaxed font-mono">
+                        Search for any player by username and battle against their showcase team in tournament standard Lv. 100 combat.
+                      </p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <ProfileModal
         isOpen={isAccountModalOpen}
@@ -1830,6 +2395,7 @@ export const ConveneStage: React.FC = () => {
         }}
         onAvatarChanged={(newAvatarId) => {
           setCurrentAvatarId(newAvatarId);
+          setUserProfile((prev: any) => (prev ? { ...prev, avatar_id: newAvatarId } : prev));
         }}
       />
 
@@ -1852,11 +2418,19 @@ export const ConveneStage: React.FC = () => {
       {/* Global Rate Limit Warning Modal */}
       <SlowDownModal />
 
+      {/* Account Logged In Elsewhere (Session Displacement) Modal */}
+      <SessionDisplacedModal
+        isOpen={isDisplaced}
+        onPreferThisSession={preferThisSession}
+        username={userProfile?.username || currentUser?.user_metadata?.username || "Player"}
+      />
+
       {/* Coming Soon Notice Modal */}
       <AnimatePresence>
         {comingSoonNotice && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md select-none"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 select-none"
+            style={{ backgroundColor: "#000000f2" }}
             onClick={() => setComingSoonNotice(false)}
           >
             <motion.div
@@ -1934,7 +2508,8 @@ export const ConveneStage: React.FC = () => {
       <AnimatePresence>
         {showInsufficientModal && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md select-none"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 select-none"
+            style={{ backgroundColor: "#000000f2" }}
             onClick={() => setShowInsufficientModal(false)}
           >
             <motion.div
@@ -2016,14 +2591,14 @@ export const ConveneStage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Floating Toast Notification (Tacet Field / Milestone Rebate) */}
+      {/* Floating Toast Notification (Free Astrites / Milestone Rebate) */}
       <AnimatePresence>
-        {toastMessage && (
+        {toastMessage && activeView !== "plaza" && (
           <motion.div
             initial={{ opacity: 0, y: -25, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -25, scale: 0.95 }}
-            className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-2.5 rounded-xl bg-black/90 border border-yellow-400/50 shadow-[0_0_30px_rgba(250,204,21,0.35)] backdrop-blur-md flex items-center space-x-2.5 text-xs font-mono font-bold text-yellow-300 pointer-events-none"
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-2.5 rounded-xl bg-[#0a0e17] border border-yellow-400/50 shadow-[0_0_30px_rgba(250,204,21,0.35)] flex items-center space-x-2.5 text-xs font-mono font-bold text-yellow-300 pointer-events-none"
           >
             <Sparkles className="w-4 h-4 text-yellow-400 animate-pulse flex-shrink-0" />
             <span>{toastMessage}</span>

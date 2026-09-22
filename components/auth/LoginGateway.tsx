@@ -270,7 +270,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -15 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
-            className="relative w-full max-w-md bg-[#0e121b]/95 border border-yellow-400/40 rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.9)] backdrop-blur-xl overflow-hidden p-6 sm:p-8 text-center space-y-6"
+            className="relative w-full max-w-md bg-[#0e121b] border border-yellow-400/40 rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.9)] overflow-hidden p-6 sm:p-8 text-center space-y-6"
           >
             {/* Top Branded Accent Bar */}
             <div className="absolute top-0 inset-x-0 h-1.5 w-full bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-300 shadow-[0_0_15px_rgba(250,204,21,0.6)]" />
@@ -312,7 +312,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
-            className="relative w-full max-w-md bg-[#0e121b]/95 border border-white/15 rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.9)] backdrop-blur-xl overflow-hidden"
+            className="relative w-full max-w-md bg-[#0e121b] border border-white/15 rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.9)] overflow-hidden"
           >
             {/* Top Branded Accent Bar */}
             <div className="h-1.5 w-full bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-300 shadow-[0_0_15px_rgba(250,204,21,0.6)]" />
@@ -747,7 +747,8 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
       <AnimatePresence>
         {showSandboxWarning && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm select-none"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 select-none"
+            style={{ backgroundColor: "#000000f2" }}
             onClick={() => setShowSandboxWarning(false)}
           >
             <motion.div

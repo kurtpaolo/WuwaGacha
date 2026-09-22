@@ -2,7 +2,7 @@
  * Daily Login Streak Engine (00:00 GMT+8 Reset)
  * Evaluates consecutive logins based on GMT+8 (Asia/Shanghai / UTC+8) calendar days.
  * Resets active streak if a day is missed, but permanently preserves maxLoginStreak
- * for lifelong milestone titles and Tacet Field storage expansions.
+ * for lifelong milestone titles and Free Astrites storage expansions.
  */
 
 export interface LoginStreakData {
