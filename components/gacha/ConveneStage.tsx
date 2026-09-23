@@ -1259,19 +1259,6 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
 
         {/* Top Right: Free Astrites Idle Accumulator, Astrite Counter & Settings */}
         <div className="flex items-center space-x-1.5 sm:space-x-2">
-          {/* VIP Status Rectangle (Positioned to the left of Free Astrites) */}
-          {userProfile?.is_vip && (
-            <div
-              className="h-[38px] sm:h-[40px] px-2.5 sm:px-3 rounded-xl border border-amber-400/50 bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-500/20 text-amber-300 backdrop-blur-sm shadow-[0_0_15px_rgba(251,191,36,0.3)] select-none cursor-default flex items-center space-x-1.5"
-              title="VIP Status Active: +50% Free Astrites Storage (+80 Pulls / +6h). Up to 24h capacity (51,200 Astrite / 320 pulls) with all streaks!"
-            >
-              <Crown className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-amber-400 animate-pulse" />
-              <span className="hidden sm:inline text-[11px] sm:text-xs font-mono font-black tracking-wider uppercase text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">
-                VIP
-              </span>
-            </div>
-          )}
-
           {/* Free Astrite Idle Accumulator (Hidden in Sandbox Mode) */}
           {!isSandboxGuest && !userState?.isSandbox && (
             <button
