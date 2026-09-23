@@ -169,7 +169,7 @@ export const UpdateLogModal: React.FC<UpdateLogModalProps> = ({
                       </h3>
                     </div>
                     <p className="text-xs font-mono text-gray-300 leading-relaxed">
-                      Climb 10-floor gauntlets with persistent squad HP. Draft 1 of 3 balanced Tactical Blessings after each win (e.g. 1% Legendary Crit Rate). Floors 5 &amp; 10 feature a 50% chance for a Mythic Revive blessing, plus auto-reset on party wipeout and a 5-floor paginated browser!
+                      Ascend the 10-floor endgame gauntlet with persistent party HP. Draft tactical blessings after each floor to empower your squad, with rare Revive blessings available at milestone floors.
                     </p>
                   </div>
 
@@ -217,11 +217,11 @@ export const UpdateLogModal: React.FC<UpdateLogModalProps> = ({
                     <div className="flex items-center space-x-2 text-purple-400">
                       <Clock className="w-3.5 h-3.5 flex-shrink-0" />
                       <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
-                        Automated Discord Webhook Broadcasts
+                        Discord Banner Broadcasts
                       </h3>
                     </div>
                     <p className="text-xs font-mono text-gray-300 leading-relaxed">
-                      Featured banner rotations are automatically announced to Discord channels every :00 and :30 (GMT+8) with rich composite banner images and smart cycle deduplication.
+                      Featured banner rotations are automatically announced to linked Discord channels every 30 minutes (at :00 and :30 GMT+8) with rich banner preview cards.
                     </p>
                   </div>
                 </>

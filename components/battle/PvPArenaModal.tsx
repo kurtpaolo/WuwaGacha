@@ -6922,32 +6922,32 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div className="p-2.5 rounded-xl bg-cyan-950/30 border border-cyan-500/30 space-y-1">
                           <span className="font-bold text-cyan-300 text-xs font-mono">Glacio (Ice)</span>
-                          <p className="text-[11px] text-gray-300">Strong against <strong>Fusion</strong> &amp; <strong>Aero</strong>. Weak to <strong>Electro</strong>.</p>
+                          <p className="text-[11px] text-gray-300">Strong against <strong>Fusion</strong> &amp; <strong>Aero</strong>. Weak to <strong>Fusion</strong> &amp; <strong>Electro</strong>.</p>
                         </div>
 
                         <div className="p-2.5 rounded-xl bg-rose-950/30 border border-rose-500/30 space-y-1">
                           <span className="font-bold text-rose-300 text-xs font-mono">Fusion (Fire)</span>
-                          <p className="text-[11px] text-gray-300">Strong against <strong>Aero</strong> &amp; <strong>Glacio</strong>. Weak to <strong>Glacio</strong>.</p>
+                          <p className="text-[11px] text-gray-300">Strong against <strong>Glacio</strong> &amp; <strong>Aero</strong>. Weak to <strong>Glacio</strong>.</p>
                         </div>
 
                         <div className="p-2.5 rounded-xl bg-violet-950/30 border border-violet-500/30 space-y-1">
                           <span className="font-bold text-violet-300 text-xs font-mono">Electro (Lightning)</span>
-                          <p className="text-[11px] text-gray-300">Strong against <strong>Glacio</strong> &amp; <strong>Aero</strong>. Weak to <strong>Havoc</strong>.</p>
+                          <p className="text-[11px] text-gray-300">Strong against <strong>Glacio</strong> &amp; <strong>Aero</strong>. Weak to <strong>Spectro</strong> &amp; <strong>Havoc</strong>.</p>
                         </div>
 
                         <div className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 space-y-1">
                           <span className="font-bold text-emerald-300 text-xs font-mono">Aero (Wind)</span>
-                          <p className="text-[11px] text-gray-300">Strong against <strong>Havoc</strong> &amp; <strong>Spectro</strong>. Weak to <strong>Fusion</strong> &amp; <strong>Electro</strong>.</p>
+                          <p className="text-[11px] text-gray-300">Strong against <strong>Havoc</strong> &amp; <strong>Spectro</strong>. Weak to <strong>Glacio</strong>, <strong>Fusion</strong> &amp; <strong>Electro</strong>.</p>
                         </div>
 
                         <div className="p-2.5 rounded-xl bg-amber-950/30 border border-amber-500/30 space-y-1">
                           <span className="font-bold text-amber-300 text-xs font-mono">Spectro (Light)</span>
-                          <p className="text-[11px] text-gray-300">Strong against <strong>Havoc</strong> &amp; <strong>Electro</strong>. Weak to <strong>Aero</strong>.</p>
+                          <p className="text-[11px] text-gray-300">Strong against <strong>Havoc</strong> &amp; <strong>Electro</strong>. Weak to <strong>Aero</strong> &amp; <strong>Havoc</strong>.</p>
                         </div>
 
                         <div className="p-2.5 rounded-xl bg-purple-950/30 border border-purple-500/30 space-y-1">
                           <span className="font-bold text-purple-300 text-xs font-mono">Havoc (Dark)</span>
-                          <p className="text-[11px] text-gray-300">Strong against <strong>Spectro</strong> &amp; <strong>Electro</strong>. Weak to <strong>Aero</strong>.</p>
+                          <p className="text-[11px] text-gray-300">Strong against <strong>Spectro</strong> &amp; <strong>Electro</strong>. Weak to <strong>Aero</strong> &amp; <strong>Spectro</strong>.</p>
                         </div>
                       </div>
                     </div>
@@ -7120,12 +7120,12 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                       <span>
                         <strong className="text-white">Weakness Counter:</strong>{" "}
                         <span className="text-emerald-400 font-bold">
-                          {selectedGymBoss.element === "Glacio" && "⚡ Electro (1.5x dmg)"}
-                          {selectedGymBoss.element === "Fusion" && "❄️ Glacio (1.5x dmg)"}
-                          {selectedGymBoss.element === "Electro" && "💀 Havoc (1.5x dmg)"}
-                          {selectedGymBoss.element === "Aero" && "🔥 Fusion (1.5x dmg)"}
-                          {selectedGymBoss.element === "Havoc" && "✨ Spectro & 🌪️ Aero (1.5x dmg)"}
-                          {selectedGymBoss.element === "Spectro" && "💀 Havoc (1.5x dmg)"}
+                          {selectedGymBoss.element === "Glacio" && "🔥 Fusion & ⚡ Electro (+25% DMG)"}
+                          {selectedGymBoss.element === "Fusion" && "❄️ Glacio (+25% DMG)"}
+                          {selectedGymBoss.element === "Electro" && "✨ Spectro & 💀 Havoc (+25% DMG)"}
+                          {selectedGymBoss.element === "Aero" && "❄️ Glacio, 🔥 Fusion & ⚡ Electro (+25% DMG)"}
+                          {selectedGymBoss.element === "Spectro" && "🌪️ Aero & 💀 Havoc (+25% DMG)"}
+                          {selectedGymBoss.element === "Havoc" && "🌪️ Aero & ✨ Spectro (+25% DMG)"}
                         </span>
                       </span>
                     </div>
