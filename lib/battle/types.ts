@@ -76,19 +76,6 @@ export interface BattleMove {
   teamBarrierPercent?: number; // grants all living party members an X% barrier
   bonusDmgCondition?: "target_status" | "low_hp" | "target_downed";
   bonusDmgMultiplier?: number; // e.g. 1.35 for +35% DMG
-  teamSync?: {
-    type:
-      | "shorekeeper_crit_strike"
-      | "yinlin_zap"
-      | "zhezhi_battery"
-      | "changli_burn"
-      | "jiyan_knockdown"
-      | "xiangli_stun"
-      | "camellya_lifesteal"
-      | "carlotta_freeze";
-    title?: string;
-    description: string;
-  };
   description: string;
   animationType?: "slash" | "blast" | "beam" | "burst" | "buff";
 }

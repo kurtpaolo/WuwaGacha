@@ -502,7 +502,6 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
     setIsPvPGuideOpen(false);
     setShowExitConfirm(false);
     setIsFaintPickerOpen(false);
-    setIsTeamSyncPickerOpen(false);
     setIsRevivePickerOpen(false);
     setSelectedReviveBlessing(null);
   };
@@ -622,11 +621,9 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
   const [isFaintReplaceModalOpen, setIsFaintReplaceModalOpen] = useState(false);
   const [faintedSlotIndex, setFaintedSlotIndex] = useState<number | null>(null);
 
-  // Faint Replacement & Team Sync Pickers
+  // Faint Replacement Picker
   const [isFaintPickerOpen, setIsFaintPickerOpen] = useState(false);
   const [pendingFaintTurnDecision, setPendingFaintTurnDecision] = useState<"player" | "opponent">("player");
-  const [isTeamSyncPickerOpen, setIsTeamSyncPickerOpen] = useState(false);
-  const [pendingTeamSyncMove, setPendingTeamSyncMove] = useState<BattleMove | null>(null);
 
   // Visual Battle FX
   const [playerAnim, setPlayerAnim] = useState<"idle" | "attack" | "hit" | "faint">("idle");
@@ -2429,373 +2426,6 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
     }
   };
 
-  // Resonator Team Sync: Synchronized Teammate Assist
-  const handleExecuteTeamSync = async (teammateId: string) => {
-    if (!playerTrainer || !opponentTrainer || !isPlayerTurn || isBusy) return;
-    const pActive = playerTrainer.team[playerTrainer.activeIdx];
-    const oActive = opponentTrainer.team[opponentTrainer.activeIdx];
-    if (!pActive || !oActive || pActive.isFainted) return;
-
-    const chosenTeammate = playerTrainer.team.find((r) => r.id === teammateId);
-    if (!chosenTeammate || chosenTeammate.isFainted) return;
-
-    setIsTeamSyncPickerOpen(false);
-    setIsBusy(true);
-    setBattleTurnCount((prev) => prev + 1);
-    battleTurnCountRef.current += 1;
-
-    const syncType = pendingTeamSyncMove?.teamSync?.type || "shorekeeper_crit_strike";
-
-    // 0. Trigger Liberation Cinematic Cut-In and audio activation
-    if (pendingTeamSyncMove) {
-      soundEngine.playLiberationActivation(pendingTeamSyncMove.element || pActive.element);
-      setLiberationCutIn({
-        resonator: pActive,
-        move: pendingTeamSyncMove,
-        isPlayer: true,
-      });
-      await new Promise((r) => setTimeout(r, 1050));
-      setLiberationCutIn(null);
-    }
-
-    // 1. Liberation cast: 100 energy consumed
-    pActive.energy = 0;
-
-    // 2. Resonator-specific Team Buffs & Effects
-    if (syncType === "shorekeeper_crit_strike") {
-      playerTrainer.team.forEach((r) => {
-        if (!r.isFainted) {
-          const heal = Math.round(r.maxHp * 0.2);
-          r.hp = Math.min(r.maxHp, r.hp + heal);
-          const barrier = Math.round(r.maxHp * 0.15);
-          r.barrierHp = (r.barrierHp || 0) + barrier;
-          if (r.statusEffects) {
-            r.statusEffects = r.statusEffects.filter(
-              (s) =>
-                s.type === "buff_atk" ||
-                s.type === "buff_def" ||
-                s.type === "buff_crit" ||
-                s.type === "buff_next_attack" ||
-                s.type === "buff_dodge"
-            );
-          }
-        }
-      });
-      (playerTrainer.activeIndices || [0, 1, 2]).forEach((teamIdx, slotIdx) => {
-        const r = playerTrainer.team[teamIdx];
-        if (r && !r.isFainted) {
-          const heal = Math.round(r.maxHp * 0.2);
-          triggerHealingPop("player", slotIdx, heal);
-        }
-      });
-      soundEngine.playHealChime();
-      setBattleLogs((prev) => [
-        ...prev,
-        {
-          id: `sk_sync_lib_${Date.now()}`,
-          text: `🌌 ${pActive.name} unleashed End of the Sea Turns Clear! Outer Stellarealm activated — Team healed by 20%, 15% Barrier granted, and debuffs cleansed!`,
-          type: "liberation",
-        },
-      ]);
-    } else if (syncType === "zhezhi_battery") {
-      chosenTeammate.energy = Math.min(100, chosenTeammate.energy + 35);
-      setBattleLogs((prev) => [
-        ...prev,
-        {
-          id: `zh_sync_lib_${Date.now()}`,
-          text: `🎨 ${pActive.name} summoned Living Ink Spirits! Granted +35 Energy to ${chosenTeammate.name}!`,
-          type: "liberation",
-        },
-      ]);
-    } else if (syncType === "changli_burn") {
-      chosenTeammate.statusEffects = [
-        ...(chosenTeammate.statusEffects || []),
-        { type: "buff_next_attack", duration: 2 },
-      ];
-      setBattleLogs((prev) => [
-        ...prev,
-        {
-          id: `cl_sync_lib_${Date.now()}`,
-          text: `🔥 ${pActive.name} ignited Radiance of Feathers! Inflicted Burn on foe and granted ${chosenTeammate.name} +30% Skill Deepen!`,
-          type: "liberation",
-        },
-      ]);
-    } else if (syncType === "yinlin_zap") {
-      setBattleLogs((prev) => [
-        ...prev,
-        {
-          id: `yl_sync_lib_${Date.now()}`,
-          text: `⚡ ${pActive.name} unleashed Thundering Wrath! Zapstring synchronizes with ${chosenTeammate.name}!`,
-          type: "liberation",
-        },
-      ]);
-    } else if (syncType === "jiyan_knockdown") {
-      setBattleLogs((prev) => [
-        ...prev,
-        {
-          id: `jy_sync_lib_${Date.now()}`,
-          text: `🐉 ${pActive.name} summoned the Qingloong! Wind formation charges ${chosenTeammate.name}'s attack!`,
-          type: "liberation",
-        },
-      ]);
-    } else if (syncType === "camellya_lifesteal") {
-      setBattleLogs((prev) => [
-        ...prev,
-        {
-          id: `cm_sync_lib_${Date.now()}`,
-          text: `🌺 ${pActive.name} wove Crimson Vines! Siphoning life essence for ${chosenTeammate.name}!`,
-          type: "liberation",
-        },
-      ]);
-    } else if (syncType === "carlotta_freeze") {
-      setBattleLogs((prev) => [
-        ...prev,
-        {
-          id: `cr_sync_lib_${Date.now()}`,
-          text: `❄️ ${pActive.name} summoned Gilded Winter Rose! Glacial sub-zero blizzard chills the battlefield!`,
-          type: "liberation",
-        },
-      ]);
-    } else if (syncType === "xiangli_stun") {
-      setBattleLogs((prev) => [
-        ...prev,
-        {
-          id: `xl_sync_lib_${Date.now()}`,
-          text: `💡 ${pActive.name} calculated Deductive Matrix Synchronization! Pinpointing enemy weak points!`,
-          type: "liberation",
-        },
-      ]);
-    }
-
-    setPlayerTrainer({ ...playerTrainer });
-    setOpponentTrainer({ ...opponentTrainer });
-
-    setPlayerAnim("attack");
-    await new Promise((r) => setTimeout(r, 600));
-    setPlayerAnim("idle");
-
-    // 3. Teammate Synchronized Assist Strike
-    const assistMove: BattleMove = {
-      id: `${chosenTeammate.id}_sync_strike`,
-      name: `Synchronized Strike: ${chosenTeammate.name}`,
-      category: "forte",
-      element: chosenTeammate.element,
-      power: 135,
-      accuracy: 80, // 80% accuracy (20% miss chance for balance)
-      critBonus: 1.0, // 100% Critical Strike guaranteed!
-      energyGain: 15,
-      statusEffect:
-        syncType === "yinlin_zap"
-          ? { type: "shock", chance: 1.0, duration: 3 }
-          : syncType === "changli_burn"
-          ? { type: "burn", chance: 1.0, duration: 3 }
-          : syncType === "carlotta_freeze"
-          ? { type: "freeze", chance: 1.0, duration: 1 }
-          : syncType === "xiangli_stun"
-          ? { type: "stun", chance: 0.5, duration: 1 }
-          : syncType === "camellya_lifesteal"
-          ? { type: "erosion", chance: 0.7, duration: 3 }
-          : undefined,
-      lifestealPercent: syncType === "camellya_lifesteal" ? 40 : undefined,
-      defPiercePercent: syncType === "xiangli_stun" ? 35 : undefined,
-      description: `${pendingTeamSyncMove?.teamSync?.title || "Team Sync"} assist: 100% Crit Rate, 80% Accuracy.`,
-      animationType: "burst",
-    };
-
-    setBattleLogs((prev) => [
-      ...prev,
-      {
-        id: `sync_assist_${Date.now()}`,
-        text: `⚔️ TEAM SYNC! ${chosenTeammate.name} leaps into battle to deliver a Synchronized Critical Strike!`,
-        type: "crit",
-      },
-    ]);
-
-    const isBossFight = currentGymChallenge !== null || (currentTowerFloor !== null && currentTowerFloor.isBossFloor);
-    const result = executeMoveDamage(chosenTeammate, oActive, assistMove, isOneMoreActive, {
-      activeBlessings: currentTowerFloor ? towerRunState.activeBlessings : undefined,
-      isBossFight,
-    });
-
-    if (result.logs && result.logs.length > 0) {
-      setBattleLogs((prev) => [
-        ...prev,
-        ...result.logs!.map((l: string) => ({
-          id: `log_${Date.now()}_${Math.random()}`,
-          text: l,
-          type: "info" as const,
-        })),
-      ]);
-    }
-
-    setPlayerTrainer({ ...playerTrainer });
-    setOpponentTrainer({ ...opponentTrainer });
-
-    const nextTurnId = result.triggeredOneMore ? playerTrainer.id : opponentTrainer.id;
-    if (isRealtimeMatch) {
-      realtimeManagerRef.current?.sendAction({
-        type: "move",
-        move: assistMove,
-        damage: result.damage,
-        isCrit: result.isCrit,
-        missed: !!result.missed,
-        typeMultiplier: result.typeMultiplier,
-        typeEffectiveness: result.typeEffectiveness,
-        knockedDown: result.knockedDown,
-        triggeredOneMore: result.triggeredOneMore,
-        statusApplied: result.statusApplied,
-        healAmount: result.healAmount,
-        attackerHp: pActive.hp,
-        attackerEnergy: pActive.energy,
-        attackerBarrierHp: pActive.barrierHp,
-        attackerStatusEffects: pActive.statusEffects,
-        defenderHp: oActive.hp,
-        defenderBarrierHp: oActive.barrierHp,
-        defenderFainted: oActive.isFainted,
-        nextTurnUserId: nextTurnId,
-        senderId: playerTrainer.id,
-        syncTeammateId: chosenTeammate.id,
-        syncTeammateName: chosenTeammate.name,
-      });
-    }
-
-    if (result.missed) {
-      setFloatingText({
-        target: "opponent",
-        text: result.dodged ? "DODGED!" : "MISS!",
-      });
-      setBattleLogs((prev) => [
-        ...prev,
-        {
-          id: `miss_${Date.now()}`,
-          text: result.dodged
-            ? `💨 Foe ${oActive.name} agilely dodged ${chosenTeammate.name}'s synchronized strike!`
-            : `${chosenTeammate.name}'s synchronized strike missed!`,
-          type: "info",
-        },
-      ]);
-    } else if (result.damage > 0) {
-      setOpponentAnim("hit");
-      setFloatingText({
-        target: "opponent",
-        text: `-${result.damage}${result.isCrit ? " CRIT!" : ""}`,
-        isCrit: result.isCrit,
-      });
-
-      // Synthesized heavy crit punch & elemental hit + screen shake
-      soundEngine.playHitPunch({ isCrit: true, isHeavy: true });
-      soundEngine.playElementalHit(chosenTeammate.element, result.typeEffectiveness === "super");
-      triggerScreenShake(380);
-
-      setBattleLogs((prev) => [
-        ...prev,
-        {
-          id: `sync_dmg_${Date.now()}`,
-          text: `💥 ${chosenTeammate.name}'s Synchronized Critical Strike dealt ${result.damage} damage!`,
-          type: "crit",
-        },
-      ]);
-
-      if (result.typeEffectiveness === "super") {
-        setBattleLogs((prev) => [
-          ...prev,
-          { id: `eff_${Date.now()}`, text: "🎯 It's super effective!", type: "effective" },
-        ]);
-      }
-    }
-
-    if (result.logs && result.logs.some((l: string) => l.includes("Resonator Grit"))) {
-      soundEngine.playResonatorGrit();
-    }
-
-    await new Promise((r) => setTimeout(r, 600));
-    setOpponentAnim("idle");
-    setFloatingText(null);
-
-    // Check if opponent fainted
-    if (result.defenderFainted) {
-      setOpponentAnim("faint");
-      setBattleLogs((prev) => [
-        ...prev,
-        { id: `faint_${Date.now()}`, text: `${oActive.name} fainted!`, type: "faint" },
-      ]);
-
-      await new Promise((r) => setTimeout(r, 700));
-
-      const nextOppIdx = chooseAiFaintReplacement(opponentTrainer, pActive);
-      if (nextOppIdx === -1 || opponentTrainer.team.every((r) => r.isFainted)) {
-        if (isRealtimeMatch) {
-          realtimeManagerRef.current?.sendAction({
-            type: "battle_end",
-            winnerId: playerTrainer.id,
-            senderId: playerTrainer.id,
-          });
-        }
-        handleBattleEnd("player");
-        return;
-      }
-
-      if (!isRealtimeMatch) {
-        opponentTrainer.activeIdx = nextOppIdx;
-        setOpponentTrainer({ ...opponentTrainer });
-        opponentTrainerRef.current = { ...opponentTrainer };
-        setOpponentAnim("idle");
-        setBattleLogs((prev) => [
-          ...prev,
-          {
-            id: `switch_o_${Date.now()}`,
-            text: `${opponentTrainer.username} sent out ${opponentTrainer.team[nextOppIdx].name}!`,
-            type: "switch",
-          },
-        ]);
-        setIsBusy(false);
-        if (result.triggeredOneMore) {
-          setOneMoreBanner("player");
-          setIsOneMoreActive(true);
-          setIsPlayerTurn(true);
-        } else {
-          setIsOneMoreActive(false);
-          setIsPlayerTurn(false);
-          triggerAiTurn();
-        }
-      } else {
-        if (result.triggeredOneMore) {
-          setOneMoreBanner("player");
-          setIsOneMoreActive(true);
-          setIsPlayerTurn(true);
-          setIsBusy(false);
-        } else {
-          setIsOneMoreActive(false);
-          setIsPlayerTurn(false);
-          setIsBusy(false);
-        }
-      }
-      return;
-    }
-
-    // 1 MORE!
-    if (result.triggeredOneMore) {
-      setOneMoreBanner("player");
-      setIsOneMoreActive(true);
-      setBattleLogs((prev) => [
-        ...prev,
-        { id: `onemore_${Date.now()}`, text: `1 MORE! Extra action earned!`, type: "one_more" },
-      ]);
-      await new Promise((r) => setTimeout(r, 1000));
-      setOneMoreBanner(null);
-      setIsBusy(false);
-      setIsPlayerTurn(true);
-      return;
-    }
-
-    // Pass turn to Opponent
-    setIsOneMoreActive(false);
-    setIsPlayerTurn(false);
-    setIsBusy(false);
-    if (!isRealtimeMatch) {
-      triggerAiTurn();
-    }
-  };
 
   // Helper to ensure downed opponent frontline slots are immediately filled by living bench reserves
   const autoDeployOpponentReserves = (
@@ -2868,16 +2498,6 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
     if (move.category === "liberation" && pActive.energy < 100) return;
     const moveCd = pActive.moveCooldowns?.[move.id] || 0;
     if (moveCd > 0) return;
-
-    // Check for Team Sync (e.g. Shorekeeper, Yinlin, Zhezhi, Changli, Jiyan, Xiangli Yao, Camellya, Carlotta)
-    if (move.teamSync) {
-      const aliveBench = playerTrainer.team.filter((r, idx) => idx !== playerTrainer.activeIdx && !r.isFainted);
-      if (aliveBench.length > 0) {
-        setPendingTeamSyncMove(move);
-        setIsTeamSyncPickerOpen(true);
-        return;
-      }
-    }
 
     setIsBusy(true);
     setBattleTurnCount((prev) => prev + 1);
@@ -5566,9 +5186,6 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                           className="w-7 h-7 object-contain"
                           style={{ imageRendering: "pixelated" }}
                         />
-                        <span className="text-[8px] font-mono font-bold truncate max-w-[50px] mt-0.5 text-center leading-none text-white">
-                          {unit.name.split(" ")[0]}
-                        </span>
                         <span
                           className={`text-[7px] font-mono font-bold px-1 rounded mt-0.5 ${
                             isTop
@@ -5614,7 +5231,6 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                         }`}
                       >
                         <img src={unit.spriteUrl} alt={unit.name} className="w-4 h-4 object-contain" />
-                        <span className="truncate max-w-[40px] text-white">{unit.name.split(" ")[0]}</span>
                         <span className={`font-bold ${isTop ? (entry.isPlayer ? "text-yellow-300 font-black" : "text-rose-400 font-black") : "text-gray-300"}`}>
                           {isTop ? "ACT" : entry.actionValue}
                         </span>
@@ -5835,7 +5451,7 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                                     ? { duration: activeAttack.phase === "approach" ? 0.19 : activeAttack.phase === "strike" ? 0.24 : 0.18, ease: "easeInOut" }
                                     : { repeat: isFainted ? 0 : Infinity, duration: 2.2, ease: "easeInOut" }
                                 }
-                                className="relative w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 flex items-center justify-center"
+                                className="relative w-[clamp(4.25rem,14vw,6.5rem)] h-[clamp(4.25rem,14vw,6.5rem)] sm:w-20 sm:h-20 md:w-24 md:h-24 flex items-center justify-center"
                               >
                                 <img
                                   src={oppRes.spriteUrl}
@@ -6038,7 +5654,7 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                                     ? { duration: activeAttack.phase === "approach" ? 0.19 : activeAttack.phase === "strike" ? 0.24 : 0.18, ease: "easeInOut" }
                                     : { repeat: isFainted ? 0 : Infinity, duration: 2.2, ease: "easeInOut" }
                                 }
-                                className="relative w-16 h-16 sm:w-24 sm:h-24 md:w-28 md:h-28 flex items-center justify-center"
+                                className="relative w-[clamp(4.75rem,16vw,7.5rem)] h-[clamp(4.75rem,16vw,7.5rem)] sm:w-24 sm:h-24 md:w-28 md:h-28 flex items-center justify-center"
                               >
                                 <img
                                   src={pRes.spriteUrl}
@@ -6465,6 +6081,61 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                               )}
                             </div>
                           </button>
+
+                          {/* Skill Hover Preview Tooltip */}
+                          <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 w-64 max-w-[85vw] p-2.5 rounded-xl bg-[#080d19]/95 border border-yellow-400/40 backdrop-blur-md shadow-[0_10px_30px_rgba(0,0,0,0.9)] opacity-0 pointer-events-none group-hover/move:opacity-100 transition-opacity duration-150 z-50 flex flex-col space-y-1.5 select-none">
+                            {/* Header: Move Name, Category, Element, Scope */}
+                            <div className="flex items-center justify-between border-b border-white/10 pb-1">
+                              <div className="flex items-center space-x-1.5">
+                                <span className="text-xs font-black text-white">{move.name}</span>
+                                <span className="text-[8px] font-mono uppercase px-1 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-400/30">
+                                  {move.category}
+                                </span>
+                              </div>
+                              <div className="flex items-center space-x-1">
+                                <span className="text-[8px] font-mono uppercase px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                  {scopeBadge}
+                                </span>
+                                <span
+                                  className={`text-[8px] font-mono uppercase px-1 py-0.2 rounded border ${
+                                    ELEMENT_COLORS[move.element]?.bg || ""
+                                  } ${ELEMENT_COLORS[move.element]?.text || ""} ${
+                                    ELEMENT_COLORS[move.element]?.border || ""
+                                  }`}
+                                >
+                                  {move.element}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Stats Strip: PWR, ACC, CD, Energy */}
+                            <div className="grid grid-cols-3 gap-1 text-[9px] font-mono text-gray-300 bg-black/40 p-1.5 rounded-lg border border-white/5">
+                              <div>
+                                <span className="text-gray-400 block text-[8px]">POWER</span>
+                                <span className="font-bold text-white">
+                                  {move.barrierPercent ? `Shield ${move.barrierPercent}%` : move.healPercent ? `Heal ${move.healPercent}%` : move.power || "--"}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400 block text-[8px]">ACCURACY</span>
+                                <span className="font-bold text-white">{move.accuracy ? `${move.accuracy}%` : "100%"}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400 block text-[8px]">ENERGY</span>
+                                <span className={isLiberation ? "font-bold text-yellow-300" : "font-bold text-cyan-300"}>
+                                  {isLiberation ? "100 Cost" : `+${move.energyGain || 20}`}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Description Text */}
+                            <p className="text-[10px] font-sans text-gray-200 leading-snug">
+                              {move.description || (isLiberation ? "Massive ultimate strike." : "Standard attack.")}
+                            </p>
+
+                            {/* Pointer triangle */}
+                            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-yellow-400/40" />
+                          </div>
                         </div>
                       );
                     })}
@@ -8331,108 +8002,6 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
           )}
         </AnimatePresence>
 
-        {/* Shorekeeper Team Sync: Assist Picker Modal */}
-        <AnimatePresence>
-          {isTeamSyncPickerOpen && playerTrainer && (
-            <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                className="w-full max-w-xl bg-[#0b101c] border border-cyan-500/50 rounded-2xl p-5 sm:p-6 shadow-[0_0_60px_rgba(6,182,212,0.35)] space-y-4"
-              >
-                <div className="flex items-center space-x-3 border-b border-white/10 pb-4">
-                  <div className="p-3 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                    <Sparkles className="w-6 h-6 animate-spin" style={{ animationDuration: "6s" }} />
-                  </div>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-bold text-white font-display uppercase tracking-wider flex items-center space-x-2">
-                      <span>{pendingTeamSyncMove?.teamSync?.title || "Team Sync Assist"}</span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-400/20 text-cyan-300 border border-cyan-400/40">
-                        100% CRIT
-                      </span>
-                    </h3>
-                    <p className="text-xs font-mono text-gray-400">
-                      {pendingTeamSyncMove?.teamSync?.description || "Select a bench teammate to execute a Synchronized Critical Strike (80% ACC, 135 PWR)!"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[50vh] overflow-y-auto pr-1">
-                  {playerTrainer.team
-                    .map((res, idx) => ({ res, idx }))
-                    .filter(({ res, idx }) => idx !== playerTrainer.activeIdx && !res.isFainted)
-                    .map(({ res }) => {
-                      const elemColor = ELEMENT_COLORS[res.element] || {
-                        bg: "bg-purple-500/20",
-                        text: "text-purple-300",
-                        border: "border-purple-500/40",
-                        glow: "shadow-purple-500/20",
-                      };
-                      const hpPercent = Math.max(0, Math.min(100, Math.round((res.hp / res.maxHp) * 100)));
-
-                      return (
-                        <button
-                          key={res.id}
-                          onClick={() => handleExecuteTeamSync(res.id)}
-                          className="group relative p-3 rounded-xl border bg-white/[0.04] hover:bg-cyan-950/30 border-white/15 hover:border-cyan-400/60 shadow-md hover:shadow-[0_0_20px_rgba(34,211,238,0.25)] text-left flex items-center space-x-3 transition-all cursor-pointer active:scale-[0.98]"
-                        >
-                          <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-black/60 border border-white/10 shrink-0">
-                            <img
-                              src={res.portraitUrl || `/assets/characters/${res.id}_portrait.png`}
-                              alt={res.name}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = "/assets/characters/rover_portrait.png";
-                              }}
-                            />
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center space-x-1.5 mb-1">
-                              <span
-                                className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border uppercase ${elemColor.bg} ${elemColor.text} ${elemColor.border}`}
-                              >
-                                {res.element}
-                              </span>
-                              <span className="text-xs font-bold text-white truncate font-display">{res.name}</span>
-                            </div>
-
-                            <div className="flex items-center justify-between text-[10px] font-mono text-gray-400">
-                              <span>ATK: {res.atk}</span>
-                              <span className="text-cyan-300 font-semibold">{hpPercent}% HP</span>
-                            </div>
-                          </div>
-
-                          <div className="shrink-0 text-xs font-mono font-bold text-cyan-400 group-hover:scale-110 transition-transform">
-                            SYNC ⚡
-                          </div>
-                        </button>
-                      );
-                    })}
-                </div>
-
-                <div className="flex justify-end pt-2 border-t border-white/10">
-                  <button
-                    onClick={() => {
-                      setIsTeamSyncPickerOpen(false);
-                      if (pendingTeamSyncMove) {
-                        const m = pendingTeamSyncMove;
-                        setPendingTeamSyncMove(null);
-                        // Fallback to regular solo move
-                        const soloMove = { ...m, teamSync: undefined };
-                        handlePlayerMove(soloMove);
-                      }
-                    }}
-                    className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white font-mono text-xs uppercase tracking-wider transition-all cursor-pointer"
-                  >
-                    Cancel (Solo Liberation)
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
       </div>
     </div>
   );

@@ -56,9 +56,6 @@ export const ResonatorInfoModal: React.FC<ResonatorInfoModalProps> = ({
 
   const portraitFile = useMemo(() => getPortraitFileName(charId), [charId]);
   const canonicalQuote = useMemo(() => getResonatorQuote(charId, resonator?.quote), [charId, resonator?.quote]);
-  const teamSync = useMemo(() => {
-    return battleRes?.moves.find((m) => m.teamSync)?.teamSync || null;
-  }, [battleRes]);
 
   if (!isOpen || !resonator) return null;
 
@@ -215,29 +212,6 @@ export const ResonatorInfoModal: React.FC<ResonatorInfoModalProps> = ({
                 })}
               </div>
             </div>
-
-            {/* Team Sync Section */}
-            {teamSync && (
-              <div className="space-y-2.5">
-                <h4 className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-wider flex items-center space-x-1.5">
-                  <Zap className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Team Sync (Synchronized Coordinated Assist)</span>
-                </h4>
-                <div className="p-3.5 rounded-xl bg-gradient-to-r from-cyan-950/30 to-[#0e1726] border border-cyan-500/30 flex flex-col space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-white font-mono">
-                      {teamSync.title}
-                    </span>
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-cyan-400/20 text-cyan-300 border border-cyan-400/40">
-                      100% CRIT ASSIST
-                    </span>
-                  </div>
-                  <p className="text-xs text-cyan-100/90 leading-relaxed font-sans">
-                    {teamSync.description}
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Footer Bar */}

@@ -1039,7 +1039,7 @@ export function execute3v3Action(
   // Zhezhi Battery Synergy:
   let batteryTeammateIndex: number | undefined;
   let batteryAmount: number | undefined;
-  if (attacker.id === "zhezhi" || move.teamSync?.type === "zhezhi_battery") {
+  if (attacker.id === "zhezhi") {
     let lowestEnergy = 101;
     let lowestIdx: number | undefined;
     actingActiveIndices.forEach((tIdx) => {

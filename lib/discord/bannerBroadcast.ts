@@ -55,7 +55,7 @@ export async function dispatchBannerBroadcast(options?: {
   let webhooks: any[] = [];
   const { data: hooksWithCycle, error: dbError } = await supabase
     .from("discord_webhooks")
-    .select("id, url, name, is_active, last_broadcast_cycle")
+    .select("id, url, name, is_active, last_broadcast_cycle, last_broadcast_at")
     .eq("is_active", true);
 
   if (dbError) {
@@ -64,7 +64,7 @@ export async function dispatchBannerBroadcast(options?: {
       hasCycleCol = false;
       const { data: fallbackHooks, error: fallbackErr } = await supabase
         .from("discord_webhooks")
-        .select("id, url, name, is_active")
+        .select("id, url, name, is_active, last_broadcast_at")
         .eq("is_active", true);
       if (fallbackErr) {
         throw new Error(`Database error: ${fallbackErr.message}`);
@@ -89,24 +89,46 @@ export async function dispatchBannerBroadcast(options?: {
     };
   }
 
-  // Filter webhooks that haven't been notified for this cycle
-  const hooksToNotify = force
-    ? webhooks
-    : webhooks.filter((h) => !hasCycleCol || (h.last_broadcast_cycle ?? -1) !== currentCycle);
+  // Check persistent DB state across all serverless instances
+  if (!force) {
+    const alreadyBroadcasted = webhooks.some((h) => {
+      const matchCycle = hasCycleCol && (h.last_broadcast_cycle ?? -1) === currentCycle;
+      const recentSend = h.last_broadcast_at && (nowMs - new Date(h.last_broadcast_at).getTime() < 20 * 60 * 1000);
+      return matchCycle || recentSend;
+    });
 
-  if (hooksToNotify.length === 0) {
-    globalBroadcast.__lastBroadcastCycle = currentCycle;
-    globalBroadcast.__lastBroadcastTimestamp = nowMs;
-    return {
-      success: true,
-      message: `All ${webhooks.length} webhooks already notified for cycle ${currentCycle}.`,
-      dispatched: 0,
-      failed: 0,
-      total: webhooks.length,
-      skipped: true,
-      currentCycle,
-    };
+    if (alreadyBroadcasted) {
+      globalBroadcast.__lastBroadcastCycle = currentCycle;
+      globalBroadcast.__lastBroadcastTimestamp = nowMs;
+      return {
+        success: true,
+        message: `Cycle ${currentCycle} was already broadcasted. Skipping duplicate send.`,
+        dispatched: 0,
+        failed: 0,
+        total: webhooks.length,
+        skipped: true,
+        currentCycle,
+      };
+    }
   }
+
+  // Pre-lock in DB to prevent concurrent lambda race conditions
+  try {
+    const updatePayload: Record<string, any> = {
+      last_broadcast_at: new Date(nowMs).toISOString(),
+    };
+    if (hasCycleCol) {
+      updatePayload.last_broadcast_cycle = currentCycle;
+    }
+    await supabase
+      .from("discord_webhooks")
+      .update(updatePayload)
+      .in("id", webhooks.map((h: any) => h.id));
+  } catch (err) {
+    console.warn("Failed to pre-lock broadcast cycle in DB:", err);
+  }
+
+  const hooksToNotify = webhooks;
 
   // Dispatch notifications concurrently
   const dispatchPromises = hooksToNotify.map(async (hook) => {

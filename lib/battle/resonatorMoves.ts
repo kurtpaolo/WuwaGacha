@@ -790,13 +790,8 @@ export const RESONATOR_LIBERATION_CUSTOMS: Record<string, Partial<BattleMove>> =
     teamHealPercent: 20,
     teamBarrierPercent: 15,
     cleanseDebuffs: true,
-    teamSync: {
-      type: "shorekeeper_crit_strike",
-      title: "Outer Stellarealm Stage 3",
-      description: "Cleanses party debuffs, restores 20% team HP, 15% team Barrier, and triggers a Synchronized 100% Critical Strike (80% ACC, 135 PWR) with a chosen teammate.",
-    },
     description:
-      "Outer Stellarealm Stage 3: Cleanses party debuffs, restores 20% team HP, and triggers a Synchronized 100% Crit Teammate Assist!",
+      "Outer Stellarealm: Cleanses party debuffs, restores 20% team HP, and grants 15% team Barrier.",
     animationType: "burst",
   },
   jinhsi: {
@@ -813,12 +808,7 @@ export const RESONATOR_LIBERATION_CUSTOMS: Record<string, Partial<BattleMove>> =
     targetScope: "single",
     debuff: { stat: "def", multiplier: 0.7, duration: 3 },
     statusEffect: { type: "burn", chance: 0.8, duration: 3 },
-    teamSync: {
-      type: "changli_burn",
-      title: "Blazing Feather: Skill Deepen",
-      description: "Chosen teammate delivers a flame-infused assist strike (135 PWR, 95% ACC), inflicting 100% Burn (-20% DEF) and gaining +30% Skill DMG Deepen.",
-    },
-    description: "Radiance of Feathers: crimson phoenix explosion dealing 200 Fusion DMG; shreds enemy DEF by 30% for 3 turns! Triggers Blazing Feather Team Sync.",
+    description: "Radiance of Feathers: crimson phoenix explosion dealing 200 Fusion DMG; shreds enemy DEF by 30% for 3 turns.",
     animationType: "burst",
   },
   yinlin: {
@@ -827,72 +817,42 @@ export const RESONATOR_LIBERATION_CUSTOMS: Record<string, Partial<BattleMove>> =
     bonusDmgCondition: "target_status",
     bonusDmgMultiplier: 1.4,
     critBonus: 0.4,
-    teamSync: {
-      type: "yinlin_zap",
-      title: "Zapstring: Coordinated Execution",
-      description: "Zapstring and a chosen teammate perform a synchronized Electro strike (135 PWR, 95% ACC) with a 100% chance to inflict [Shock].",
-    },
-    description: "Thundering Wrath: deals 195 Electro DMG to all enemies (+40% bonus DMG and +40% Crit Rate if target is Shocked)! Triggers Zapstring Team Sync.",
+    description: "Thundering Wrath: deals 195 Electro DMG to all enemies (+40% bonus DMG and +40% Crit Rate if target is Shocked)!",
     animationType: "burst",
   },
   jiyan: {
     power: 215,
     targetScope: "aoe",
     selfBuff: { type: "buff_next_attack", duration: 2 },
-    teamSync: {
-      type: "jiyan_knockdown",
-      title: "Qingloong Wind Formation",
-      description: "A chosen teammate attacks empowered by Qingloong vortex (135 PWR, 95% ACC) with an 80% Knockdown chance against the enemy.",
-    },
-    description: "Emerald Storm: Finale: Qingloong cyclone sweeps all enemies with devastating Aero DMG and 80% Knockdown chance! Triggers Qingloong Team Sync.",
+    description: "Emerald Storm: Finale: Qingloong cyclone sweeps all enemies with devastating Aero DMG and 80% Knockdown chance.",
     animationType: "burst",
   },
   camellya: {
     power: 210,
     targetScope: "blast",
     lifestealPercent: 50,
-    teamSync: {
-      type: "camellya_lifesteal",
-      title: "Crimson Vine Entanglement",
-      description: "Blood blossom vortex: chosen teammate strikes (135 PWR, 95% ACC) with 40% Lifesteal and 70% Erosion chance.",
-    },
-    description: "Vow of Red Tears: blood blossom vortex dealing 210 Havoc DMG to target & adjacent foes with 50% lifesteal! Triggers Crimson Vine Team Sync.",
+    description: "Vow of Red Tears: blood blossom vortex dealing 210 Havoc DMG to target & adjacent foes with 50% lifesteal.",
     animationType: "burst",
   },
   carlotta: {
     power: 190,
     targetScope: "aoe",
     statusEffect: { type: "freeze", chance: 1.0, duration: 1 },
-    teamSync: {
-      type: "carlotta_freeze",
-      title: "Glacial Waltz: Deep Zero Assist",
-      description: "Winter rose blizzard: chosen teammate delivers a frosty assist strike (130 PWR, 95% ACC) with a guaranteed 100% Freeze chance for 1 turn.",
-    },
-    description: "Gilded Winter Rose: deep zero blizzard dealing 190 Glacio DMG to all enemies with 100% Freeze chance for 1 turn! Triggers Glacial Waltz Team Sync.",
+    description: "Gilded Winter Rose: deep zero blizzard dealing 190 Glacio DMG to all enemies with 100% Freeze chance for 1 turn.",
     animationType: "burst",
   },
   xiangli_yao: {
     power: 210,
     targetScope: "single",
     statusEffect: { type: "stun", chance: 0.5, duration: 1 },
-    teamSync: {
-      type: "xiangli_stun",
-      title: "Deductive Matrix Synchronization",
-      description: "Calculates an optimal strike angle: chosen teammate delivers a high-impact assist (135 PWR, 95% ACC) that pierces 35% DEF with 50% Stun chance.",
-    },
-    description: "Cogito Ergo Sum: matrix calculation beam dealing 210 Electro concentrated DMG with 50% Stun chance! Triggers Deductive Matrix Team Sync.",
+    description: "Cogito Ergo Sum: matrix calculation beam dealing 210 concentrated Electro DMG with 50% Stun chance.",
     animationType: "burst",
   },
   zhezhi: {
     power: 180,
     targetScope: "aoe",
     statusEffect: { type: "freeze", chance: 0.5, duration: 1 },
-    teamSync: {
-      type: "zhezhi_battery",
-      title: "Living Ink Spirits: Battery Assist",
-      description: "Flanked by ink spirits, a chosen teammate delivers a Glacio assist strike (130 PWR, 95% ACC) and receives +35 instant Resonance Energy.",
-    },
-    description: "Living Masterpiece: deals 180 Glacio DMG with 50% Freeze chance and grants party +20 Energy! Triggers Ink Spirit Team Sync.",
+    description: "Living Masterpiece: deals 180 Glacio DMG with 50% Freeze chance and grants party +20 Energy.",
     animationType: "burst",
   },
 };
@@ -1102,10 +1062,6 @@ export function createBattleResonator(
       customLib.targetScope ??
       (archetype === "support"
         ? "ally_team"
-        : customLib.teamSync?.type === "jiyan_knockdown" ||
-          customLib.teamSync?.type === "carlotta_freeze" ||
-          customLib.teamSync?.type === "yinlin_zap"
-        ? "aoe"
         : archetype === "dps"
         ? "blast"
         : "single"),
@@ -1126,7 +1082,6 @@ export function createBattleResonator(
     selfBuff: customLib.selfBuff,
     debuff: customLib.debuff,
     lifestealPercent: customLib.lifestealPercent,
-    teamSync: customLib.teamSync,
     description:
       customLib.description ||
       (archetype === "support"

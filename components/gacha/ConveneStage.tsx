@@ -416,18 +416,21 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
         setToastMessage("Featured Resonators have rotated!");
         setTimeout(() => setToastMessage(null), 6000);
 
-        // Auto-broadcast new half-hourly banner rotation to Discord webhooks
-        const cycleKey = `wuwa_broadcast_cycle_${currentHour}`;
-        if (typeof window !== "undefined" && !sessionStorage.getItem(cycleKey)) {
-          sessionStorage.setItem(cycleKey, "true");
-          fetch("/api/banner/broadcast", { method: "POST" })
-            .then((r) => r.json())
-            .then((data) => {
-              if (data.dispatched > 0) {
-                console.log(`[Auto-Broadcast] Sent rotation update to ${data.dispatched} webhook(s).`);
-              }
-            })
-            .catch(() => {});
+        // Auto-broadcast new half-hourly banner rotation to Discord webhooks (shared across tabs via localStorage)
+        const cycleKey = "wuwa_last_broadcast_cycle";
+        if (typeof window !== "undefined") {
+          const lastSentCycle = localStorage.getItem(cycleKey);
+          if (lastSentCycle !== String(currentHour)) {
+            localStorage.setItem(cycleKey, String(currentHour));
+            fetch("/api/banner/broadcast", { method: "POST" })
+              .then((r) => r.json())
+              .then((data) => {
+                if (data.dispatched > 0) {
+                  console.log(`[Auto-Broadcast] Sent rotation update to ${data.dispatched} webhook(s).`);
+                }
+              })
+              .catch(() => {});
+          }
         }
       }
 
@@ -444,24 +447,6 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
 
     return () => clearInterval(interval);
   }, [selectedCharId, isSandboxGuest, currentUser?.id, userProfile?.is_vip, userProfile?.max_login_streak]);
-
-  // Auto-sync current banner rotation to Discord webhooks on initial load if not yet notified
-  useEffect(() => {
-    if (isSandboxGuest) return;
-    const currentHour = getCurrentGmt8HourIndex();
-    const cycleKey = `wuwa_broadcast_cycle_${currentHour}`;
-    if (typeof window !== "undefined" && !sessionStorage.getItem(cycleKey)) {
-      sessionStorage.setItem(cycleKey, "true");
-      fetch("/api/banner/broadcast", { method: "POST" })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.dispatched > 0) {
-            console.log(`[Auto-Broadcast] Dispatched banner rotation to ${data.dispatched} webhook(s).`);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [isSandboxGuest]);
 
   // Re-sync Tacet status immediately when user or sandbox status changes
   useEffect(() => {
