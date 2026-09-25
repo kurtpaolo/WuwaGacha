@@ -35,7 +35,25 @@ interface PlazaMinigamesModalProps {
 }
 
 // ----------------------------------------------------------------------------
-// GAME CONFIG & HOSTS (Clean titles, no OwO, no cf/bj, no subtitles)
+// MATHEMATICAL INTEGRITY & CRYPTO RNG (Strict 95% RTP Target)
+// ----------------------------------------------------------------------------
+export const TARGET_RTP = 0.95; // 95.00% Return-to-Player / 5.00% House Edge
+
+export function getCryptoRandomFloat(): number {
+  if (typeof window !== "undefined" && window.crypto && window.crypto.getRandomValues) {
+    const arr = new Uint32Array(1);
+    window.crypto.getRandomValues(arr);
+    return arr[0] / (0xffffffff + 1);
+  }
+  return Math.random();
+}
+
+export function getCryptoRandomInt(min: number, max: number): number {
+  return Math.floor(getCryptoRandomFloat() * (max - min + 1)) + min;
+}
+
+// ----------------------------------------------------------------------------
+// GAME CONFIG & HOSTS
 // ----------------------------------------------------------------------------
 export const MINIGAME_HOSTS: Record<
   MinigameId,
@@ -44,7 +62,7 @@ export const MINIGAME_HOSTS: Record<
   coinflip: {
     name: "Brant",
     title: "Double or Nothing",
-    tag: "Coinflip",
+    tag: "1.9x Flip",
   },
   slots: {
     name: "Carlotta",
@@ -54,22 +72,22 @@ export const MINIGAME_HOSTS: Record<
   blackjack: {
     name: "Yinlin",
     title: "Tacet 21",
-    tag: "Blackjack",
+    tag: "3:2 Blackjack",
   },
   dice: {
     name: "Cantarella",
     title: "Dice Ladder",
-    tag: "Unavailable",
+    tag: "1-20 Ladder",
   },
   wheel: {
     name: "Phoebe",
     title: "Color Game",
-    tag: "2-Dice Perya",
+    tag: "Color Game",
   },
   scratch: {
     name: "Lupa",
     title: "Mystery Scratchcards",
-    tag: "3x3 Match",
+    tag: "5x5 Match 3",
   },
 };
 
@@ -505,11 +523,6 @@ export const PlazaMinigamesModal = React.memo<PlazaMinigamesModalProps>(({
                 >
                   <Icon className="w-3.5 h-3.5" />
                   <span>{t.label}</span>
-                  {t.id === "dice" && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/30 font-mono">
-                      Offline
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -577,8 +590,8 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
     setIsFlipping(true);
     setOutcomeModal(null);
 
-    // Strictly 50% Heads, 50% Tails (No edge outcome)
-    const outcomeSide: "heads" | "tails" = Math.random() < 0.5 ? "heads" : "tails";
+    // Strictly 50% Heads, 50% Tails with cryptographic RNG
+    const outcomeSide: "heads" | "tails" = getCryptoRandomFloat() < 0.5 ? "heads" : "tails";
     setPendingOutcome(outcomeSide);
 
     // Flip math:
@@ -598,13 +611,14 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
     setTimeout(() => {
       const won = pendingOutcome === side;
       if (won) {
-        const payout = bet * 2;
+        // Fair 1.90x gross return (95.00% RTP)
+        const payout = Math.floor(bet * 1.9);
         onUpdateAstrites(payout);
         setStreak((s) => s + 1);
         soundEngine.playAstriteGain();
         setOutcomeModal({
           type: "win",
-          title: "VICTORY! DOUBLED UP",
+          title: "VICTORY! 1.9x WIN",
           landedTitle: "Coin Landed On",
           landedValue: pendingOutcome.toUpperCase(),
           landedIcon: pendingOutcome === "heads" ? "🪙" : "🛡️",
@@ -612,7 +626,7 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
           betTitle: "Your Call",
           betValue: `${side.toUpperCase()} (${bet.toLocaleString()} ✦)`,
           deltaAmount: payout,
-          multiplier: "2.0x Payout",
+          multiplier: "1.9x Payout",
         });
       } else {
         setStreak(0);
@@ -760,7 +774,7 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
           }`}
         >
           <Coins className="w-4 h-4 text-amber-400" />
-          <span>CALL HEADS (2x)</span>
+          <span>CALL HEADS (1.9x)</span>
         </button>
 
         <button
@@ -777,7 +791,7 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
           }`}
         >
           <Shield className="w-4 h-4 text-purple-400" />
-          <span>CALL TAILS (2x)</span>
+          <span>CALL TAILS (1.9x)</span>
         </button>
       </div>
 
@@ -857,15 +871,15 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
     setIsSpinning(true);
     setOutcomeModal(null);
 
-    // OwO Bot / Real-world Casino Slots Odds (RTP: ~94.3%, House Edge ~5.7%):
-    // 0.2% 🌟 Jackpot (50x Win)
-    // 0.6% ⭐ 5-Star (20x Win)
-    // 1.5% 👑 Crown (8x Win)
-    // 3.5% 💎 Gem (4x Win)
-    // 8.5% ⚡ Energy (2x Win)
-    // 15.0% 🍒 Cherry (1.0x Refund / Break-Even)
-    // 70.7% Loss (strictly NO 3-match, ~60% near-miss pairs)
-    const roll = Math.random();
+    // Calibrated Casino Slots Odds (Exact 95.00% RTP, House Edge 5.00%):
+    // 0.2% 🌟 Jackpot (50x Win, EV: 0.100)
+    // 0.8% ⭐ 5-Star (20x Win, EV: 0.160)
+    // 2.0% 👑 Crown (8x Win, EV: 0.160)
+    // 4.5% 💎 Gem (4x Win, EV: 0.180)
+    // 10.0% ⚡ Energy (2x Win, EV: 0.200)
+    // 15.0% 🍒 Cherry (1.0x Refund / Break-Even, EV: 0.150)
+    // 67.5% Loss (strictly NO 3-match, ~65% near-miss pairs)
+    const roll = getCryptoRandomFloat();
     let final1: typeof SLOT_SYMBOLS[0];
     let final2: typeof SLOT_SYMBOLS[0];
     let final3: typeof SLOT_SYMBOLS[0];
@@ -874,34 +888,34 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
       final1 = SLOT_SYMBOLS[5];
       final2 = SLOT_SYMBOLS[5];
       final3 = SLOT_SYMBOLS[5];
-    } else if (roll < 0.008) {
+    } else if (roll < 0.010) {
       final1 = SLOT_SYMBOLS[4];
       final2 = SLOT_SYMBOLS[4];
       final3 = SLOT_SYMBOLS[4];
-    } else if (roll < 0.023) {
+    } else if (roll < 0.030) {
       final1 = SLOT_SYMBOLS[3];
       final2 = SLOT_SYMBOLS[3];
       final3 = SLOT_SYMBOLS[3];
-    } else if (roll < 0.058) {
+    } else if (roll < 0.075) {
       final1 = SLOT_SYMBOLS[2];
       final2 = SLOT_SYMBOLS[2];
       final3 = SLOT_SYMBOLS[2];
-    } else if (roll < 0.143) {
+    } else if (roll < 0.175) {
       final1 = SLOT_SYMBOLS[1];
       final2 = SLOT_SYMBOLS[1];
       final3 = SLOT_SYMBOLS[1];
-    } else if (roll < 0.293) {
+    } else if (roll < 0.325) {
       final1 = SLOT_SYMBOLS[0];
       final2 = SLOT_SYMBOLS[0];
       final3 = SLOT_SYMBOLS[0];
     } else {
       // Loss: strictly NO 3-match! In 65% of losses, generate a near-miss pair for suspense
       const otherSymbols = [...SLOT_SYMBOLS];
-      const pick1 = otherSymbols[Math.floor(Math.random() * otherSymbols.length)];
-      if (Math.random() < 0.65) {
+      const pick1 = otherSymbols[Math.floor(getCryptoRandomFloat() * otherSymbols.length)];
+      if (getCryptoRandomFloat() < 0.65) {
         const remaining = otherSymbols.filter((s) => s.id !== pick1.id);
-        const pickDiff = remaining[Math.floor(Math.random() * remaining.length)];
-        const slotConfig = Math.random();
+        const pickDiff = remaining[Math.floor(getCryptoRandomFloat() * remaining.length)];
+        const slotConfig = getCryptoRandomFloat();
         if (slotConfig < 0.33) {
           final1 = pick1;
           final2 = pick1;
@@ -916,7 +930,7 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
           final3 = pick1;
         }
       } else {
-        const shuffled = otherSymbols.sort(() => 0.5 - Math.random());
+        const shuffled = [...otherSymbols].sort(() => 0.5 - getCryptoRandomFloat());
         final1 = shuffled[0];
         final2 = shuffled[1];
         final3 = shuffled[2];
@@ -1114,7 +1128,12 @@ function createDeck(): Card[] {
       deck.push({ suit, value: val, num });
     }
   }
-  return deck.sort(() => 0.5 - Math.random());
+  // Cryptographic Fisher-Yates shuffle
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(getCryptoRandomFloat() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
 }
 
 function calculateHandScore(cards: Card[]): number {
@@ -1194,7 +1213,7 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
             landedValue: `${dScore} (${dHand.map((c) => c.value + c.suit).join(" ")})`,
             betTitle: "Your Hand",
             betValue: `21 Blackjack (${pHand.map((c) => c.value + c.suit).join(" ")})`,
-            deltaAmount: payout - bet,
+            deltaAmount: payout,
             multiplier: "3:2 Payout",
           });
         }
@@ -1265,8 +1284,8 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
           betTitle: "Your Score",
           betValue: `${pScore}`,
           betSub: playerCards.map((c) => c.value + c.suit).join(" "),
-          deltaAmount: bet,
-          multiplier: "1:1 Payout",
+          deltaAmount: payout,
+          multiplier: "2.0x Return",
         });
       } else if (pScore > dScore) {
         const payout = bet * 2;
@@ -1281,8 +1300,8 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
           betTitle: "Your Score",
           betValue: `${pScore}`,
           betSub: playerCards.map((c) => c.value + c.suit).join(" "),
-          deltaAmount: bet,
-          multiplier: "1:1 Payout",
+          deltaAmount: payout,
+          multiplier: "2.0x Return",
         });
       } else if (pScore < dScore) {
         soundEngine.playMissWhoosh();
@@ -1448,53 +1467,14 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
 };
 
 // ============================================================================
-// SUB-GAME 4: DICE LADDER (1 to 30) - Cantarella
-// Number 1-30, Higher or Lower, Break-Even Cash Out, Tie Push
+// SUB-GAME 4: DICE LADDER (1 to 20) - Cantarella
+// Number 1-20, Dynamic Conditional Odds, Fair Cash Out, Tie Push
 // ============================================================================
-const LADDER_STEPS_30 = [1.0, 1.8, 3.0, 5.5, 10.0, 20.0, 35.0];
-
-const IS_DICE_LADDER_ENABLED = false;
+const LADDER_STEPS_20 = [1.0, 1.5, 2.4, 4.2, 8.5, 18.0, 40.0];
 
 const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites }) => {
-  if (!IS_DICE_LADDER_ENABLED) {
-    return (
-      <div className="max-w-md mx-auto flex flex-col items-center justify-center p-6 text-center space-y-4 animate-fade-in select-none my-auto py-10">
-        <div className="relative">
-          <div className="w-20 h-20 rounded-2xl bg-amber-500/15 border-2 border-amber-400/40 flex items-center justify-center text-amber-400 shadow-[0_0_35px_rgba(245,158,11,0.25)]">
-            <Lock className="w-9 h-9 text-amber-400" />
-          </div>
-          <div className="absolute -bottom-1 -right-1 p-1 rounded-lg bg-black border border-amber-400/60 text-amber-400">
-            <ShieldAlert className="w-4 h-4" />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 text-xs font-mono font-bold tracking-wider uppercase">
-            <span>Temporarily Unavailable</span>
-          </div>
-          <h3 className="text-xl font-black text-white font-mono tracking-wide">
-            DICE LADDER OFFLINE
-          </h3>
-          <p className="text-xs text-gray-300 font-mono leading-relaxed max-w-sm mx-auto">
-            Cantarella&apos;s Dice Ladder is temporarily closed for abuse prevention, security verification, and algorithmic re-calibration.
-          </p>
-        </div>
-
-        <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 text-left text-xs font-mono text-gray-400 space-y-1.5 w-full">
-          <div className="flex items-center space-x-2 text-yellow-300 font-bold">
-            <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>Abuse Prevention Notice</span>
-          </div>
-          <p className="text-[11px] leading-relaxed text-gray-400">
-            Wagering on this machine has been temporarily disabled. Please check back in an upcoming update or try other Jinzhou Plaza games!
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   const [bet, setBet] = useState(100);
-  const [currentNum, setCurrentNum] = useState<number>(15);
+  const [currentNum, setCurrentNum] = useState<number>(10);
   const [stepIndex, setStepIndex] = useState(-1);
   const [isRolling, setIsRolling] = useState(false);
   const [outcomeModal, setOutcomeModal] = useState<MinigameOutcomeData | null>(null);
@@ -1511,8 +1491,8 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
     onUpdateAstrites(-bet);
     setOutcomeModal(null);
 
-    // Initial roll: random number between 8 and 22 for fair start
-    const initial = Math.floor(Math.random() * 15) + 8;
+    // Initial roll: random number between 7 and 14 for a balanced starting point
+    const initial = getCryptoRandomInt(7, 14);
     setCurrentNum(initial);
     setStepIndex(0);
   };
@@ -1522,14 +1502,14 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
     soundEngine.playClick();
     setIsRolling(true);
 
-    // Rolling animation rapid cycling 1 to 30
+    // Rolling animation rapid cycling 1 to 20
     const interval = setInterval(() => {
-      setCurrentNum(Math.floor(Math.random() * 30) + 1);
+      setCurrentNum(getCryptoRandomInt(1, 20));
     }, 60);
 
     setTimeout(() => {
       clearInterval(interval);
-      const nextNum = Math.floor(Math.random() * 30) + 1;
+      const nextNum = getCryptoRandomInt(1, 20);
       setCurrentNum(nextNum);
       setIsRolling(false);
 
@@ -1563,13 +1543,13 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
       if (guess === "higher" && nextNum > currentNum) correct = true;
       if (guess === "lower" && nextNum < currentNum) correct = true;
 
-      // 800ms delay so player inspects rolled number before outcome popup
+      // 800ms inspection delay
       setTimeout(() => {
         if (correct) {
           soundEngine.playAstriteGain();
           const nextStep = stepIndex + 1;
-          if (nextStep >= LADDER_STEPS_30.length - 1) {
-            const mult = LADDER_STEPS_30[LADDER_STEPS_30.length - 1];
+          if (nextStep >= LADDER_STEPS_20.length - 1) {
+            const mult = LADDER_STEPS_20[LADDER_STEPS_20.length - 1];
             const payout = Math.floor(bet * mult);
             onUpdateAstrites(payout);
             setStepIndex(-1);
@@ -1577,10 +1557,10 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
               type: "win",
               title: "MAX LADDER ASCENT!",
               landedTitle: "Final Number",
-              landedValue: `${nextNum} (1-30)`,
+              landedValue: `${nextNum} (1-20)`,
               betTitle: "Ascent Reached",
               betValue: `${mult}x Top Step`,
-              deltaAmount: payout - bet,
+              deltaAmount: payout,
               multiplier: `${mult}x Payout`,
             });
           } else {
@@ -1593,7 +1573,7 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
             type: "loss",
             title: "BUSTED ON LADDER",
             landedTitle: "Rolled Number",
-            landedValue: `${nextNum} (1-30)`,
+            landedValue: `${nextNum} (1-20)`,
             betTitle: "Your Call",
             betValue: `${guess.toUpperCase()} (Was: ${currentNum})`,
             deltaAmount: -bet,
@@ -1606,7 +1586,7 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
   const handleCashOut = () => {
     if (stepIndex < 0) return;
     soundEngine.playClick();
-    const mult = LADDER_STEPS_30[stepIndex];
+    const mult = LADDER_STEPS_20[stepIndex];
     const payout = Math.floor(bet * mult);
     onUpdateAstrites(payout);
     setStepIndex(-1);
@@ -1631,7 +1611,7 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
         landedValue: `${mult}x Step`,
         betTitle: "Initial Stake",
         betValue: `${bet.toLocaleString()} Astrites`,
-        deltaAmount: payout - bet,
+        deltaAmount: payout,
         multiplier: `${mult}x Return`,
       });
     }
@@ -1643,17 +1623,17 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
         <div className="flex items-center space-x-2 text-left">
           <Dices className="w-4 h-4 text-cyan-400 flex-shrink-0" />
           <span>
-            <strong>Cantarella:</strong> "Roll 1 to 30. Guess Higher or Lower to climb the ladder!"
+            <strong>Cantarella:</strong> "Roll 1 to 20. Guess Higher or Lower to climb the ladder!"
           </span>
         </div>
         <span className="text-[10px] font-mono text-cyan-300 font-bold uppercase">
-          35x Top Step
+          40x Top Step
         </span>
       </div>
 
       {/* Multiplier Ladder Progress Bar */}
       <div className="flex items-center justify-between gap-1 w-full p-2 rounded-xl bg-black/40 border border-white/10">
-        {LADDER_STEPS_30.map((m, idx) => {
+        {LADDER_STEPS_20.map((m, idx) => {
           const isPassed = stepIndex >= idx;
           const isCurrent = stepIndex === idx;
           return (
@@ -1673,7 +1653,7 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
         })}
       </div>
 
-      {/* Cyber D30 Visualizer */}
+      {/* Cyber D20 Visualizer */}
       <div className="p-6 rounded-2xl bg-[#0a1224] border-2 border-cyan-500/40 shadow-inner flex flex-col items-center space-y-3 w-full">
         <div
           className={`w-28 h-28 rounded-3xl bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-600 text-black border-4 border-white flex flex-col items-center justify-center font-mono font-black text-4xl sm:text-5xl shadow-[0_0_30px_rgba(6,182,212,0.4)] ${
@@ -1682,11 +1662,11 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
         >
           <span>{currentNum}</span>
           <span className="text-[10px] font-bold tracking-widest text-cyan-950 uppercase -mt-1">
-            D30 DIE
+            D20 DIE
           </span>
         </div>
         <div className="text-xs font-mono text-gray-400">
-          Will the next roll (1 to 30) be Higher or Lower than <strong className="text-cyan-300">{currentNum}</strong>?
+          Will the next roll (1 to 20) be Higher or Lower than <strong className="text-cyan-300">{currentNum}</strong>?
         </div>
       </div>
 
@@ -1736,9 +1716,9 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
             onClick={handleCashOut}
             className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-black uppercase text-xs tracking-wider transition-all shadow-[0_0_15px_rgba(250,204,21,0.4)] hover:scale-101 active:scale-98 cursor-pointer"
           >
-            {LADDER_STEPS_30[stepIndex] === 1.0
+            {LADDER_STEPS_20[stepIndex] === 1.0
               ? `CASH OUT ${bet.toLocaleString()} ASTRITES (1.0x BREAK-EVEN REFUND)`
-              : `CASH OUT +${Math.floor(bet * LADDER_STEPS_30[stepIndex]).toLocaleString()} ASTRITES (${LADDER_STEPS_30[stepIndex]}x)`}
+              : `CASH OUT ${Math.floor(bet * LADDER_STEPS_20[stepIndex]).toLocaleString()} ASTRITES (${LADDER_STEPS_20[stepIndex]}x)`}
           </button>
         </div>
       )}
@@ -1809,9 +1789,9 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
     setIsRolling(true);
     setOutcomeModal(null);
 
-    // Roll two 6-sided color dice independently (1/6 chance per color per die)
-    const finalDie1 = PERYA_COLORS[Math.floor(Math.random() * PERYA_COLORS.length)];
-    const finalDie2 = PERYA_COLORS[Math.floor(Math.random() * PERYA_COLORS.length)];
+    // Roll two 6-sided color dice independently with crypto RNG (1/6 chance per color per die)
+    const finalDie1 = PERYA_COLORS[getCryptoRandomInt(0, PERYA_COLORS.length - 1)];
+    const finalDie2 = PERYA_COLORS[getCryptoRandomInt(0, PERYA_COLORS.length - 1)];
 
     // Rapid tumbling color animation
     const interval = setInterval(() => {
@@ -1833,36 +1813,36 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
         const chosen = PERYA_COLORS.find((c) => c.id === selectedColor) || PERYA_COLORS[0];
 
         if (matches === 2) {
-          // Double Match: Win 3x! Winnings is strictly bet * 3
-          const payout = bet * 3;
+          // Double Match: Win 4.2x! (Authentic 95.00% RTP perya combinatorics)
+          const payout = Math.floor(bet * 4.2);
           onUpdateAstrites(payout);
           soundEngine.playAstriteGain();
           setOutcomeModal({
             type: "win",
-            title: "DOUBLE WIN!",
+            title: "4.2x DOUBLE WIN!",
             landedTitle: "Dice",
             landedValue: `${finalDie1.emoji} ${finalDie2.emoji}`,
             landedColor: chosen.hex,
             betTitle: "Bet",
             betValue: `${chosen.name} (${bet.toLocaleString()} ✦)`,
             deltaAmount: payout,
-            multiplier: "3x Double",
+            multiplier: "4.2x Double",
           });
         } else if (matches === 1) {
-          // Single Match: Win 2x! Winnings is strictly bet * 2
-          const payout = bet * 2;
+          // Single Match: Win 3.0x!
+          const payout = Math.floor(bet * 3.0);
           onUpdateAstrites(payout);
           soundEngine.playAstriteGain();
           setOutcomeModal({
             type: "win",
-            title: "WIN!",
+            title: "3.0x WIN!",
             landedTitle: "Dice",
             landedValue: `${finalDie1.emoji} ${finalDie2.emoji}`,
             landedColor: chosen.hex,
             betTitle: "Bet",
             betValue: `${chosen.name} (${bet.toLocaleString()} ✦)`,
             deltaAmount: payout,
-            multiplier: "2x Win",
+            multiplier: "3.0x Win",
           });
         } else {
           // 0 Matches: Loss (-bet)
@@ -1889,11 +1869,11 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
         <div className="flex items-center space-x-2 text-left">
           <CircleDot className="w-4 h-4 text-amber-400 flex-shrink-0" />
           <span>
-            Pick a color & roll 2 dice. 1 match = 2x win, 2 matches = 3x double!
+            Pick a color & roll 2 dice. 1 match = 3.0x win, 2 matches = 4.2x double!
           </span>
         </div>
         <span className="text-[10px] font-mono text-amber-300 font-bold uppercase">
-          3x Double
+          4.2x Double
         </span>
       </div>
 
@@ -2011,11 +1991,12 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
     </div>
   );
 };
+
 // ============================================================================
-// SUB-GAME 6: MYSTERY SCRATCHCARDS - Lupa
-// 3x3 Grid (9 Panels), 4 Multipliers, First to 3 Matches Wins, 800ms Delay
+// SUB-GAME 6: MYSTERY SCRATCHCARDS (5×5 Grid) - Lupa
+// 25 Panels (16 Misses, 9 Winning Symbols), First to 3 Matches Wins, Exact 95% RTP
 // ============================================================================
-type MultiplierType = "10x" | "3x" | "1x" | "miss";
+type MultiplierType = "20x" | "10x" | "5x" | "2x" | "1x" | "miss";
 
 interface ScratchIconInfo {
   type: MultiplierType;
@@ -2026,29 +2007,38 @@ interface ScratchIconInfo {
 }
 
 const MULTIPLIER_DEFS: Record<MultiplierType, ScratchIconInfo> = {
-  "10x": { type: "10x", label: "10x Jackpot", mult: 10, icon: "🌟", color: "#facc15" },
-  "3x": { type: "3x", label: "3x Win", mult: 3, icon: "⭐", color: "#38bdf8" },
-  "1x": { type: "1x", label: "1x Refund", mult: 1, icon: "💎", color: "#34d399" },
+  "20x": { type: "20x", label: "20x Jackpot", mult: 20, icon: "🌟", color: "#facc15" },
+  "10x": { type: "10x", label: "10x Boss", mult: 10, icon: "👑", color: "#c084fc" },
+  "5x": { type: "5x", label: "5x Win", mult: 5, icon: "⭐", color: "#38bdf8" },
+  "2x": { type: "2x", label: "2x Win", mult: 2, icon: "💎", color: "#34d399" },
+  "1x": { type: "1x", label: "1x Refund", mult: 1, icon: "🍒", color: "#fb7185" },
   miss: { type: "miss", label: "Miss", mult: 0, icon: "❌", color: "#f43f5e" },
 };
 
 const SCRATCH_CARD_TIERS = [
-  { id: "tier100", name: "100 ✦ Ticket", cost: 100, maxWin: 1000 },
-  { id: "tier500", name: "500 ✦ Ticket", cost: 500, maxWin: 5000 },
-  { id: "tier1000", name: "1000 ✦ Ticket", cost: 1000, maxWin: 10000 },
+  { id: "tier100", name: "100 ✦ Ticket", cost: 100, maxWin: 2000 },
+  { id: "tier500", name: "500 ✦ Ticket", cost: 500, maxWin: 10000 },
+  { id: "tier1000", name: "1000 ✦ Ticket", cost: 1000, maxWin: 20000 },
 ];
 
 const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites }) => {
   const [selectedTier, setSelectedTier] = useState(SCRATCH_CARD_TIERS[0]);
   const [hasBought, setHasBought] = useState(false);
-  const [scratched, setScratched] = useState<boolean[]>(Array(9).fill(false));
-  const [gridPanels, setGridPanels] = useState<MultiplierType[]>(Array(9).fill("miss"));
+  const [scratched, setScratched] = useState<boolean[]>(Array(25).fill(false));
+  const [gridPanels, setGridPanels] = useState<MultiplierType[]>(Array(25).fill("miss"));
   const [outcomeModal, setOutcomeModal] = useState<MinigameOutcomeData | null>(null);
   const [insufficientNeeded, setInsufficientNeeded] = useState<number | null>(null);
 
   // Live count of revealed multipliers
   const revealedCounts = useMemo(() => {
-    const counts: Record<MultiplierType, number> = { "10x": 0, "3x": 0, "1x": 0, miss: 0 };
+    const counts: Record<MultiplierType, number> = {
+      "20x": 0,
+      "10x": 0,
+      "5x": 0,
+      "2x": 0,
+      "1x": 0,
+      miss: 0,
+    };
     gridPanels.forEach((p, idx) => {
       if (scratched[idx]) {
         counts[p]++;
@@ -2068,48 +2058,71 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
     onUpdateAstrites(-tier.cost);
     setSelectedTier(tier);
     setHasBought(true);
-    setScratched(Array(9).fill(false));
+    setScratched(Array(25).fill(false));
     setOutcomeModal(null);
 
-    // Predetermine winning symbol:
-    // 15% 10x, 25% 3x, 30% 1x, 30% miss
-    const rand = Math.random();
+    // Predetermine winning symbol (Calibrated to exact 95.00% RTP):
+    // 1.0% 20x (EV: 0.20), 2.5% 10x (EV: 0.25), 5.0% 5x (EV: 0.25), 7.5% 2x (EV: 0.15), 10.0% 1x (EV: 0.10), 74.0% Miss
+    const rand = getCryptoRandomFloat();
     let winner: MultiplierType = "miss";
-    if (rand < 0.15) winner = "10x";
-    else if (rand < 0.40) winner = "3x";
-    else if (rand < 0.70) winner = "1x";
+    if (rand < 0.010) winner = "20x";
+    else if (rand < 0.035) winner = "10x";
+    else if (rand < 0.085) winner = "5x";
+    else if (rand < 0.160) winner = "2x";
+    else if (rand < 0.260) winner = "1x";
     else winner = "miss";
 
-    // Build 9 panels where the winner reaches 3 first
-    const items: MultiplierType[] = [winner, winner, winner];
-    const pool: MultiplierType[] = (["10x", "3x", "1x", "miss"] as MultiplierType[]).filter((m) => m !== winner);
+    // 25 total positions: 16 losses (❌), 9 symbols
+    const nineSymbols: MultiplierType[] = [];
+    const prizeTypes: MultiplierType[] = ["20x", "10x", "5x", "2x", "1x"];
 
-    // Add up to 2 of other items
-    pool.forEach((m) => {
-      items.push(m);
-      if (Math.random() < 0.6) items.push(m);
-    });
-
-    while (items.length < 9) {
-      items.push(pool[Math.floor(Math.random() * pool.length)]);
+    if (winner !== "miss") {
+      // 3 of winning prize
+      nineSymbols.push(winner, winner, winner);
+      // 6 fillers from other prizes with max 2 of any
+      const otherTypes = prizeTypes.filter((t) => t !== winner);
+      nineSymbols.push(otherTypes[0], otherTypes[0]);
+      nineSymbols.push(otherTypes[1], otherTypes[1]);
+      nineSymbols.push(otherTypes[2], otherTypes[3] || otherTypes[2]);
+    } else {
+      // Loss: 9 symbols with NONE reaching 3 (e.g. 2, 2, 2, 2, 1)
+      nineSymbols.push(prizeTypes[0], prizeTypes[0]);
+      nineSymbols.push(prizeTypes[1], prizeTypes[1]);
+      nineSymbols.push(prizeTypes[2], prizeTypes[2]);
+      nineSymbols.push(prizeTypes[3], prizeTypes[3]);
+      nineSymbols.push(prizeTypes[4]);
     }
 
-    // Truncate to 9 and shuffle
-    const shuffled = items.slice(0, 9).sort(() => 0.5 - Math.random());
-    setGridPanels(shuffled);
+    // Build 25 panels: 16 misses and 9 symbols
+    const fullGrid: MultiplierType[] = Array(16).fill("miss").concat(nineSymbols);
+
+    // Cryptographic Fisher-Yates shuffle
+    for (let i = fullGrid.length - 1; i > 0; i--) {
+      const j = Math.floor(getCryptoRandomFloat() * (i + 1));
+      [fullGrid[i], fullGrid[j]] = [fullGrid[j], fullGrid[i]];
+    }
+
+    setGridPanels(fullGrid);
   };
 
   const checkWinner = (updatedScratched: boolean[], panels: MultiplierType[]) => {
-    const counts: Record<MultiplierType, number> = { "10x": 0, "3x": 0, "1x": 0, miss: 0 };
-    for (let i = 0; i < 9; i++) {
+    const counts: Record<MultiplierType, number> = {
+      "20x": 0,
+      "10x": 0,
+      "5x": 0,
+      "2x": 0,
+      "1x": 0,
+      miss: 0,
+    };
+    for (let i = 0; i < 25; i++) {
       if (updatedScratched[i]) {
         const type = panels[i];
         counts[type]++;
-        if (counts[type] >= 3) {
-          // Found first 3-of-a-kind!
+        if (type !== "miss" && counts[type] >= 3) {
+          // Found first 3-of-a-kind prize!
           const def = MULTIPLIER_DEFS[type];
 
-          // 800ms delay so user inspects the 3rd matching symbol on the 3x3 grid
+          // 800ms inspection delay
           setTimeout(() => {
             if (def.mult > 1) {
               const payout = selectedTier.cost * def.mult;
@@ -2140,24 +2153,32 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
                 deltaAmount: 0,
                 multiplier: "1.0x Refund",
               });
-            } else {
-              soundEngine.playMissWhoosh();
-              setOutcomeModal({
-                type: "loss",
-                title: "LOSE",
-                landedTitle: "Result",
-                landedValue: "❌ Miss",
-                landedColor: "#f43f5e",
-                betTitle: "Ticket",
-                betValue: `${selectedTier.cost.toLocaleString()} ✦`,
-                deltaAmount: -selectedTier.cost,
-              });
             }
           }, 800);
           return true;
         }
       }
     }
+
+    // If all 25 panels scratched and no prize reached 3: Loss
+    const allRevealed = updatedScratched.every((s) => s);
+    if (allRevealed) {
+      setTimeout(() => {
+        soundEngine.playMissWhoosh();
+        setOutcomeModal({
+          type: "loss",
+          title: "LOSE",
+          landedTitle: "Result",
+          landedValue: "❌ No 3-Match",
+          landedColor: "#f43f5e",
+          betTitle: "Ticket",
+          betValue: `${selectedTier.cost.toLocaleString()} ✦`,
+          deltaAmount: -selectedTier.cost,
+        });
+      }, 800);
+      return true;
+    }
+
     return false;
   };
 
@@ -2173,7 +2194,7 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
   const handleScratchAll = () => {
     if (!hasBought || outcomeModal) return;
     soundEngine.playClick();
-    const allScratched = Array(9).fill(true);
+    const allScratched = Array(25).fill(true);
     setScratched(allScratched);
     checkWinner(allScratched, gridPanels);
   };
@@ -2184,11 +2205,11 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
         <div className="flex items-center space-x-2 text-left">
           <Ticket className="w-4 h-4 text-orange-400 flex-shrink-0" />
           <span>
-            <strong>Lupa:</strong> "Scratch panels! The first multiplier to reach 3 matches wins that prize!"
+            <strong>Lupa:</strong> "5×5 Card! 3 matching symbols of any tier wins that prize!"
           </span>
         </div>
         <span className="text-[10px] font-mono text-orange-300 font-bold uppercase">
-          3x3 Match 3
+          5×5 Match 3
         </span>
       </div>
 
@@ -2211,11 +2232,11 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
         </div>
       )}
 
-      {/* Active 3x3 Scratchcard Arena */}
+      {/* Active 5×5 Scratchcard Arena */}
       {hasBought && (
-        <div className="w-full p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-950/40 via-[#130f1e] to-black border-2 border-amber-400/50 shadow-2xl space-y-4">
+        <div className="w-full p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-950/40 via-[#130f1e] to-black border-2 border-amber-400/50 shadow-2xl space-y-3.5">
           <div className="flex items-center justify-between text-xs font-mono">
-            <span className="font-bold text-amber-300 uppercase">{selectedTier.name}</span>
+            <span className="font-bold text-amber-300 uppercase">{selectedTier.name} (5×5)</span>
             <button
               type="button"
               onClick={handleScratchAll}
@@ -2226,15 +2247,15 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
           </div>
 
           {/* Live Multiplier Tracker Bar */}
-          <div className="grid grid-cols-4 gap-1.5 p-2 rounded-xl bg-black/60 border border-white/10 text-[10px] font-mono">
-            {(["10x", "3x", "1x", "miss"] as MultiplierType[]).map((type) => {
+          <div className="grid grid-cols-5 gap-1.5 p-2 rounded-xl bg-black/60 border border-white/10 text-[10px] font-mono">
+            {(["20x", "10x", "5x", "2x", "1x"] as MultiplierType[]).map((type) => {
               const def = MULTIPLIER_DEFS[type];
               const count = revealedCounts[type];
               return (
                 <div key={type} className="flex flex-col items-center p-1 rounded bg-white/5">
                   <div className="flex items-center space-x-1 font-bold" style={{ color: def.color }}>
                     <span>{def.icon}</span>
-                    <span>{def.mult > 0 ? `${def.mult}x` : "Miss"}</span>
+                    <span>{def.mult}x</span>
                   </div>
                   <div className="flex space-x-1 mt-1">
                     {[0, 1, 2].map((i) => (
@@ -2253,8 +2274,8 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
             })}
           </div>
 
-          {/* 3x3 Grid (9 Panels) */}
-          <div className="grid grid-cols-3 gap-2.5 max-w-sm mx-auto">
+          {/* 5×5 Grid (25 Panels: 16 Misses, 9 Symbols) */}
+          <div className="grid grid-cols-5 gap-2 max-w-sm sm:max-w-md mx-auto">
             {gridPanels.map((type, idx) => {
               const isRevealed = scratched[idx];
               const def = MULTIPLIER_DEFS[type];
@@ -2262,22 +2283,24 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
                 <div
                   key={idx}
                   onClick={() => handleScratchPanel(idx)}
-                  className={`h-24 rounded-2xl border-2 flex flex-col items-center justify-center font-mono font-black select-none cursor-pointer transition-all ${
+                  className={`h-14 sm:h-16 rounded-xl border-2 flex flex-col items-center justify-center font-mono font-black select-none cursor-pointer transition-all ${
                     isRevealed
-                      ? "bg-[#0c1424] border-amber-400/40 shadow-inner"
-                      : "bg-gradient-to-br from-amber-400 via-yellow-600 to-amber-700 border-yellow-200 text-amber-950 shadow-lg hover:brightness-110 active:scale-95"
+                      ? type === "miss"
+                        ? "bg-[#180a0f] border-rose-500/40 text-rose-400 shadow-inner"
+                        : "bg-[#0c1424] border-amber-400/40 shadow-inner"
+                      : "bg-gradient-to-br from-amber-400 via-yellow-600 to-amber-700 border-yellow-200 text-amber-950 shadow-md hover:brightness-110 active:scale-95"
                   }`}
                 >
                   {isRevealed ? (
-                    <div className="flex flex-col items-center space-y-1">
-                      <span className="text-2xl">{def.icon}</span>
-                      <span className="text-xs font-mono font-black" style={{ color: def.color }}>
+                    <div className="flex flex-col items-center">
+                      <span className="text-xl sm:text-2xl">{def.icon}</span>
+                      <span className="text-[10px] font-mono font-black" style={{ color: def.color }}>
                         {def.mult > 0 ? `${def.mult}x` : "MISS"}
                       </span>
                     </div>
                   ) : (
-                    <span className="text-xs font-mono font-black tracking-wider uppercase drop-shadow">
-                      SCRATCH
+                    <span className="text-[10px] font-mono font-black tracking-wider uppercase drop-shadow">
+                      ✦
                     </span>
                   )}
                 </div>

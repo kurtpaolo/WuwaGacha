@@ -125,7 +125,17 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
 
   // Local Player Setup
   const myPlayerId = useMemo(() => {
-    return userProfile?.id || currentUser?.id || `guest_${Math.random().toString(36).slice(2, 8)}`;
+    if (userProfile?.id) return userProfile.id;
+    if (currentUser?.id) return currentUser.id;
+    if (typeof window !== "undefined") {
+      let guestId = sessionStorage.getItem("wuwa_plaza_guest_id");
+      if (!guestId) {
+        guestId = `guest_${Math.random().toString(36).slice(2, 8)}`;
+        sessionStorage.setItem("wuwa_plaza_guest_id", guestId);
+      }
+      return guestId;
+    }
+    return "guest_rover";
   }, [userProfile?.id, currentUser?.id]);
 
   const myUsername = useMemo(() => {
@@ -722,13 +732,18 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
   // 1. Initialize Realtime Manager
   useEffect(() => {
     const manager = new PlazaRealtimeManager({
-      onPlayerWaypoint: (senderId, targetX, targetY, facing, isStop) => {
+      onPlayerWaypoint: (senderId, targetX, targetY, facing, isStop, timestamp) => {
         setPeerPlayers((prev) => {
           const next = new Map(prev);
           const existing = next.get(senderId);
           if (existing) {
+            // Drop out-of-order stale packets
+            if (timestamp && existing.lastActive && timestamp < existing.lastActive - 1500) {
+              return prev;
+            }
             const dist = Math.hypot(targetX - existing.x, targetY - existing.y);
-            const shouldSnap = !!isStop || dist > 6.0;
+            // Only snap on huge jumps (> 40% map warp); otherwise let 60fps tick loop glide smoothly
+            const shouldSnap = dist > 40.0;
             next.set(senderId, {
               ...existing,
               x: shouldSnap ? targetX : existing.x,
@@ -738,7 +753,7 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
               facing,
               isMoving: !isStop && dist > 0.05,
               isSleeping: false,
-              lastActive: Date.now(),
+              lastActive: timestamp || Date.now(),
             });
           }
           return next;
@@ -835,21 +850,14 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
         const now = Date.now();
         setPeerPlayers((prev) => {
           const next = new Map(prev);
-          // Grace period check for players no longer present (15s grace for alt-tabs / background throttling)
+          // 1. Instantly prune dropped peers from the map (0 ghost players!)
           for (const key of Array.from(next.keys())) {
             if (!onlineMap.has(key)) {
-              const removalExpiry = peerGraceRemovalRef.current.get(key);
-              if (!removalExpiry) {
-                peerGraceRemovalRef.current.set(key, now + 15000);
-              } else if (now > removalExpiry) {
-                peerGraceRemovalRef.current.delete(key);
-                next.delete(key);
-              }
-            } else {
+              next.delete(key);
               peerGraceRemovalRef.current.delete(key);
             }
           }
-          // Add newly joined peers or update existing metadata
+          // 2. Add newly joined peers or update metadata (without overriding moving coordinates!)
           for (const [id, meta] of Array.from(onlineMap.entries())) {
             peerGraceRemovalRef.current.delete(id);
             if (id !== myPlayerId && id !== localPlayer.id && meta.username !== myUsername) {
@@ -869,21 +877,21 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
                   facing: meta.facing || "right",
                   isMoving: false,
                   isSleeping: false,
-                  lastActive: Date.now(),
+                  lastActive: now,
                 });
               } else {
-                const isStationary = !existing.isMoving;
+                // Profile metadata updates only; only sync position on major teleport (> 40%)
                 const dist = Math.hypot(existing.x - posX, existing.y - posY);
-                const shouldSyncPos = isStationary && dist > 0.5 && typeof meta.x === "number";
+                const shouldWarp = dist > 40.0 && typeof meta.x === "number";
                 next.set(id, {
                   ...existing,
                   username: meta.username || existing.username,
                   avatarId: meta.avatarId || existing.avatarId,
                   title: meta.title || existing.title,
-                  x: shouldSyncPos ? posX : existing.x,
-                  y: shouldSyncPos ? posY : existing.y,
-                  targetX: shouldSyncPos ? posX : existing.targetX,
-                  targetY: shouldSyncPos ? posY : existing.targetY,
+                  x: shouldWarp ? posX : existing.x,
+                  y: shouldWarp ? posY : existing.y,
+                  targetX: shouldWarp ? posX : existing.targetX,
+                  targetY: shouldWarp ? posY : existing.targetY,
                   facing: meta.facing || existing.facing,
                 });
               }
@@ -978,8 +986,11 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
       // Don't intercept when user is typing in chat or another input
       if (
         e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
+        e.target instanceof HTMLTextAreaElement ||
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement
       ) {
+        heldKeysRef.current.clear();
         return;
       }
 
@@ -1007,8 +1018,8 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
         return;
       }
 
-      // E, Space, or Enter to talk to closest NPC (Talk [E])
-      if (e.code === "KeyE" || e.code === "Space" || e.code === "Enter" || key === "e") {
+      // E or Space to talk to closest NPC (Talk [E])
+      if (e.code === "KeyE" || e.code === "Space" || key === "e") {
         if (!selectedNpc && !showMiniMap) {
           e.preventDefault();
           const nearby = BINAN_GUIDE_NPCS.find((npc) => {
@@ -1029,10 +1040,16 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
         setShowMiniMap((prev) => !prev);
       }
 
-      // KeyT opens Plaza text chat (Minecraft style)
+      // KeyT toggles Plaza text chat history
       if ((e.code === "KeyT" || key === "t") && !selectedNpc && !showMiniMap) {
         e.preventDefault();
-        window.dispatchEvent(new CustomEvent("wuwa_open_plaza_chat"));
+        window.dispatchEvent(new CustomEvent("wuwa_toggle_plaza_chat_history"));
+      }
+
+      // Enter focuses Plaza chat input
+      if ((e.code === "Enter" || key === "enter") && !selectedNpc && !showMiniMap) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("wuwa_focus_plaza_chat_input"));
       }
 
       // Escape closes dialogue or mini-map
@@ -1345,6 +1362,13 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
         const next = new Map(prev);
 
         for (const [id, p] of Array.from(next.entries())) {
+          // Heartbeat reaper: prune abandoned ghost peers inactive for > 20s
+          if (p.lastActive && now - p.lastActive > 20000) {
+            next.delete(id);
+            changed = true;
+            continue;
+          }
+
           const dx = p.targetX - p.x;
           const dy = p.targetY - p.y;
           const dist = Math.hypot(dx, dy);

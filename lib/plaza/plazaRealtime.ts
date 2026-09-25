@@ -3,7 +3,7 @@ import { RealtimeChannel } from "@supabase/supabase-js";
 import { PlazaChatMessage, PlazaPlayer } from "./plazaTypes";
 
 export interface PlazaRealtimeCallbacks {
-  onPlayerWaypoint: (senderId: string, targetX: number, targetY: number, facing: "left" | "right", isStop?: boolean) => void;
+  onPlayerWaypoint: (senderId: string, targetX: number, targetY: number, facing: "left" | "right", isStop?: boolean, timestamp?: number) => void;
   onPlayerHello?: (payload: { senderId: string; username: string; avatarId: string; title?: string; x: number; y: number; facing: "left" | "right" }) => void;
   onChatMessage: (msg: PlazaChatMessage) => void;
   onPlayerEmote: (senderId: string, emoji: string) => void;
@@ -98,9 +98,21 @@ export class PlazaRealtimeManager {
     }
   }
 
+  private handleWindowUnload = () => {
+    if (this.channel) {
+      try {
+        this.channel.untrack();
+      } catch {}
+    }
+  };
+
   public init(myPlayer: PlazaPlayer, initialLobbyId: number = 1) {
     this.myPlayer = myPlayer;
     this.lobbyId = initialLobbyId;
+    if (typeof window !== "undefined") {
+      window.addEventListener("beforeunload", this.handleWindowUnload);
+      window.addEventListener("pagehide", this.handleWindowUnload);
+    }
     this.connect();
     this.resetIdleTimer();
   }
@@ -164,7 +176,8 @@ export class PlazaRealtimeManager {
           payload.targetX,
           payload.targetY,
           payload.facing || "right",
-          !!payload.isStop
+          !!payload.isStop,
+          payload.timestamp
         );
       });
 
@@ -378,6 +391,7 @@ export class PlazaRealtimeManager {
         targetY: Math.round(targetY * 10) / 10,
         facing,
         isStop: force,
+        timestamp: now,
       },
     });
   }
@@ -582,6 +596,10 @@ export class PlazaRealtimeManager {
 
   public async destroy() {
     this.stopChallengePulse();
+    if (typeof window !== "undefined") {
+      window.removeEventListener("beforeunload", this.handleWindowUnload);
+      window.removeEventListener("pagehide", this.handleWindowUnload);
+    }
     if (this.idleTimer) clearTimeout(this.idleTimer);
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     await this.disconnect();
