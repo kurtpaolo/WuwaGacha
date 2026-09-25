@@ -81,7 +81,17 @@ export async function dispatchBannerBroadcast(options?: {
     webhooks = hooksWithCycle || [];
   }
 
-  if (webhooks.length === 0) {
+  // Deduplicate active webhooks by URL to ensure each distinct webhook destination is only called once
+  const uniqueWebhooksMap = new Map<string, any>();
+  for (const h of webhooks) {
+    const normUrl = (h.url || "").trim().toLowerCase();
+    if (normUrl && !uniqueWebhooksMap.has(normUrl)) {
+      uniqueWebhooksMap.set(normUrl, h);
+    }
+  }
+  const uniqueWebhooks = Array.from(uniqueWebhooksMap.values());
+
+  if (uniqueWebhooks.length === 0) {
     return {
       success: true,
       message: "No active Discord webhooks configured.",
@@ -93,31 +103,33 @@ export async function dispatchBannerBroadcast(options?: {
     };
   }
 
-  // Check persistent DB state across all serverless instances
-  if (!force) {
-    const alreadyBroadcasted = webhooks.some((h) => {
-      const matchCycle = hasCycleCol && (h.last_broadcast_cycle ?? -1) === currentCycle;
-      const recentSend = h.last_broadcast_at && (nowMs - new Date(h.last_broadcast_at).getTime() < 20 * 60 * 1000);
-      return matchCycle || recentSend;
-    });
+  // Filter only webhooks that have NOT yet received a broadcast for this cycle
+  const hooksToNotify = force
+    ? uniqueWebhooks
+    : uniqueWebhooks.filter((hook) => {
+        const matchCycle = hasCycleCol && (hook.last_broadcast_cycle ?? -1) === currentCycle;
+        const recentSend =
+          hook.last_broadcast_at &&
+          nowMs - new Date(hook.last_broadcast_at).getTime() < 15 * 60 * 1000;
+        return !matchCycle && !recentSend;
+      });
 
-    if (alreadyBroadcasted) {
-      globalBroadcast.__lastBroadcastCycle = currentCycle;
-      globalBroadcast.__lastBroadcastTimestamp = nowMs;
-      return {
-        success: true,
-        message: `Cycle ${currentCycle} was already broadcasted. Skipping duplicate send.`,
-        dispatched: 0,
-        failed: 0,
-        total: webhooks.length,
-        skipped: true,
-        currentCycle,
-      };
-    }
+  if (hooksToNotify.length === 0) {
+    globalBroadcast.__lastBroadcastCycle = currentCycle;
+    globalBroadcast.__lastBroadcastTimestamp = nowMs;
+    return {
+      success: true,
+      message: `All ${uniqueWebhooks.length} webhook(s) have already received broadcast for cycle ${currentCycle}. Skipping duplicate send.`,
+      dispatched: 0,
+      failed: 0,
+      total: uniqueWebhooks.length,
+      skipped: true,
+      currentCycle,
+    };
   }
 
   // Pre-lock in DB to prevent concurrent lambda race conditions (only if columns exist)
-  if (hasCycleCol) {
+  if (hasCycleCol && hooksToNotify.length > 0) {
     try {
       await supabase
         .from("discord_webhooks")
@@ -125,15 +137,13 @@ export async function dispatchBannerBroadcast(options?: {
           last_broadcast_cycle: currentCycle,
           last_broadcast_at: new Date(nowMs).toISOString(),
         })
-        .in("id", webhooks.map((h: any) => h.id));
+        .in("id", hooksToNotify.map((h: any) => h.id));
     } catch (err) {
       console.warn("Failed to pre-lock broadcast cycle in DB:", err);
     }
   }
 
-  const hooksToNotify = webhooks;
-
-  // Dispatch notifications concurrently
+  // Dispatch notifications concurrently to unique un-notified webhooks
   const dispatchPromises = hooksToNotify.map(async (hook) => {
     const res = await sendDiscordBannerNotification(hook.url, nowMs);
     if (!res.ok) {
@@ -177,7 +187,7 @@ export async function dispatchBannerBroadcast(options?: {
     message: `Broadcast finished: ${successful} succeeded, ${failed} failed.`,
     dispatched: successful,
     failed,
-    total: webhooks.length,
+    total: uniqueWebhooks.length,
     skipped: false,
     currentCycle,
   };

@@ -187,7 +187,7 @@ export const PlazaChatOverlay: React.FC<PlazaChatOverlayProps> = ({
   return (
     <div
       ref={containerRef}
-      className="fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-40 w-72 sm:w-80 md:w-96 max-w-[calc(100vw-32px)] pointer-events-auto flex flex-col select-none"
+      className="fixed bottom-3 left-3 sm:bottom-6 sm:left-6 z-40 w-52 sm:w-80 md:w-96 max-w-[calc(100vw-145px)] pointer-events-auto flex flex-col select-none"
     >
       {/* ========================================================================= */}
       {/* 1. EXPANDABLE CHAT HISTORY (Hidden by default, toggled with T or button) */}
@@ -310,7 +310,7 @@ export const PlazaChatOverlay: React.FC<PlazaChatOverlayProps> = ({
           type="text"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder="Chat... (Enter to send, T for history)"
+          placeholder="Chat... (Enter to send)"
           maxLength={120}
           className="flex-1 bg-transparent border-none px-1.5 py-0.5 text-xs text-white placeholder-gray-400 font-mono outline-none"
         />

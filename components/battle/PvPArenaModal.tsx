@@ -3710,17 +3710,47 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
 
       if (statusRes.fainted) {
         setPlayerSwitchCooldown(0);
-        const hasAlive = currentP.team.some((r) => !r.isFainted);
+        const hasAlive = currentP.team.some((r) => !r.isFainted && (r.hp ?? 0) > 0);
         if (!hasAlive) {
           handleBattleEnd("opponent");
           return;
         }
-        const slot = currentP.activeIndices?.indexOf(currentP.activeIdx) ?? 0;
-        setFaintedSlotIndex(slot);
-        setIsFaintReplaceModalOpen(true);
-        setIsBusy(false);
-        setIsPlayerTurn(false);
-        return;
+
+        const hasBench = currentP.team.some(
+          (u, idx) => !currentP.activeIndices?.includes(idx) && !u.isFainted && (u.hp ?? 0) > 0
+        );
+
+        if (hasBench) {
+          const slot = currentP.activeIndices?.indexOf(currentP.activeIdx) ?? 0;
+          setFaintedSlotIndex(slot);
+          setIsFaintReplaceModalOpen(true);
+          setIsBusy(false);
+          setIsPlayerTurn(false);
+          return;
+        } else {
+          // No living bench reinforcements remain; remove fainted unit from timeline and pass turn to next living unit
+          const updatedTimeline = removeUnitFromTimeline(actionTimeline, true, currentP.activeIdx);
+          setActionTimeline(updatedTimeline);
+          const adv = advanceTimeline(updatedTimeline);
+          if (adv) {
+            setActionTimeline(adv.updatedTimeline);
+            if (adv.updatedTimeline[0]?.isPlayer) {
+              if (playerTrainer) {
+                playerTrainer.activeIdx = adv.updatedTimeline[0].teamIndex;
+              }
+              setIsPlayerTurn(true);
+              setIsBusy(false);
+            } else {
+              if (opponentTrainer) {
+                opponentTrainer.activeIdx = adv.updatedTimeline[0].teamIndex;
+              }
+              setIsPlayerTurn(false);
+              setIsBusy(true);
+              setTimeout(() => triggerAiTurn(false, adv.updatedTimeline), 500);
+            }
+          }
+          return;
+        }
       } else if (statusRes.skipTurn) {
         const adv = advanceTimeline(actionTimeline);
         if (adv) {
@@ -6545,65 +6575,101 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                       </div>
 
                       {/* Living Bench Reserves List */}
-                      <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-                        {playerTrainer.team
+                      {(() => {
+                        const benchList = playerTrainer.team
                           .map((r, i) => ({ r, i }))
-                          .filter(({ i, r }) => !playerTrainer.activeIndices?.includes(i) && !r.isFainted && r.hp > 0)
-                          .map(({ r, i }) => (
-                            <button
-                              key={`faint_sub_${i}`}
-                              type="button"
-                              onClick={() => handleSelectBenchSubstitute(i)}
-                              className="w-full p-2.5 rounded-xl border border-cyan-500/30 hover:border-cyan-400 bg-cyan-950/30 hover:bg-cyan-900/40 text-left flex items-center justify-between transition-all cursor-pointer group active:scale-[0.99]"
-                            >
-                              <div className="flex items-center space-x-2.5">
-                                <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-black/60 border border-cyan-500/30 shrink-0">
-                                  <img
-                                    src={r.portraitUrl || r.spriteUrl}
-                                    alt={r.name}
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                    onError={(e) => {
-                                      (e.target as HTMLImageElement).src = r.spriteUrl;
-                                    }}
-                                  />
-                                </div>
-                                <div>
-                                  <p className="text-xs font-bold text-white group-hover:text-cyan-200 transition-colors">
-                                    {r.name}
-                                  </p>
-                                  <div className="flex items-center space-x-1.5 text-[9px] font-mono text-gray-400">
-                                    <span
-                                      className={`px-1 py-0.2 rounded uppercase border ${
-                                        ELEMENT_COLORS[r.element]?.bg || ""
-                                      } ${ELEMENT_COLORS[r.element]?.text || ""} ${
-                                        ELEMENT_COLORS[r.element]?.border || ""
-                                      }`}
-                                    >
-                                      {r.element}
-                                    </span>
-                                    <span>Lv.{r.level}</span>
-                                    <span>{r.spd} SPD</span>
+                          .filter(({ i, r }) => !playerTrainer.activeIndices?.includes(i) && !r.isFainted && r.hp > 0);
+
+                        if (benchList.length === 0) {
+                          return (
+                            <div className="p-4 rounded-xl bg-black/50 border border-white/10 text-center space-y-3">
+                              <p className="text-xs text-rose-300 font-mono">
+                                No living bench reserves available to reinforce this slot.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  soundEngine.playClick();
+                                  setIsFaintReplaceModalOpen(false);
+                                  setFaintedSlotIndex(null);
+                                  const livingIdx = (playerTrainer.activeIndices || []).find(
+                                    (idx) => !playerTrainer.team[idx]?.isFainted && (playerTrainer.team[idx]?.hp ?? 0) > 0
+                                  );
+                                  if (livingIdx !== undefined) {
+                                    playerTrainer.activeIdx = livingIdx;
+                                    playerTrainerRef.current = { ...playerTrainer };
+                                    setPlayerTrainer({ ...playerTrainer });
+                                  }
+                                  setIsBusy(false);
+                                  setIsPlayerTurn(true);
+                                }}
+                                className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(6,182,212,0.4)] cursor-pointer active:scale-95"
+                              >
+                                Continue Battle
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                            {benchList.map(({ r, i }) => (
+                              <button
+                                key={`faint_sub_${i}`}
+                                type="button"
+                                onClick={() => handleSelectBenchSubstitute(i)}
+                                className="w-full p-2.5 rounded-xl border border-cyan-500/30 hover:border-cyan-400 bg-cyan-950/30 hover:bg-cyan-900/40 text-left flex items-center justify-between transition-all cursor-pointer group active:scale-[0.99]"
+                              >
+                                <div className="flex items-center space-x-2.5">
+                                  <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-black/60 border border-cyan-500/30 shrink-0">
+                                    <img
+                                      src={r.portraitUrl || r.spriteUrl}
+                                      alt={r.name}
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src = r.spriteUrl;
+                                      }}
+                                    />
+                                  </div>
+                                  <div>
+                                    <p className="text-xs font-bold text-white group-hover:text-cyan-200 transition-colors">
+                                      {r.name}
+                                    </p>
+                                    <div className="flex items-center space-x-1.5 text-[9px] font-mono text-gray-400">
+                                      <span
+                                        className={`px-1 py-0.2 rounded uppercase border ${
+                                          ELEMENT_COLORS[r.element]?.bg || ""
+                                        } ${ELEMENT_COLORS[r.element]?.text || ""} ${
+                                          ELEMENT_COLORS[r.element]?.border || ""
+                                        }`}
+                                      >
+                                        {r.element}
+                                      </span>
+                                      <span>Lv.{r.level}</span>
+                                      <span>{r.spd} SPD</span>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
 
-                              <div className="text-right flex flex-col items-end">
-                                <span className="text-xs font-mono font-bold text-emerald-400">
-                                  {r.hp}/{r.maxHp} HP
-                                </span>
-                                <div className="w-16 bg-black/60 rounded-full h-1.5 overflow-hidden border border-white/10 mt-1">
-                                  <div
-                                    className="h-full bg-emerald-400 rounded-full"
-                                    style={{ width: `${Math.round((r.hp / r.maxHp) * 100)}%` }}
-                                  />
+                                <div className="text-right flex flex-col items-end">
+                                  <span className="text-xs font-mono font-bold text-emerald-400">
+                                    {r.hp}/{r.maxHp} HP
+                                  </span>
+                                  <div className="w-16 bg-black/60 rounded-full h-1.5 overflow-hidden border border-white/10 mt-1">
+                                    <div
+                                      className="h-full bg-emerald-400 rounded-full"
+                                      style={{ width: `${Math.round((r.hp / r.maxHp) * 100)}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[9px] font-mono text-cyan-400 uppercase font-bold mt-1 group-hover:underline">
+                                    Deploy ➔
+                                  </span>
                                 </div>
-                                <span className="text-[9px] font-mono text-cyan-400 uppercase font-bold mt-1 group-hover:underline">
-                                  Deploy ➔
-                                </span>
-                              </div>
-                            </button>
-                          ))}
-                      </div>
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </motion.div>
                 )}

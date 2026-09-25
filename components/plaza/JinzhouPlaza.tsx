@@ -67,6 +67,7 @@ import {
   Calendar,
   ShieldAlert,
   AlertTriangle,
+  Smartphone,
 } from "lucide-react";
 import { PlazaMinigamesModal, MinigameId } from "./minigames/PlazaMinigamesModal";
 import { calculateAge, updateUserBirthday } from "@/lib/supabase/auth";
@@ -319,6 +320,26 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
     return 1;
   });
   const moveSpeedRef = useRef<number>(moveSpeed);
+
+  // Phone Portrait Detection & Orientation Lock Notice
+  const [isPhonePortrait, setIsPhonePortrait] = useState<boolean>(false);
+  const [dismissPortraitNotice, setDismissPortraitNotice] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleCheckOrientation = () => {
+      if (typeof window === "undefined") return;
+      const isPortrait = window.innerHeight > window.innerWidth;
+      const isPhone = window.innerWidth < 768;
+      setIsPhonePortrait(isPortrait && isPhone);
+    };
+    handleCheckOrientation();
+    window.addEventListener("resize", handleCheckOrientation);
+    window.addEventListener("orientationchange", handleCheckOrientation);
+    return () => {
+      window.removeEventListener("resize", handleCheckOrientation);
+      window.removeEventListener("orientationchange", handleCheckOrientation);
+    };
+  }, []);
 
   const handleCycleSpeed = useCallback(() => {
     soundEngine.playClick();
@@ -1532,6 +1553,42 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
         ref={plazaRef}
         className={`relative w-screen h-screen overflow-hidden bg-[#07090e] select-none cursor-default font-sans ${isVisible === false ? "hidden pointer-events-none" : ""}`}
       >
+        {/* Phone Portrait Orientation Barrier */}
+        {isPhonePortrait && !dismissPortraitNotice && (
+          <div className="fixed inset-0 z-50 bg-[#07090e]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center select-none pointer-events-auto">
+            <div className="w-16 h-16 rounded-2xl bg-yellow-400/10 border border-yellow-400/30 flex items-center justify-center mb-4 text-yellow-400">
+              <Smartphone className="w-8 h-8 rotate-90 animate-pulse text-yellow-400" />
+            </div>
+            <h3 className="text-lg sm:text-xl font-black text-white font-display tracking-wider uppercase mb-2">
+              Landscape Mode Required
+            </h3>
+            <p className="text-xs text-gray-300 font-mono max-w-xs mb-6 leading-relaxed">
+              Jinzhou Plaza is an MMO overworld designed for Landscape mode or Desktop browsers. Please rotate your device sideways.
+            </p>
+            <div className="flex flex-col gap-3 w-full max-w-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  soundEngine.playClick();
+                  onNavigate("convene");
+                }}
+                className="w-full py-3 px-4 rounded-xl bg-yellow-400 hover:bg-yellow-300 text-black font-mono font-bold text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(250,204,21,0.4)] transition-all cursor-pointer active:scale-95"
+              >
+                Return to Convene
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  soundEngine.playClick();
+                  setDismissPortraitNotice(true);
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/15 text-gray-300 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                Continue in Portrait
+              </button>
+            </div>
+          </div>
+        )}
       {/* ========================================================================= */}
       {/* 1. ATMOSPHERIC TOWN CANVAS / BACKGROUND */}
       {/* ========================================================================= */}

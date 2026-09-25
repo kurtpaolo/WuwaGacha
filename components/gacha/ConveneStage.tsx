@@ -420,22 +420,7 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
         setToastMessage("Featured Resonators have rotated!");
         setTimeout(() => setToastMessage(null), 6000);
 
-        // Auto-broadcast new half-hourly banner rotation to Discord webhooks (shared across tabs via localStorage)
-        const cycleKey = "wuwa_last_broadcast_cycle";
-        if (typeof window !== "undefined") {
-          const lastSentCycle = localStorage.getItem(cycleKey);
-          if (lastSentCycle !== String(currentHour)) {
-            localStorage.setItem(cycleKey, String(currentHour));
-            fetch("/api/banner/broadcast", { method: "POST" })
-              .then((r) => r.json())
-              .then((data) => {
-                if (data.dispatched > 0) {
-                  console.log(`[Auto-Broadcast] Sent rotation update to ${data.dispatched} webhook(s).`);
-                }
-              })
-              .catch(() => {});
-          }
-        }
+
       }
 
       setTacetStatus(
@@ -1215,7 +1200,7 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
                 setActiveView("plaza");
               }
             }}
-            className="h-[38px] sm:h-[40px] px-2.5 sm:px-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/40 text-amber-300 hover:text-white text-[11px] sm:text-xs font-mono font-bold tracking-wider flex items-center space-x-1.5 transition-all shadow-sm hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
+            className="hidden md:flex landscape:flex h-[38px] sm:h-[40px] px-2.5 sm:px-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/40 text-amber-300 hover:text-white text-[11px] sm:text-xs font-mono font-bold tracking-wider items-center space-x-1.5 transition-all shadow-sm hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
             title="Return to Jinzhou Plaza Hub"
           >
             <Compass className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-amber-300" />
