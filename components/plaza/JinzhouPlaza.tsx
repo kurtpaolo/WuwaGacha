@@ -542,6 +542,7 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
   }, [minigamesModalState.isOpen, isAgeVerificationModalOpen, isAgeRestrictedModalOpen]);
 
   const handleCloseMinigames = useCallback(() => {
+    isModalActiveRef.current = false;
     setMinigamesModalState((prev) => ({ ...prev, isOpen: false }));
   }, []);
 
@@ -581,6 +582,7 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
       }
 
       // 18+ verified -> proceed to game
+      isModalActiveRef.current = true;
       setMinigamesModalState({ isOpen: true, initialGame: gameId });
     },
     [userProfile?.birthday, currentUser?.id]
@@ -619,6 +621,7 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
         setIsAgeRestrictedModalOpen(true);
       } else {
         if (pendingMinigame) {
+          isModalActiveRef.current = true;
           setMinigamesModalState({ isOpen: true, initialGame: pendingMinigame });
         }
       }
@@ -2786,14 +2789,15 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 pointer-events-auto select-none"
+            className="fixed inset-0 z-[120] bg-black/90 flex items-center justify-center p-4 pointer-events-auto select-none"
             onClick={() => setIsAgeVerificationModalOpen(false)}
           >
             <motion.div
               initial={{ scale: 0.92, opacity: 0, y: 15 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.92, opacity: 0, y: 15 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+              style={{ willChange: "transform, opacity" }}
               className="w-full max-w-md rounded-2xl bg-[#0c1017]/98 border-2 border-yellow-400/50 shadow-[0_20px_60px_rgba(0,0,0,0.9),0_0_35px_rgba(250,204,21,0.2)] p-6 text-left font-mono space-y-4"
               onClick={(e) => e.stopPropagation()}
             >
@@ -2879,14 +2883,15 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 pointer-events-auto select-none"
+            className="fixed inset-0 z-[120] bg-black/90 flex items-center justify-center p-4 pointer-events-auto select-none"
             onClick={() => setIsAgeRestrictedModalOpen(false)}
           >
             <motion.div
               initial={{ scale: 0.92, opacity: 0, y: 15 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.92, opacity: 0, y: 15 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+              style={{ willChange: "transform, opacity" }}
               className="w-full max-w-md rounded-2xl bg-[#0c1017]/98 border-2 border-rose-500/60 shadow-[0_20px_60px_rgba(0,0,0,0.9),0_0_35px_rgba(244,63,94,0.3)] p-6 text-center font-mono space-y-4"
               onClick={(e) => e.stopPropagation()}
             >

@@ -62,7 +62,7 @@ export const MINIGAME_HOSTS: Record<
   coinflip: {
     name: "Brant",
     title: "Double or Nothing",
-    tag: "1.9x Flip",
+    tag: "2.0x Flip",
   },
   slots: {
     name: "Carlotta",
@@ -104,43 +104,54 @@ interface InsufficientAlertProps {
 
 const InsufficientAlertModal: React.FC<InsufficientAlertProps> = ({ needed, current, onClose }) => {
   return (
-    <div
-      className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm select-none animate-fade-in"
-      onClick={onClose}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-2xl bg-[#140b0e] border-2 border-rose-500/80 p-5 shadow-[0_0_40px_rgba(244,63,94,0.4)] flex flex-col items-center text-center space-y-3.5 animate-scale-up"
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.12 }}
+        className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/85 select-none"
+        onClick={onClose}
       >
-        <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border-2 border-rose-400 text-rose-300 flex items-center justify-center shadow-lg">
-          <AlertTriangle className="w-6 h-6 animate-pulse" />
-        </div>
-
-        <div className="space-y-1">
-          <h3 className="text-base font-black font-mono text-rose-300 uppercase tracking-wider">
-            Not Enough Astrites!
-          </h3>
-          <p className="text-xs font-mono text-gray-300 leading-relaxed">
-            You need <strong className="text-yellow-300">{needed.toLocaleString()} ✦</strong> to place this bet, but you only have <strong className="text-rose-400">{current.toLocaleString()} ✦</strong>.
-          </p>
-        </div>
-
-        <div className="w-full p-2.5 rounded-xl bg-black/50 border border-white/10 text-[11px] font-mono text-gray-400">
-          Tip: Lower your wager or claim free Astrites from the bank in the top bar!
-        </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            soundEngine.playClick();
-            onClose();
-          }}
-          className="w-full py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-400 hover:to-pink-500 text-white font-mono font-black text-xs uppercase tracking-wider shadow-lg transition-all active:scale-95 cursor-pointer"
+        <motion.div
+          initial={{ scale: 0.92, opacity: 0, y: 8 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+          style={{ willChange: "transform, opacity" }}
+          onClick={(e) => e.stopPropagation()}
+          className="w-full max-w-sm rounded-2xl bg-[#140b0e] border-2 border-rose-500/80 p-5 shadow-2xl flex flex-col items-center text-center space-y-3.5"
         >
-          Got it
-        </button>
-      </div>
-    </div>
+          <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border-2 border-rose-400 text-rose-300 flex items-center justify-center shadow-lg">
+            <AlertTriangle className="w-6 h-6 animate-pulse" />
+          </div>
+
+          <div className="space-y-1">
+            <h3 className="text-base font-black font-mono text-rose-300 uppercase tracking-wider">
+              Not Enough Astrites!
+            </h3>
+            <p className="text-xs font-mono text-gray-300 leading-relaxed">
+              You need <strong className="text-yellow-300">{needed.toLocaleString()} ✦</strong> to place this bet, but you only have <strong className="text-rose-400">{current.toLocaleString()} ✦</strong>.
+            </p>
+          </div>
+
+          <div className="w-full p-2.5 rounded-xl bg-black/50 border border-white/10 text-[11px] font-mono text-gray-400">
+            Tip: Lower your wager or claim free Astrites from the bank in the top bar!
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              soundEngine.playClick();
+              onClose();
+            }}
+            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-400 hover:to-pink-500 text-white font-mono font-black text-xs uppercase tracking-wider shadow-lg transition-all active:scale-95 cursor-pointer"
+          >
+            Got it
+          </button>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 };
 
@@ -295,123 +306,122 @@ interface OutcomeModalProps {
 }
 
 const MinigameOutcomeModal: React.FC<OutcomeModalProps> = ({ outcome, onPlayAgain, onClose }) => {
-  if (!outcome) return null;
-
-  const isWin = outcome.type === "win";
-  const isLoss = outcome.type === "loss";
-
   return (
     <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 select-none"
-        onClick={onClose}
-      >
+      {outcome && (
         <motion.div
-          initial={{ scale: 0.88, y: 12, opacity: 0 }}
-          animate={{ scale: 1, y: 0, opacity: 1 }}
-          exit={{ scale: 0.9, y: 10, opacity: 0 }}
-          transition={{ type: "spring", damping: 22, stiffness: 350 }}
-          onClick={(e) => e.stopPropagation()}
-          className={`w-full max-w-sm rounded-2xl p-5 border-2 shadow-2xl flex flex-col items-center text-center space-y-4 ${
-            isWin
-              ? "bg-[#0a1811] border-emerald-400 shadow-[0_0_40px_rgba(16,185,129,0.4)]"
-              : isLoss
-              ? "bg-[#180a0f] border-rose-500 shadow-[0_0_40px_rgba(244,63,94,0.35)]"
-              : "bg-[#161208] border-amber-400 shadow-[0_0_40px_rgba(245,158,11,0.3)]"
-          }`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.12 }}
+          className="absolute inset-0 z-50 bg-black/85 flex items-center justify-center p-3 select-none"
+          onClick={onClose}
         >
-          {/* Status Header Badge */}
-          <div className="flex flex-col items-center space-y-1">
-            <div
-              className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl border-2 shadow-lg ${
-                isWin
-                  ? "bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.5)]"
-                  : isLoss
-                  ? "bg-rose-500/20 border-rose-400 text-rose-300 shadow-[0_0_20px_rgba(244,63,94,0.4)]"
-                  : "bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.4)]"
-              }`}
-            >
-              {isWin ? "🏆" : isLoss ? "💥" : "🤝"}
-            </div>
-            <h3
-              className={`text-lg sm:text-xl font-black font-mono tracking-wider uppercase ${
-                isWin
-                  ? "text-emerald-300 drop-shadow-[0_0_12px_rgba(16,185,129,0.5)]"
-                  : isLoss
-                  ? "text-rose-400 drop-shadow-[0_0_12px_rgba(244,63,94,0.5)]"
-                  : "text-amber-300 drop-shadow-[0_0_12px_rgba(245,158,11,0.5)]"
-              }`}
-            >
-              {isWin ? "WIN!" : isLoss ? "LOSE" : "REFUND"}
-            </h3>
-            {outcome.multiplier && (
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-black bg-yellow-400 text-black shadow">
-                {outcome.multiplier}
-              </span>
-            )}
-          </div>
-
-          {/* Large Amount Display */}
-          <div
-            className={`w-full py-3 px-4 rounded-xl border font-mono font-black flex items-center justify-center text-2xl sm:text-3xl ${
-              outcome.deltaAmount > 0
-                ? "bg-emerald-500/15 border-emerald-400/50 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.25)]"
-                : outcome.deltaAmount < 0
-                ? "bg-rose-500/15 border-rose-400/50 text-rose-400 shadow-[0_0_20px_rgba(244,63,94,0.2)]"
-                : "bg-white/5 border-white/10 text-gray-300"
+          <motion.div
+            initial={{ scale: 0.9, y: 8, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            exit={{ scale: 0.92, y: 6, opacity: 0 }}
+            transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+            style={{ willChange: "transform, opacity" }}
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-w-sm rounded-2xl p-5 border-2 shadow-2xl flex flex-col items-center text-center space-y-4 ${
+              outcome.type === "win"
+                ? "bg-[#0a1811] border-emerald-400 shadow-[0_4px_24px_rgba(16,185,129,0.35)]"
+                : outcome.type === "loss"
+                ? "bg-[#180a0f] border-rose-500 shadow-[0_4px_24px_rgba(244,63,94,0.3)]"
+                : "bg-[#161208] border-amber-400 shadow-[0_4px_24px_rgba(245,158,11,0.25)]"
             }`}
           >
-            <span>
-              {outcome.deltaAmount > 0
-                ? `+${outcome.deltaAmount.toLocaleString()}`
-                : outcome.deltaAmount < 0
-                ? `-${Math.abs(outcome.deltaAmount).toLocaleString()}`
-                : "0"}
-            </span>
-            <AstriteIcon className="w-6 h-6 ml-2 inline" />
-          </div>
+            {/* Status Header Badge */}
+            <div className="flex flex-col items-center space-y-1">
+              <div
+                className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl border-2 shadow-lg ${
+                  outcome.type === "win"
+                    ? "bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.5)]"
+                    : outcome.type === "loss"
+                    ? "bg-rose-500/20 border-rose-400 text-rose-300 shadow-[0_0_20px_rgba(244,63,94,0.4)]"
+                    : "bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.4)]"
+                }`}
+              >
+                {outcome.type === "win" ? "🏆" : outcome.type === "loss" ? "💥" : "🤝"}
+              </div>
+              <h3
+                className={`text-lg sm:text-xl font-black font-mono tracking-wider uppercase ${
+                  outcome.type === "win"
+                    ? "text-emerald-300 drop-shadow-[0_0_12px_rgba(16,185,129,0.5)]"
+                    : outcome.type === "loss"
+                    ? "text-rose-400 drop-shadow-[0_0_12px_rgba(244,63,94,0.5)]"
+                    : "text-amber-300 drop-shadow-[0_0_12px_rgba(245,158,11,0.5)]"
+                }`}
+              >
+                {outcome.type === "win" ? "WIN!" : outcome.type === "loss" ? "LOSE" : "REFUND"}
+              </h3>
+              {outcome.multiplier && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-black bg-yellow-400 text-black shadow">
+                  {outcome.multiplier}
+                </span>
+              )}
+            </div>
 
-          {/* Clean Result Row */}
-          <div className="flex items-center justify-between w-full px-3 py-2 rounded-xl bg-black/50 border border-white/10 font-mono text-xs text-gray-300">
-            <div className="flex items-center space-x-1.5">
-              {outcome.landedIcon && <span>{outcome.landedIcon}</span>}
-              <span style={{ color: outcome.landedColor || "#ffffff" }} className="font-bold">
-                {outcome.landedValue}
+            {/* Large Amount Display */}
+            <div
+              className={`w-full py-3 px-4 rounded-xl border font-mono font-black flex items-center justify-center text-2xl sm:text-3xl ${
+                outcome.deltaAmount > 0
+                  ? "bg-emerald-500/15 border-emerald-400/50 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.25)]"
+                  : outcome.deltaAmount < 0
+                  ? "bg-rose-500/15 border-rose-400/50 text-rose-400 shadow-[0_0_20px_rgba(244,63,94,0.2)]"
+                  : "bg-white/5 border-white/10 text-gray-300"
+              }`}
+            >
+              <span>
+                {outcome.deltaAmount > 0
+                  ? `+${outcome.deltaAmount.toLocaleString()}`
+                  : outcome.deltaAmount < 0
+                  ? `-${Math.abs(outcome.deltaAmount).toLocaleString()}`
+                  : "0"}
               </span>
+              <AstriteIcon className="w-6 h-6 ml-2 inline" />
             </div>
-            <div className="text-gray-400 text-[11px]">
-              Bet: <strong className="text-white">{outcome.betValue}</strong>
-            </div>
-          </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-2 w-full pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                soundEngine.playClick();
-                onPlayAgain();
-              }}
-              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 hover:from-yellow-300 hover:to-yellow-400 text-black font-mono font-black text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(250,204,21,0.4)] transition-all hover:scale-102 active:scale-95 cursor-pointer"
-            >
-              Play Again
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                soundEngine.playClick();
-                onClose();
-              }}
-              className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-gray-300 hover:text-white font-mono font-bold text-xs uppercase transition-all cursor-pointer"
-            >
-              Close
-            </button>
-          </div>
+            {/* Clean Result Row */}
+            <div className="flex items-center justify-between w-full px-3 py-2 rounded-xl bg-black/50 border border-white/10 font-mono text-xs text-gray-300">
+              <div className="flex items-center space-x-1.5">
+                {outcome.landedIcon && <span>{outcome.landedIcon}</span>}
+                <span style={{ color: outcome.landedColor || "#ffffff" }} className="font-bold">
+                  {outcome.landedValue}
+                </span>
+              </div>
+              <div className="text-gray-400 text-[11px]">
+                Bet: <strong className="text-white">{outcome.betValue}</strong>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 w-full pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  soundEngine.playClick();
+                  onPlayAgain();
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 hover:from-yellow-300 hover:to-yellow-400 text-black font-mono font-black text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(250,204,21,0.4)] transition-all hover:scale-102 active:scale-95 cursor-pointer"
+              >
+                Play Again
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  soundEngine.playClick();
+                  onClose();
+                }}
+                className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-gray-300 hover:text-white font-mono font-bold text-xs uppercase transition-all cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </motion.div>
         </motion.div>
-      </motion.div>
+      )}
     </AnimatePresence>
   );
 };
@@ -438,22 +448,28 @@ export const PlazaMinigamesModal = React.memo<PlazaMinigamesModalProps>(({
     }
   }, [lockedGame, initialGame]);
 
-  if (!isOpen) return null;
-
   const currentHost = MINIGAME_HOSTS[activeGame];
 
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md select-none overflow-y-auto"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl max-h-[92dvh] bg-[#0b0f1a] border border-amber-500/30 rounded-2xl shadow-2xl flex flex-col overflow-hidden my-auto relative"
-      >
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.12 }}
+          className="fixed inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 bg-black/90 select-none overflow-y-auto"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 6 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+            style={{ willChange: "transform, opacity" }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-4xl max-h-[92dvh] bg-[#0b0f1a] border border-amber-500/30 rounded-2xl shadow-2xl flex flex-col overflow-hidden my-auto relative"
+          >
         {/* Modal Top Bar (Just NPC Name, No Subtitle) */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-amber-500/20 bg-[#080c14] flex-shrink-0">
           <div className="flex items-center space-x-3">
@@ -550,8 +566,10 @@ export const PlazaMinigamesModal = React.memo<PlazaMinigamesModalProps>(({
             <ScratchcardGame astriteBalance={astriteBalance} onUpdateAstrites={onUpdateAstrites} />
           )}
         </div>
-      </motion.div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 });
 
@@ -607,18 +625,18 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
     if (!isFlipping || !pendingOutcome) return;
     setIsFlipping(false);
 
-    // 750ms suspense delay so user sees the landed coin before the popup appears
+    // 400ms suspense delay so user sees the landed coin before the popup appears
     setTimeout(() => {
       const won = pendingOutcome === side;
       if (won) {
-        // Fair 1.90x gross return (95.00% RTP)
-        const payout = Math.floor(bet * 1.9);
+        // True Double or Nothing (2.0x gross payout)
+        const payout = bet * 2;
         onUpdateAstrites(payout);
         setStreak((s) => s + 1);
         soundEngine.playAstriteGain();
         setOutcomeModal({
           type: "win",
-          title: "VICTORY! 1.9x WIN",
+          title: "VICTORY! 2.0x WIN",
           landedTitle: "Coin Landed On",
           landedValue: pendingOutcome.toUpperCase(),
           landedIcon: pendingOutcome === "heads" ? "🪙" : "🛡️",
@@ -626,7 +644,7 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
           betTitle: "Your Call",
           betValue: `${side.toUpperCase()} (${bet.toLocaleString()} ✦)`,
           deltaAmount: payout,
-          multiplier: "1.9x Payout",
+          multiplier: "2.0x Payout",
         });
       } else {
         setStreak(0);
@@ -643,7 +661,7 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
           deltaAmount: -bet,
         });
       }
-    }, 750);
+    }, 400);
   };
 
   return (
@@ -774,7 +792,7 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
           }`}
         >
           <Coins className="w-4 h-4 text-amber-400" />
-          <span>CALL HEADS (1.9x)</span>
+          <span>CALL HEADS (2.0x)</span>
         </button>
 
         <button
@@ -791,7 +809,7 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
           }`}
         >
           <Shield className="w-4 h-4 text-purple-400" />
-          <span>CALL TAILS (1.9x)</span>
+          <span>CALL TAILS (2.0x)</span>
         </button>
       </div>
 
@@ -972,7 +990,7 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
       setIsSpinning(false);
       soundEngine.playClick();
 
-      // 1000ms delay so player clearly inspects all 3 stopped reels before popup appears
+      // 450ms delay so player clearly inspects all 3 stopped reels before popup appears
       setTimeout(() => {
         // Payout Calculation: ONLY 3-of-a-kind pays!
         if (final1.id === final2.id && final2.id === final3.id) {
@@ -1020,7 +1038,7 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
             deltaAmount: -bet,
           });
         }
-      }, 1000);
+      }, 450);
     }, 2300);
   };
 
@@ -1217,7 +1235,7 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
             multiplier: "3:2 Payout",
           });
         }
-      }, 800);
+      }, 450);
     } else {
       setGameState("playing");
     }
@@ -1247,7 +1265,7 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
           betValue: `${bet.toLocaleString()} Astrites`,
           deltaAmount: -bet,
         });
-      }, 750);
+      }, 450);
     }
   };
 
@@ -1328,7 +1346,7 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
           deltaAmount: 0,
         });
       }
-    }, 800);
+    }, 450);
   };
 
   return (
@@ -1470,7 +1488,7 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
 // SUB-GAME 4: DICE LADDER (1 to 20) - Cantarella
 // Number 1-20, Dynamic Conditional Odds, Fair Cash Out, Tie Push
 // ============================================================================
-const LADDER_STEPS_20 = [1.0, 1.5, 2.4, 4.2, 8.5, 18.0, 40.0];
+const LADDER_STEPS_20 = [0.5, 1.5, 2.4, 4.2, 8.5, 18.0, 40.0];
 
 const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites }) => {
   const [bet, setBet] = useState(100);
@@ -1535,7 +1553,7 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
           } else {
             soundEngine.playClick();
           }
-        }, 800);
+        }, 450);
         return;
       }
 
@@ -1543,7 +1561,7 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
       if (guess === "higher" && nextNum > currentNum) correct = true;
       if (guess === "lower" && nextNum < currentNum) correct = true;
 
-      // 800ms inspection delay
+      // 450ms inspection delay
       setTimeout(() => {
         if (correct) {
           soundEngine.playAstriteGain();
@@ -1579,7 +1597,7 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
             deltaAmount: -bet,
           });
         }
-      }, 800);
+      }, 450);
     }, 600);
   };
 
@@ -1592,7 +1610,18 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
     setStepIndex(-1);
     soundEngine.playAstriteGain();
 
-    if (mult === 1.0) {
+    if (mult < 1.0) {
+      setOutcomeModal({
+        type: "loss",
+        title: "EARLY CASH OUT",
+        landedTitle: "Cashed Out At",
+        landedValue: `${mult}x Base Step`,
+        betTitle: "Initial Stake",
+        betValue: `${bet.toLocaleString()} Astrites`,
+        deltaAmount: payout - bet,
+        multiplier: `${mult}x Forfeit`,
+      });
+    } else if (mult === 1.0) {
       setOutcomeModal({
         type: "push",
         title: "BREAK-EVEN CASH OUT!",
@@ -1716,7 +1745,9 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
             onClick={handleCashOut}
             className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-black uppercase text-xs tracking-wider transition-all shadow-[0_0_15px_rgba(250,204,21,0.4)] hover:scale-101 active:scale-98 cursor-pointer"
           >
-            {LADDER_STEPS_20[stepIndex] === 1.0
+            {LADDER_STEPS_20[stepIndex] < 1.0
+              ? `CASH OUT ${Math.floor(bet * LADDER_STEPS_20[stepIndex]).toLocaleString()} ASTRITES (${LADDER_STEPS_20[stepIndex]}x FORFEIT)`
+              : LADDER_STEPS_20[stepIndex] === 1.0
               ? `CASH OUT ${bet.toLocaleString()} ASTRITES (1.0x BREAK-EVEN REFUND)`
               : `CASH OUT ${Math.floor(bet * LADDER_STEPS_20[stepIndex]).toLocaleString()} ASTRITES (${LADDER_STEPS_20[stepIndex]}x)`}
           </button>
@@ -1857,7 +1888,7 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
             deltaAmount: -bet,
           });
         }
-      }, 800);
+      }, 450);
     }, 1400);
   };
 
@@ -2122,7 +2153,7 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
           // Found first 3-of-a-kind prize!
           const def = MULTIPLIER_DEFS[type];
 
-          // 800ms inspection delay
+          // 450ms inspection delay
           setTimeout(() => {
             if (def.mult > 1) {
               const payout = selectedTier.cost * def.mult;
@@ -2154,7 +2185,7 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
                 multiplier: "1.0x Refund",
               });
             }
-          }, 800);
+          }, 450);
           return true;
         }
       }
@@ -2175,7 +2206,7 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
           betValue: `${selectedTier.cost.toLocaleString()} ✦`,
           deltaAmount: -selectedTier.cost,
         });
-      }, 800);
+      }, 450);
       return true;
     }
 
