@@ -17,6 +17,8 @@ import {
   AlertTriangle,
   ArrowUp,
   ArrowDown,
+  Lock,
+  ShieldAlert,
 } from "lucide-react";
 import { soundEngine } from "@/lib/audio/soundEngine";
 import { AstriteIcon } from "@/components/ui/GameIcons";
@@ -57,7 +59,7 @@ export const MINIGAME_HOSTS: Record<
   dice: {
     name: "Cantarella",
     title: "Dice Ladder",
-    tag: "1 - 30",
+    tag: "Unavailable",
   },
   wheel: {
     name: "Phoebe",
@@ -503,6 +505,11 @@ export const PlazaMinigamesModal = React.memo<PlazaMinigamesModalProps>(({
                 >
                   <Icon className="w-3.5 h-3.5" />
                   <span>{t.label}</span>
+                  {t.id === "dice" && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/30 font-mono">
+                      Offline
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -1446,7 +1453,46 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
 // ============================================================================
 const LADDER_STEPS_30 = [1.0, 1.8, 3.0, 5.5, 10.0, 20.0, 35.0];
 
+const IS_DICE_LADDER_ENABLED = false;
+
 const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites }) => {
+  if (!IS_DICE_LADDER_ENABLED) {
+    return (
+      <div className="max-w-md mx-auto flex flex-col items-center justify-center p-6 text-center space-y-4 animate-fade-in select-none my-auto py-10">
+        <div className="relative">
+          <div className="w-20 h-20 rounded-2xl bg-amber-500/15 border-2 border-amber-400/40 flex items-center justify-center text-amber-400 shadow-[0_0_35px_rgba(245,158,11,0.25)]">
+            <Lock className="w-9 h-9 text-amber-400" />
+          </div>
+          <div className="absolute -bottom-1 -right-1 p-1 rounded-lg bg-black border border-amber-400/60 text-amber-400">
+            <ShieldAlert className="w-4 h-4" />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 text-xs font-mono font-bold tracking-wider uppercase">
+            <span>Temporarily Unavailable</span>
+          </div>
+          <h3 className="text-xl font-black text-white font-mono tracking-wide">
+            DICE LADDER OFFLINE
+          </h3>
+          <p className="text-xs text-gray-300 font-mono leading-relaxed max-w-sm mx-auto">
+            Cantarella&apos;s Dice Ladder is temporarily closed for abuse prevention, security verification, and algorithmic re-calibration.
+          </p>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 text-left text-xs font-mono text-gray-400 space-y-1.5 w-full">
+          <div className="flex items-center space-x-2 text-yellow-300 font-bold">
+            <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
+            <span>Abuse Prevention Notice</span>
+          </div>
+          <p className="text-[11px] leading-relaxed text-gray-400">
+            Wagering on this machine has been temporarily disabled. Please check back in an upcoming update or try other Jinzhou Plaza games!
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const [bet, setBet] = useState(100);
   const [currentNum, setCurrentNum] = useState<number>(15);
   const [stepIndex, setStepIndex] = useState(-1);
