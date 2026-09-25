@@ -549,7 +549,7 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
   const [side, setSide] = useState<"heads" | "tails">("heads");
   const [isFlipping, setIsFlipping] = useState(false);
   const [rotation, setRotation] = useState<number>(0);
-  const [pendingOutcome, setPendingOutcome] = useState<"heads" | "tails" | "edge" | null>(null);
+  const [pendingOutcome, setPendingOutcome] = useState<"heads" | "tails" | null>(null);
   const [streak, setStreak] = useState(0);
   const [outcomeModal, setOutcomeModal] = useState<MinigameOutcomeData | null>(null);
   const [insufficientNeeded, setInsufficientNeeded] = useState<number | null>(null);
@@ -570,25 +570,16 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
     setIsFlipping(true);
     setOutcomeModal(null);
 
-    // 45% Heads, 45% Tails, 10% Edge (Push / Refund)
-    const roll = Math.random();
-    let outcomeSide: "heads" | "tails" | "edge";
-    if (roll < 0.10) {
-      outcomeSide = "edge";
-    } else if (roll < 0.55) {
-      outcomeSide = "heads";
-    } else {
-      outcomeSide = "tails";
-    }
+    // Strictly 50% Heads, 50% Tails (No edge outcome)
+    const outcomeSide: "heads" | "tails" = Math.random() < 0.5 ? "heads" : "tails";
     setPendingOutcome(outcomeSide);
 
     // Flip math:
     // Front face (0 deg) = HEADS
     // Back face (180 deg) = TAILS
-    // Edge (90 deg) = STANDING ON RIM
     const baseRotation = Math.ceil(rotation / 360) * 360;
     const spins = 1800; // 5 full turns
-    const target = baseRotation + spins + (outcomeSide === "tails" ? 180 : outcomeSide === "edge" ? 90 : 0);
+    const target = baseRotation + spins + (outcomeSide === "tails" ? 180 : 0);
     setRotation(target);
   };
 
@@ -598,24 +589,6 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
 
     // 750ms suspense delay so user sees the landed coin before the popup appears
     setTimeout(() => {
-      if (pendingOutcome === "edge") {
-        onUpdateAstrites(bet);
-        soundEngine.playAstriteGain();
-        setOutcomeModal({
-          type: "push",
-          title: "EDGE LANDING! BET RETURNED",
-          landedTitle: "Coin Landed On",
-          landedValue: "STANDING ON EDGE",
-          landedIcon: "🪙",
-          landedColor: "#38bdf8",
-          betTitle: "Your Call",
-          betValue: `${side.toUpperCase()} (${bet.toLocaleString()} ✦)`,
-          deltaAmount: 0,
-          multiplier: "1.0x Refund",
-        });
-        return;
-      }
-
       const won = pendingOutcome === side;
       if (won) {
         const payout = bet * 2;
@@ -631,7 +604,7 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
           landedColor: pendingOutcome === "heads" ? "#facc15" : "#c084fc",
           betTitle: "Your Call",
           betValue: `${side.toUpperCase()} (${bet.toLocaleString()} ✦)`,
-          deltaAmount: bet,
+          deltaAmount: payout,
           multiplier: "2.0x Payout",
         });
       } else {
@@ -659,7 +632,7 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
         <div className="flex items-center space-x-2 text-left">
           <Coins className="w-4 h-4 text-amber-400 flex-shrink-0" />
           <span>
-            <strong>Brant:</strong> "Heads or Tails, Rover? Double up or land on edge to get your bet back!"
+            <strong>Brant:</strong> "Heads or Tails, Rover? Double up or lose it all!"
           </span>
         </div>
         <div className="flex items-center space-x-2 flex-shrink-0 font-bold ml-2">
@@ -998,10 +971,9 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
               multiplier: "1.0x Refund",
             });
           } else {
-            // Profit is bet * mult; user receives profit PLUS stake back!
-            const profit = bet * mult;
-            const totalPayout = profit + bet;
-            onUpdateAstrites(totalPayout);
+            // Bet winnings is strictly multiplier * bet!
+            const payout = bet * mult;
+            onUpdateAstrites(payout);
             soundEngine.playAstriteGain();
             setOutcomeModal({
               type: "win",
@@ -1010,7 +982,7 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
               landedValue: `${final1.symbol} ${final2.symbol} ${final3.symbol}`,
               betTitle: "Bet",
               betValue: `${bet.toLocaleString()} ✦`,
-              deltaAmount: profit,
+              deltaAmount: payout,
               multiplier: `${mult}x`,
             });
           }
@@ -1815,10 +1787,9 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
         const chosen = PERYA_COLORS.find((c) => c.id === selectedColor) || PERYA_COLORS[0];
 
         if (matches === 2) {
-          // Double Match: Win 3x! Profit = bet * 3; returned = profit + bet = bet * 4
-          const profit = bet * 3;
-          const totalReturn = profit + bet;
-          onUpdateAstrites(totalReturn);
+          // Double Match: Win 3x! Winnings is strictly bet * 3
+          const payout = bet * 3;
+          onUpdateAstrites(payout);
           soundEngine.playAstriteGain();
           setOutcomeModal({
             type: "win",
@@ -1828,14 +1799,13 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
             landedColor: chosen.hex,
             betTitle: "Bet",
             betValue: `${chosen.name} (${bet.toLocaleString()} ✦)`,
-            deltaAmount: profit,
+            deltaAmount: payout,
             multiplier: "3x Double",
           });
         } else if (matches === 1) {
-          // Single Match: Win 2x! Profit = bet * 2; returned = profit + bet = bet * 3
-          const profit = bet * 2;
-          const totalReturn = profit + bet;
-          onUpdateAstrites(totalReturn);
+          // Single Match: Win 2x! Winnings is strictly bet * 2
+          const payout = bet * 2;
+          onUpdateAstrites(payout);
           soundEngine.playAstriteGain();
           setOutcomeModal({
             type: "win",
@@ -1845,7 +1815,7 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
             landedColor: chosen.hex,
             betTitle: "Bet",
             betValue: `${chosen.name} (${bet.toLocaleString()} ✦)`,
-            deltaAmount: profit,
+            deltaAmount: payout,
             multiplier: "2x Win",
           });
         } else {
@@ -2096,9 +2066,8 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
           // 800ms delay so user inspects the 3rd matching symbol on the 3x3 grid
           setTimeout(() => {
             if (def.mult > 1) {
-              const profit = selectedTier.cost * def.mult;
-              const totalPayout = profit + selectedTier.cost;
-              onUpdateAstrites(totalPayout);
+              const payout = selectedTier.cost * def.mult;
+              onUpdateAstrites(payout);
               soundEngine.playAstriteGain();
               setOutcomeModal({
                 type: "win",
@@ -2108,7 +2077,7 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
                 landedColor: def.color,
                 betTitle: "Ticket",
                 betValue: `${selectedTier.cost.toLocaleString()} ✦`,
-                deltaAmount: profit,
+                deltaAmount: payout,
                 multiplier: `${def.mult}x`,
               });
             } else if (def.mult === 1) {
