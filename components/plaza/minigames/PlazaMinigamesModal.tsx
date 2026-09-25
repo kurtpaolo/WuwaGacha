@@ -61,8 +61,8 @@ export const MINIGAME_HOSTS: Record<
   },
   wheel: {
     name: "Phoebe",
-    title: "Wheel of Fortune",
-    tag: "Color Wheel",
+    title: "Color Game",
+    tag: "2-Dice Perya",
   },
   scratch: {
     name: "Lupa",
@@ -71,7 +71,7 @@ export const MINIGAME_HOSTS: Record<
   },
 };
 
-const BET_PRESETS = [50, 100, 250, 500, 1000];
+const BET_PRESETS = [100, 500, 1000];
 
 // ============================================================================
 // INSUFFICIENT ASTRITES ALERT MODAL
@@ -125,6 +125,132 @@ const InsufficientAlertModal: React.FC<InsufficientAlertProps> = ({ needed, curr
 };
 
 // ============================================================================
+// UNIVERSAL BET SELECTOR (100, 500, 1000, CUSTOM)
+// ============================================================================
+interface BetSelectorProps {
+  bet: number;
+  setBet: (val: number) => void;
+  disabled?: boolean;
+  astriteBalance: number;
+  onInsufficient?: (needed: number) => void;
+}
+
+const BetSelector: React.FC<BetSelectorProps> = ({
+  bet,
+  setBet,
+  disabled,
+  astriteBalance,
+  onInsufficient,
+}) => {
+  const [isCustom, setIsCustom] = useState(() => ![100, 500, 1000].includes(bet));
+  const [customText, setCustomText] = useState(() => (![100, 500, 1000].includes(bet) ? bet.toString() : ""));
+
+  const handlePreset = (amt: number) => {
+    if (amt > astriteBalance) {
+      soundEngine.playInsufficient();
+      onInsufficient?.(amt);
+      return;
+    }
+    soundEngine.playClick();
+    setIsCustom(false);
+    setBet(amt);
+  };
+
+  const handleCustomInput = (val: string) => {
+    setCustomText(val);
+    const parsed = parseInt(val.replace(/\D/g, ""), 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      setBet(Math.min(parsed, astriteBalance));
+    }
+  };
+
+  return (
+    <div className="space-y-2 w-full pt-1">
+      <div className="flex items-center justify-between text-xs font-mono text-gray-400">
+        <span>Choose Bet:</span>
+        <span className="font-bold text-white flex items-center space-x-1">
+          <span>{bet.toLocaleString()} Astrites</span>
+          <AstriteIcon className="w-3.5 h-3.5 inline ml-1" />
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {BET_PRESETS.map((amt) => {
+          const isSelected = !isCustom && bet === amt;
+          return (
+            <button
+              key={amt}
+              type="button"
+              disabled={disabled}
+              onClick={() => handlePreset(amt)}
+              className={`flex-1 min-w-[65px] py-1.5 rounded-lg border font-mono text-xs font-bold transition-all cursor-pointer ${
+                isSelected
+                  ? "bg-yellow-400/25 border-yellow-400 text-yellow-300 shadow-[0_0_12px_rgba(250,204,21,0.25)] scale-102"
+                  : "bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              {amt.toLocaleString()}
+            </button>
+          );
+        })}
+
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => {
+            soundEngine.playClick();
+            setIsCustom(true);
+            setCustomText(bet.toString());
+          }}
+          className={`flex-1 min-w-[65px] py-1.5 rounded-lg border font-mono text-xs font-bold transition-all cursor-pointer ${
+            isCustom
+              ? "bg-amber-400/25 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.25)] scale-102"
+              : "bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          Custom
+        </button>
+      </div>
+
+      {isCustom && (
+        <div className="flex items-center gap-2 pt-1 animate-fade-in">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              disabled={disabled}
+              value={customText}
+              placeholder="Enter bet amount..."
+              onChange={(e) => handleCustomInput(e.target.value)}
+              className="w-full px-3 py-1.5 rounded-lg bg-black/60 border border-amber-400/60 text-white font-mono text-xs focus:outline-none focus:border-amber-400 shadow-inner"
+            />
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-gray-500">
+              ✦
+            </span>
+          </div>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              if (astriteBalance <= 0) {
+                soundEngine.playInsufficient();
+                onInsufficient?.(100);
+                return;
+              }
+              soundEngine.playClick();
+              setCustomText(astriteBalance.toString());
+              setBet(astriteBalance);
+            }}
+            className="px-3 py-1.5 rounded-lg border border-rose-400/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 font-mono text-xs font-bold transition-all cursor-pointer"
+          >
+            MAX
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================================================
 // UNIVERSAL HIGH-IMPACT OUTCOME MODAL
 // ============================================================================
 export interface MinigameOutcomeData {
@@ -151,6 +277,9 @@ interface OutcomeModalProps {
 const MinigameOutcomeModal: React.FC<OutcomeModalProps> = ({ outcome, onPlayAgain, onClose }) => {
   if (!outcome) return null;
 
+  const isWin = outcome.type === "win";
+  const isLoss = outcome.type === "loss";
+
   return (
     <AnimatePresence>
       <motion.div
@@ -161,15 +290,15 @@ const MinigameOutcomeModal: React.FC<OutcomeModalProps> = ({ outcome, onPlayAgai
         onClick={onClose}
       >
         <motion.div
-          initial={{ scale: 0.85, y: 15, opacity: 0 }}
+          initial={{ scale: 0.88, y: 12, opacity: 0 }}
           animate={{ scale: 1, y: 0, opacity: 1 }}
           exit={{ scale: 0.9, y: 10, opacity: 0 }}
           transition={{ type: "spring", damping: 22, stiffness: 350 }}
           onClick={(e) => e.stopPropagation()}
           className={`w-full max-w-sm rounded-2xl p-5 border-2 shadow-2xl flex flex-col items-center text-center space-y-4 ${
-            outcome.type === "win"
+            isWin
               ? "bg-[#0a1811] border-emerald-400 shadow-[0_0_40px_rgba(16,185,129,0.4)]"
-              : outcome.type === "loss"
+              : isLoss
               ? "bg-[#180a0f] border-rose-500 shadow-[0_0_40px_rgba(244,63,94,0.35)]"
               : "bg-[#161208] border-amber-400 shadow-[0_0_40px_rgba(245,158,11,0.3)]"
           }`}
@@ -178,91 +307,64 @@ const MinigameOutcomeModal: React.FC<OutcomeModalProps> = ({ outcome, onPlayAgai
           <div className="flex flex-col items-center space-y-1">
             <div
               className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl border-2 shadow-lg ${
-                outcome.type === "win"
+                isWin
                   ? "bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.5)]"
-                  : outcome.type === "loss"
+                  : isLoss
                   ? "bg-rose-500/20 border-rose-400 text-rose-300 shadow-[0_0_20px_rgba(244,63,94,0.4)]"
                   : "bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.4)]"
               }`}
             >
-              {outcome.type === "win" ? "🏆" : outcome.type === "loss" ? "💥" : "🤝"}
+              {isWin ? "🏆" : isLoss ? "💥" : "🤝"}
             </div>
             <h3
-              className={`text-base sm:text-lg font-black font-mono tracking-wider uppercase ${
-                outcome.type === "win"
+              className={`text-lg sm:text-xl font-black font-mono tracking-wider uppercase ${
+                isWin
                   ? "text-emerald-300 drop-shadow-[0_0_12px_rgba(16,185,129,0.5)]"
-                  : outcome.type === "loss"
-                  ? "text-rose-300 drop-shadow-[0_0_12px_rgba(244,63,94,0.5)]"
+                  : isLoss
+                  ? "text-rose-400 drop-shadow-[0_0_12px_rgba(244,63,94,0.5)]"
                   : "text-amber-300 drop-shadow-[0_0_12px_rgba(245,158,11,0.5)]"
               }`}
             >
-              {outcome.title}
+              {isWin ? "WIN!" : isLoss ? "LOSE" : "REFUND"}
             </h3>
             {outcome.multiplier && (
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-black bg-yellow-400 text-black shadow">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-black bg-yellow-400 text-black shadow">
                 {outcome.multiplier}
               </span>
             )}
           </div>
 
-          {/* Comparison Cards Grid */}
-          <div className="grid grid-cols-2 gap-2.5 w-full text-left">
-            <div className="p-2.5 rounded-xl bg-black/60 border border-white/10 space-y-1">
-              <span className="text-[10px] font-mono text-gray-400 block font-bold uppercase">
-                {outcome.landedTitle}
-              </span>
-              <div className="flex items-center space-x-1.5">
-                {outcome.landedIcon && <span className="text-base">{outcome.landedIcon}</span>}
-                <span
-                  className="font-mono font-black text-xs sm:text-sm truncate"
-                  style={{ color: outcome.landedColor || "#facc15" }}
-                >
-                  {outcome.landedValue}
-                </span>
-              </div>
-              {outcome.landedSub && (
-                <span className="text-[9px] font-mono text-gray-400 block truncate">
-                  {outcome.landedSub}
-                </span>
-              )}
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-black/60 border border-white/10 space-y-1">
-              <span className="text-[10px] font-mono text-gray-400 block font-bold uppercase">
-                {outcome.betTitle}
-              </span>
-              <span className="font-mono font-bold text-xs sm:text-sm text-white block truncate">
-                {outcome.betValue}
-              </span>
-              {outcome.betSub && (
-                <span className="text-[9px] font-mono text-gray-400 block truncate">
-                  {outcome.betSub}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Net Astrite Change Strip */}
+          {/* Large Amount Display */}
           <div
-            className={`w-full py-2 px-3 rounded-xl border font-mono font-black text-xs sm:text-sm flex items-center justify-between ${
+            className={`w-full py-3 px-4 rounded-xl border font-mono font-black flex items-center justify-center text-2xl sm:text-3xl ${
               outcome.deltaAmount > 0
-                ? "bg-emerald-500/15 border-emerald-400/50 text-emerald-300"
+                ? "bg-emerald-500/15 border-emerald-400/50 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.25)]"
                 : outcome.deltaAmount < 0
-                ? "bg-rose-500/15 border-rose-400/50 text-rose-300"
+                ? "bg-rose-500/15 border-rose-400/50 text-rose-400 shadow-[0_0_20px_rgba(244,63,94,0.2)]"
                 : "bg-white/5 border-white/10 text-gray-300"
             }`}
           >
-            <span className="text-xs text-gray-400 font-normal">Astrite Net:</span>
-            <span className="flex items-center space-x-1.5 text-base">
-              <span>
-                {outcome.deltaAmount > 0
-                  ? `+${outcome.deltaAmount.toLocaleString()}`
-                  : outcome.deltaAmount < 0
-                  ? `-${Math.abs(outcome.deltaAmount).toLocaleString()}`
-                  : "0 (Returned)"}
-              </span>
-              <AstriteIcon className="w-4 h-4 ml-1 inline" />
+            <span>
+              {outcome.deltaAmount > 0
+                ? `+${outcome.deltaAmount.toLocaleString()}`
+                : outcome.deltaAmount < 0
+                ? `-${Math.abs(outcome.deltaAmount).toLocaleString()}`
+                : "0"}
             </span>
+            <AstriteIcon className="w-6 h-6 ml-2 inline" />
+          </div>
+
+          {/* Clean Result Row */}
+          <div className="flex items-center justify-between w-full px-3 py-2 rounded-xl bg-black/50 border border-white/10 font-mono text-xs text-gray-300">
+            <div className="flex items-center space-x-1.5">
+              {outcome.landedIcon && <span>{outcome.landedIcon}</span>}
+              <span style={{ color: outcome.landedColor || "#ffffff" }} className="font-bold">
+                {outcome.landedValue}
+              </span>
+            </div>
+            <div className="text-gray-400 text-[11px]">
+              Bet: <strong className="text-white">{outcome.betValue}</strong>
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -699,54 +801,14 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
         </button>
       </div>
 
-      {/* Bet Amount Selector */}
-      <div className="space-y-2 w-full pt-1">
-        <div className="flex items-center justify-between text-xs font-mono text-gray-400">
-          <span>Choose Bet:</span>
-          <span>{bet.toLocaleString()} Astrites</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {BET_PRESETS.map((amt) => (
-            <button
-              key={amt}
-              type="button"
-              disabled={isFlipping}
-              onClick={() => {
-                if (amt > astriteBalance) {
-                  soundEngine.playInsufficient();
-                  setInsufficientNeeded(amt);
-                  return;
-                }
-                soundEngine.playClick();
-                setBet(amt);
-              }}
-              className={`flex-1 min-w-[65px] py-1.5 rounded-lg border font-mono text-xs font-bold transition-all cursor-pointer ${
-                bet === amt
-                  ? "bg-amber-400/20 border-amber-400 text-yellow-300"
-                  : "bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10"
-              }`}
-            >
-              {amt}
-            </button>
-          ))}
-          <button
-            type="button"
-            disabled={isFlipping}
-            onClick={() => {
-              if (astriteBalance <= 0) {
-                soundEngine.playInsufficient();
-                setInsufficientNeeded(100);
-                return;
-              }
-              soundEngine.playClick();
-              setBet(Math.min(astriteBalance, 5000));
-            }}
-            className="px-3 py-1.5 rounded-lg border border-rose-400/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 font-mono text-xs font-bold transition-all cursor-pointer"
-          >
-            MAX
-          </button>
-        </div>
-      </div>
+      {/* Universal Bet Selector */}
+      <BetSelector
+        bet={bet}
+        setBet={setBet}
+        disabled={isFlipping}
+        astriteBalance={astriteBalance}
+        onInsufficient={(needed) => setInsufficientNeeded(needed)}
+      />
 
       {/* Big Flip Button */}
       <button
@@ -786,12 +848,12 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
 // Rapid Rolling Symbols, 2-Match Payouts, 1000ms Inspection Delay
 // ============================================================================
 const SLOT_SYMBOLS = [
-  { id: "echo", name: "Chirrpit", symbol: "🍒", mult: 1, label: "Refund (1.0x)" },
-  { id: "energy", name: "Waveplate", symbol: "⚡", mult: 2, label: "2x Payout" },
-  { id: "astrite", name: "Astrite", symbol: "💎", mult: 4, label: "4x Payout" },
-  { id: "boss", name: "Crownless", symbol: "👑", mult: 8, label: "8x Payout" },
-  { id: "star5", name: "5-Star", symbol: "⭐", mult: 20, label: "20x Payout" },
-  { id: "jackpot", name: "Gold Star", symbol: "🌟", mult: 50, label: "50x Jackpot" },
+  { id: "echo", symbol: "🍒", mult: 1, isRefund: true },
+  { id: "energy", symbol: "⚡", mult: 2, isRefund: false },
+  { id: "astrite", symbol: "💎", mult: 4, isRefund: false },
+  { id: "boss", symbol: "👑", mult: 8, isRefund: false },
+  { id: "star5", symbol: "⭐", mult: 20, isRefund: false },
+  { id: "jackpot", symbol: "🌟", mult: 50, isRefund: false },
 ];
 
 const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites }) => {
@@ -815,52 +877,45 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
     setIsSpinning(true);
     setOutcomeModal(null);
 
-    // Roll outcome distribution:
-    // 0.5% Gold Star (50x Jackpot)
-    // 1.5% 5-Star (20x Win)
-    // 3.5% Crownless (8x Win)
-    // 6.5% Astrite (4x Win)
-    // 12.0% Waveplate (2x Win)
-    // 18.0% Chirrpit (1.0x Push / Bet Returned)
-    // 58.0% Miss (strictly a LOSS: 2-match near misses or no match)
+    // OwO Bot / Real-world Casino Slots Odds (RTP: ~94.3%, House Edge ~5.7%):
+    // 0.2% 🌟 Jackpot (50x Win)
+    // 0.6% ⭐ 5-Star (20x Win)
+    // 1.5% 👑 Crown (8x Win)
+    // 3.5% 💎 Gem (4x Win)
+    // 8.5% ⚡ Energy (2x Win)
+    // 15.0% 🍒 Cherry (1.0x Refund / Break-Even)
+    // 70.7% Loss (strictly NO 3-match, ~60% near-miss pairs)
     const roll = Math.random();
     let final1: typeof SLOT_SYMBOLS[0];
     let final2: typeof SLOT_SYMBOLS[0];
     let final3: typeof SLOT_SYMBOLS[0];
 
-    if (roll < 0.005) {
-      // 🌟 Gold Star Jackpot (50x)
+    if (roll < 0.002) {
       final1 = SLOT_SYMBOLS[5];
       final2 = SLOT_SYMBOLS[5];
       final3 = SLOT_SYMBOLS[5];
-    } else if (roll < 0.020) {
-      // ⭐ 5-Star (20x)
+    } else if (roll < 0.008) {
       final1 = SLOT_SYMBOLS[4];
       final2 = SLOT_SYMBOLS[4];
       final3 = SLOT_SYMBOLS[4];
-    } else if (roll < 0.055) {
-      // 👑 Crownless (8x)
+    } else if (roll < 0.023) {
       final1 = SLOT_SYMBOLS[3];
       final2 = SLOT_SYMBOLS[3];
       final3 = SLOT_SYMBOLS[3];
-    } else if (roll < 0.120) {
-      // 💎 Astrite (4x)
+    } else if (roll < 0.058) {
       final1 = SLOT_SYMBOLS[2];
       final2 = SLOT_SYMBOLS[2];
       final3 = SLOT_SYMBOLS[2];
-    } else if (roll < 0.240) {
-      // ⚡ Waveplate (2x)
+    } else if (roll < 0.143) {
       final1 = SLOT_SYMBOLS[1];
       final2 = SLOT_SYMBOLS[1];
       final3 = SLOT_SYMBOLS[1];
-    } else if (roll < 0.420) {
-      // 🍒 Chirrpit (1.0x Refund / Push)
+    } else if (roll < 0.293) {
       final1 = SLOT_SYMBOLS[0];
       final2 = SLOT_SYMBOLS[0];
       final3 = SLOT_SYMBOLS[0];
     } else {
-      // Loss: strictly NO 3-match! 2 matching reels do NOT win.
-      // In 65% of losses, generate a near-miss pair for suspense
+      // Loss: strictly NO 3-match! In 65% of losses, generate a near-miss pair for suspense
       const otherSymbols = [...SLOT_SYMBOLS];
       const pick1 = otherSymbols[Math.floor(Math.random() * otherSymbols.length)];
       if (Math.random() < 0.65) {
@@ -926,52 +981,49 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
       // 1000ms delay so player clearly inspects all 3 stopped reels before popup appears
       setTimeout(() => {
         // Payout Calculation: ONLY 3-of-a-kind pays!
-        // 2-of-a-kind is strictly a near-miss LOSS.
         if (final1.id === final2.id && final2.id === final3.id) {
           const mult = final1.mult;
-          if (mult === 1) {
-            // Chirrpit Push / Refund: Get what you bet!
+          if (final1.isRefund) {
+            // Push / Refund: Get what you bet back!
             onUpdateAstrites(bet);
             soundEngine.playAstriteGain();
             setOutcomeModal({
               type: "push",
-              title: "CHIRRPIT REBATE! BET RETURNED",
-              landedTitle: "Slot Reels Result",
+              title: "REFUND",
+              landedTitle: "Result",
               landedValue: `${final1.symbol} ${final2.symbol} ${final3.symbol}`,
-              landedSub: "3x Chirrpit (1.0x Break-Even)",
-              betTitle: "Wager Placed",
-              betValue: `${bet.toLocaleString()} Astrites`,
+              betTitle: "Bet",
+              betValue: `${bet.toLocaleString()} ✦`,
               deltaAmount: 0,
               multiplier: "1.0x Refund",
             });
           } else {
-            const payout = bet * mult;
-            onUpdateAstrites(payout);
+            // Profit is bet * mult; user receives profit PLUS stake back!
+            const profit = bet * mult;
+            const totalPayout = profit + bet;
+            onUpdateAstrites(totalPayout);
             soundEngine.playAstriteGain();
             setOutcomeModal({
               type: "win",
-              title: mult >= 50 ? "JACKPOT EXTRAVAGANZA!" : "3-OF-A-KIND WIN!",
-              landedTitle: "Slot Reels Result",
+              title: "WIN!",
+              landedTitle: "Result",
               landedValue: `${final1.symbol} ${final2.symbol} ${final3.symbol}`,
-              landedSub: `3x ${final1.name} (${mult}x)`,
-              betTitle: "Wager Placed",
-              betValue: `${bet.toLocaleString()} Astrites`,
-              deltaAmount: payout - bet,
-              multiplier: `${mult}x Payout`,
+              betTitle: "Bet",
+              betValue: `${bet.toLocaleString()} ✦`,
+              deltaAmount: profit,
+              multiplier: `${mult}x`,
             });
           }
         } else {
           // No 3-match: strictly LOSS
-          const isPair = final1.id === final2.id || final2.id === final3.id || final1.id === final3.id;
           soundEngine.playMissWhoosh();
           setOutcomeModal({
             type: "loss",
-            title: isPair ? "NEAR MISS! (NO PAYOUT)" : "NO MATCH",
-            landedTitle: "Slot Reels Result",
+            title: "LOSE",
+            landedTitle: "Result",
             landedValue: `${final1.symbol} ${final2.symbol} ${final3.symbol}`,
-            landedSub: isPair ? "2 matching symbols (3 required to win)" : "No matching combination",
-            betTitle: "Wager Placed",
-            betValue: `${bet.toLocaleString()} Astrites`,
+            betTitle: "Bet",
+            betValue: `${bet.toLocaleString()} ✦`,
             deltaAmount: -bet,
           });
         }
@@ -985,7 +1037,7 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
         <div className="flex items-center space-x-2 text-left">
           <Sparkles className="w-4 h-4 text-purple-400 flex-shrink-0" />
           <span>
-            <strong>Carlotta:</strong> "Match 3 across the reels to win up to 50x! Chirrpit refunds your bet."
+            Match 3 symbols across reels to win up to 50x. 🍒 refunds bet.
           </span>
         </div>
         <span className="text-[10px] font-mono text-purple-300 font-bold uppercase">
@@ -1011,49 +1063,25 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
         </div>
       </div>
 
-      {/* Paytable Summary Strip */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 w-full text-[10px] font-mono">
+      {/* Paytable Summary Strip - Logos & Multipliers Only, No Yap */}
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 w-full text-xs font-mono">
         {SLOT_SYMBOLS.map((s) => (
-          <div key={s.id} className="p-1.5 rounded-lg bg-black/40 border border-white/5 flex flex-col items-center">
-            <span className="text-base">{s.symbol}</span>
-            <span className="font-bold text-gray-300">{s.name}</span>
+          <div key={s.id} className="p-2 rounded-xl bg-black/40 border border-white/10 flex flex-col items-center justify-center space-y-0.5">
+            <span className="text-xl sm:text-2xl">{s.symbol}</span>
             <span className="text-yellow-400 font-bold">{s.mult}x</span>
+            {s.isRefund && <span className="text-[9px] text-gray-400 font-bold uppercase">Refund</span>}
           </div>
         ))}
       </div>
 
-      {/* Bet Presets */}
-      <div className="space-y-2 w-full pt-1">
-        <div className="flex items-center justify-between text-xs font-mono text-gray-400">
-          <span>Choose Bet:</span>
-          <span>{bet.toLocaleString()} Astrites</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {BET_PRESETS.map((amt) => (
-            <button
-              key={amt}
-              type="button"
-              disabled={isSpinning}
-              onClick={() => {
-                if (amt > astriteBalance) {
-                  soundEngine.playInsufficient();
-                  setInsufficientNeeded(amt);
-                  return;
-                }
-                soundEngine.playClick();
-                setBet(amt);
-              }}
-              className={`flex-1 min-w-[65px] py-1.5 rounded-lg border font-mono text-xs font-bold transition-all cursor-pointer ${
-                bet === amt
-                  ? "bg-purple-400/20 border-purple-400 text-purple-200"
-                  : "bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10"
-              }`}
-            >
-              {amt}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Universal Bet Presets (100, 500, 1000, Custom) */}
+      <BetSelector
+        bet={bet}
+        setBet={setBet}
+        disabled={isSpinning}
+        astriteBalance={astriteBalance}
+        onInsufficient={(needed) => setInsufficientNeeded(needed)}
+      />
 
       <button
         type="button"
@@ -1384,34 +1412,12 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
       {/* Controls */}
       {gameState === "betting" ? (
         <div className="space-y-3 w-full">
-          <div className="flex items-center justify-between text-xs font-mono text-gray-400">
-            <span>Bet Amount:</span>
-            <span>{bet.toLocaleString()} Astrites</span>
-          </div>
-          <div className="flex gap-2">
-            {BET_PRESETS.map((amt) => (
-              <button
-                key={amt}
-                type="button"
-                onClick={() => {
-                  if (amt > astriteBalance) {
-                    soundEngine.playInsufficient();
-                    setInsufficientNeeded(amt);
-                    return;
-                  }
-                  soundEngine.playClick();
-                  setBet(amt);
-                }}
-                className={`flex-1 py-1.5 rounded-lg border font-mono text-xs font-bold transition-all cursor-pointer ${
-                  bet === amt
-                    ? "bg-rose-400/20 border-rose-400 text-rose-200"
-                    : "bg-white/5 border-white/10 text-gray-400"
-                }`}
-              >
-                {amt}
-              </button>
-            ))}
-          </div>
+          <BetSelector
+            bet={bet}
+            setBet={setBet}
+            astriteBalance={astriteBalance}
+            onInsufficient={(needed) => setInsufficientNeeded(needed)}
+          />
           <button
             type="button"
             onClick={handleDeal}
@@ -1669,34 +1675,12 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
       {/* Controls: Higher or Lower Only */}
       {stepIndex < 0 ? (
         <div className="w-full space-y-2">
-          <div className="flex items-center justify-between text-xs font-mono text-gray-400">
-            <span>Stake Bet:</span>
-            <span>{bet.toLocaleString()} Astrites</span>
-          </div>
-          <div className="flex gap-2">
-            {BET_PRESETS.map((amt) => (
-              <button
-                key={amt}
-                type="button"
-                onClick={() => {
-                  if (amt > astriteBalance) {
-                    soundEngine.playInsufficient();
-                    setInsufficientNeeded(amt);
-                    return;
-                  }
-                  soundEngine.playClick();
-                  setBet(amt);
-                }}
-                className={`flex-1 py-1.5 rounded-lg border font-mono text-xs font-bold transition-all cursor-pointer ${
-                  bet === amt
-                    ? "bg-cyan-400/20 border-cyan-400 text-cyan-200"
-                    : "bg-white/5 border-white/10 text-gray-400 hover:text-white"
-                }`}
-              >
-                {amt}
-              </button>
-            ))}
-          </div>
+          <BetSelector
+            bet={bet}
+            setBet={setBet}
+            astriteBalance={astriteBalance}
+            onInsufficient={(needed) => setInsufficientNeeded(needed)}
+          />
           <button
             type="button"
             onClick={handleStartRun}
@@ -1762,45 +1746,39 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
 };
 
 // ============================================================================
-// SUB-GAME 5: WHEEL OF FORTUNE - Phoebe
-// Clean Vibrant Solid Colors on Slices, FULL Solid Color Box Buttons, 800ms Delay
+// SUB-GAME 5: PHILIPPINE PERYA COLOR GAME (2-Dice) - Phoebe
+// 6 Colors, 2 Six-Sided Color Dice, 1 Match = 2x Win, 2 Matches = 3x Double Win
 // ============================================================================
-export interface PureColorSector {
+export interface PeryaColor {
   id: string;
   name: string;
-  color: string;
+  hex: string;
   textColor: string;
-  mult: number;
+  emoji: string;
 }
 
-export const PURE_COLOR_SECTORS: PureColorSector[] = [
-  { id: "cyan", name: "Cyan", color: "#00e5ff", textColor: "#000000", mult: 2.5 },
-  { id: "red", name: "Red", color: "#ff3344", textColor: "#ffffff", mult: 2.5 },
-  { id: "green", name: "Green", color: "#00e676", textColor: "#000000", mult: 2.5 },
-  { id: "purple", name: "Purple", color: "#b388ff", textColor: "#000000", mult: 2.5 },
-  { id: "yellow", name: "Yellow", color: "#ffd600", textColor: "#000000", mult: 2.5 },
-  { id: "pink", name: "Pink", color: "#ff4081", textColor: "#ffffff", mult: 2.5 },
-  { id: "orange", name: "Orange", color: "#ff9100", textColor: "#000000", mult: 6.0 },
-  { id: "gold", name: "Gold", color: "#ffc400", textColor: "#000000", mult: 20.0 },
-  { id: "silver", name: "Silver Safe", color: "#94a3b8", textColor: "#000000", mult: 1.0 },
+export const PERYA_COLORS: PeryaColor[] = [
+  { id: "red", name: "Red", hex: "#ef4444", textColor: "#ffffff", emoji: "🔴" },
+  { id: "blue", name: "Blue", hex: "#3b82f6", textColor: "#ffffff", emoji: "🔵" },
+  { id: "yellow", name: "Yellow", hex: "#eab308", textColor: "#000000", emoji: "🟡" },
+  { id: "green", name: "Green", hex: "#22c55e", textColor: "#ffffff", emoji: "🟢" },
+  { id: "white", name: "White", hex: "#f8fafc", textColor: "#000000", emoji: "⚪" },
+  { id: "purple", name: "Purple", hex: "#a855f7", textColor: "#ffffff", emoji: "🟣" },
 ];
 
 const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites }) => {
   const [bet, setBet] = useState(100);
-  const [selectedTarget, setSelectedTarget] = useState<string>("yellow");
-  const [rotation, setRotation] = useState<number>(0);
-  const [isSpinning, setIsSpinning] = useState(false);
-  const [pendingSector, setPendingSector] = useState<PureColorSector | null>(null);
+  const [selectedColor, setSelectedColor] = useState<string>("yellow");
+  const [isRolling, setIsRolling] = useState(false);
+  const [diceResults, setDiceResults] = useState<[PeryaColor, PeryaColor]>([
+    PERYA_COLORS[2], // yellow
+    PERYA_COLORS[0], // red
+  ]);
   const [outcomeModal, setOutcomeModal] = useState<MinigameOutcomeData | null>(null);
   const [insufficientNeeded, setInsufficientNeeded] = useState<number | null>(null);
 
-  const SVG_SIZE = 300;
-  const CENTER = SVG_SIZE / 2;
-  const RADIUS = 140;
-  const SECTOR_ANGLE = 360 / PURE_COLOR_SECTORS.length; // 40 degrees
-
-  const handleSpinWheel = () => {
-    if (isSpinning) return;
+  const handleRollDice = () => {
+    if (isRolling) return;
 
     if (bet <= 0 || bet > astriteBalance) {
       soundEngine.playInsufficient();
@@ -1810,81 +1788,84 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
 
     soundEngine.playClick();
     onUpdateAstrites(-bet);
-    setIsSpinning(true);
+    setIsRolling(true);
     setOutcomeModal(null);
 
-    const winningIndex = Math.floor(Math.random() * PURE_COLOR_SECTORS.length);
-    const winningSector = PURE_COLOR_SECTORS[winningIndex];
-    setPendingSector(winningSector);
+    // Roll two 6-sided color dice independently (1/6 chance per color per die)
+    const finalDie1 = PERYA_COLORS[Math.floor(Math.random() * PERYA_COLORS.length)];
+    const finalDie2 = PERYA_COLORS[Math.floor(Math.random() * PERYA_COLORS.length)];
 
-    // Exact needle landing alignment
-    const targetRemainder = (360 - (((winningIndex + 0.5) * SECTOR_ANGLE) % 360)) % 360;
-    const currentRemainder = rotation % 360;
-    let delta = (targetRemainder - currentRemainder) % 360;
-    if (delta <= 0) delta += 360;
-    const fullSpins = 360 * 6;
-    const targetRotation = rotation + fullSpins + delta;
+    // Rapid tumbling color animation
+    const interval = setInterval(() => {
+      setDiceResults([
+        PERYA_COLORS[Math.floor(Math.random() * PERYA_COLORS.length)],
+        PERYA_COLORS[Math.floor(Math.random() * PERYA_COLORS.length)],
+      ]);
+    }, 70);
 
-    setRotation(targetRotation);
-  };
-
-  const handleSpinAnimationComplete = () => {
-    if (!isSpinning || !pendingSector) return;
-    setIsSpinning(false);
-
-    const won = pendingSector.id === selectedTarget;
-    const chosenSector = PURE_COLOR_SECTORS.find((s) => s.id === selectedTarget) || pendingSector;
-
-    // 800ms delay so user inspects the pointer on the winning color slice before popup
     setTimeout(() => {
-      if (pendingSector.id === "silver") {
-        // Universal Safe Zone / Push: Bet refunded regardless of selection!
-        onUpdateAstrites(bet);
-        soundEngine.playAstriteGain();
-        setOutcomeModal({
-          type: "push",
-          title: "SILVER SAFE ZONE! BET RETURNED",
-          landedTitle: "Needle Stopped On",
-          landedValue: "SILVER SAFE (1.0x)",
-          landedColor: "#94a3b8",
-          betTitle: "Your Selection",
-          betValue: `${chosenSector.name.toUpperCase()} (${chosenSector.mult}x)`,
-          betSub: "Safe Zone landed — stake returned in full!",
-          deltaAmount: 0,
-          multiplier: "1.0x Refund",
-        });
-      } else if (won && pendingSector.mult > 0) {
-        const payout = Math.floor(bet * pendingSector.mult);
-        onUpdateAstrites(payout);
-        soundEngine.playAstriteGain();
-        setOutcomeModal({
-          type: "win",
-          title: pendingSector.mult >= 20 ? "JACKPOT 20X GOLD!" : "WHEEL VICTORY!",
-          landedTitle: "Needle Stopped On",
-          landedValue: `${pendingSector.name.toUpperCase()} (${pendingSector.mult}x)`,
-          landedColor: pendingSector.color,
-          betTitle: "Your Selection",
-          betValue: `${chosenSector.name.toUpperCase()} (${chosenSector.mult}x)`,
-          betSub: `${bet.toLocaleString()} Astrites Wagered`,
-          deltaAmount: payout - bet,
-          multiplier: `${pendingSector.mult}x Payout`,
-        });
-      } else {
-        soundEngine.playMissWhoosh();
-        setOutcomeModal({
-          type: "loss",
-          title: "NO HIT ON WHEEL",
-          landedTitle: "Needle Stopped On",
-          landedValue: `${pendingSector.name.toUpperCase()} (${pendingSector.mult > 0 ? `${pendingSector.mult}x` : "0x"})`,
-          landedColor: pendingSector.color,
-          betTitle: "Your Selection",
-          betValue: `${chosenSector.name.toUpperCase()} (${chosenSector.mult}x)`,
-          betSub: `${bet.toLocaleString()} Astrites Wagered`,
-          deltaAmount: -bet,
-        });
-      }
-    }, 800);
+      clearInterval(interval);
+      setDiceResults([finalDie1, finalDie2]);
+      setIsRolling(false);
+      soundEngine.playClick();
+
+      // Inspection delay before outcome popup
+      setTimeout(() => {
+        const matches = (finalDie1.id === selectedColor ? 1 : 0) + (finalDie2.id === selectedColor ? 1 : 0);
+        const chosen = PERYA_COLORS.find((c) => c.id === selectedColor) || PERYA_COLORS[0];
+
+        if (matches === 2) {
+          // Double Match: Win 3x! Profit = bet * 3; returned = profit + bet = bet * 4
+          const profit = bet * 3;
+          const totalReturn = profit + bet;
+          onUpdateAstrites(totalReturn);
+          soundEngine.playAstriteGain();
+          setOutcomeModal({
+            type: "win",
+            title: "DOUBLE WIN!",
+            landedTitle: "Dice",
+            landedValue: `${finalDie1.emoji} ${finalDie2.emoji}`,
+            landedColor: chosen.hex,
+            betTitle: "Bet",
+            betValue: `${chosen.name} (${bet.toLocaleString()} ✦)`,
+            deltaAmount: profit,
+            multiplier: "3x Double",
+          });
+        } else if (matches === 1) {
+          // Single Match: Win 2x! Profit = bet * 2; returned = profit + bet = bet * 3
+          const profit = bet * 2;
+          const totalReturn = profit + bet;
+          onUpdateAstrites(totalReturn);
+          soundEngine.playAstriteGain();
+          setOutcomeModal({
+            type: "win",
+            title: "WIN!",
+            landedTitle: "Dice",
+            landedValue: `${finalDie1.emoji} ${finalDie2.emoji}`,
+            landedColor: chosen.hex,
+            betTitle: "Bet",
+            betValue: `${chosen.name} (${bet.toLocaleString()} ✦)`,
+            deltaAmount: profit,
+            multiplier: "2x Win",
+          });
+        } else {
+          // 0 Matches: Loss (-bet)
+          soundEngine.playMissWhoosh();
+          setOutcomeModal({
+            type: "loss",
+            title: "LOSE",
+            landedTitle: "Dice",
+            landedValue: `${finalDie1.emoji} ${finalDie2.emoji}`,
+            betTitle: "Bet",
+            betValue: `${chosen.name} (${bet.toLocaleString()} ✦)`,
+            deltaAmount: -bet,
+          });
+        }
+      }, 800);
+    }, 1400);
   };
+
+  const selectedObj = PERYA_COLORS.find((c) => c.id === selectedColor) || PERYA_COLORS[0];
 
   return (
     <div className="max-w-xl mx-auto flex flex-col items-center space-y-4 text-center relative">
@@ -1892,194 +1873,118 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
         <div className="flex items-center space-x-2 text-left">
           <CircleDot className="w-4 h-4 text-amber-400 flex-shrink-0" />
           <span>
-            <strong>Phoebe:</strong> "Choose your lucky color for up to 20x — or land on Silver Safe to get your bet back!"
+            Pick a color & roll 2 dice. 1 match = 2x win, 2 matches = 3x double!
           </span>
         </div>
         <span className="text-[10px] font-mono text-amber-300 font-bold uppercase">
-          20x Max Gold
+          3x Double
         </span>
       </div>
 
-      {/* SVG Solid Vibrant Color Wheel Stage */}
-      <div className="relative flex flex-col items-center justify-center my-1 select-none">
-        {/* Top Indicator Needle */}
-        <div className="absolute -top-3.5 z-30 flex flex-col items-center pointer-events-none drop-shadow-[0_4px_12px_rgba(0,0,0,0.9)]">
-          <div className="w-6 h-6 bg-gradient-to-b from-yellow-300 via-amber-400 to-yellow-500 rounded-md border-2 border-yellow-100 shadow-md flex items-center justify-center">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse border border-white" />
-          </div>
-          <div className="w-0 h-0 border-l-[12px] border-l-transparent border-r-[12px] border-r-transparent border-t-[18px] border-t-amber-400 drop-shadow-lg" />
+      {/* 2-Dice Display Arena */}
+      <div className="p-6 sm:p-8 rounded-2xl bg-[#080d19] border-2 border-amber-500/40 shadow-[0_0_35px_rgba(245,158,11,0.2)] w-full flex flex-col items-center justify-center space-y-4">
+        <div className="flex items-center justify-center gap-6 sm:gap-10">
+          {diceResults.map((die, idx) => (
+            <motion.div
+              key={idx}
+              animate={
+                isRolling
+                  ? {
+                      rotate: [0, 90, 180, 270, 360],
+                      scale: [1, 1.1, 0.95, 1],
+                      y: [0, -15, 5, 0],
+                    }
+                  : { rotate: 0, scale: 1, y: 0 }
+              }
+              transition={
+                isRolling
+                  ? { repeat: Infinity, duration: 0.35, ease: "linear" }
+                  : { duration: 0.2 }
+              }
+              className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl border-4 flex flex-col items-center justify-center shadow-2xl transition-colors select-none"
+              style={{
+                backgroundColor: die.hex,
+                borderColor: die.id === "white" ? "#cbd5e1" : "#ffffff40",
+                boxShadow: `0 0 25px ${die.hex}60`,
+              }}
+            >
+              <div
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-white/60 shadow-inner flex items-center justify-center font-mono font-black text-sm"
+                style={{
+                  backgroundColor: "rgba(0,0,0,0.15)",
+                  color: die.textColor,
+                }}
+              >
+                {die.emoji}
+              </div>
+            </motion.div>
+          ))}
         </div>
 
-        {/* Rotating SVG Wheel */}
-        <motion.div
-          animate={{ rotate: rotation }}
-          transition={{ duration: 3.2, ease: [0.12, 0.8, 0.2, 1] }}
-          onAnimationComplete={handleSpinAnimationComplete}
-          style={{ willChange: "transform", transform: "translateZ(0)" }}
-          className="w-72 h-72 sm:w-80 sm:h-80 rounded-full shadow-[0_0_40px_rgba(250,204,21,0.25)] flex items-center justify-center relative border-4 border-amber-400/60 bg-[#060a12]"
-        >
-          <svg viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`} className="w-full h-full">
-            {PURE_COLOR_SECTORS.map((sector, idx) => {
-              const startAngle = (idx * SECTOR_ANGLE - 90) * (Math.PI / 180);
-              const endAngle = ((idx + 1) * SECTOR_ANGLE - 90) * (Math.PI / 180);
-              const midAngle = ((idx + 0.5) * SECTOR_ANGLE - 90) * (Math.PI / 180);
-
-              const x1 = CENTER + RADIUS * Math.cos(startAngle);
-              const y1 = CENTER + RADIUS * Math.sin(startAngle);
-              const x2 = CENTER + RADIUS * Math.cos(endAngle);
-              const y2 = CENTER + RADIUS * Math.sin(endAngle);
-
-              const pathData = `M ${CENTER} ${CENTER} L ${x1} ${y1} A ${RADIUS} ${RADIUS} 0 0 1 ${x2} ${y2} Z`;
-
-              // Multiplier / Name position
-              const textR = RADIUS * 0.65;
-              const textX = CENTER + textR * Math.cos(midAngle);
-              const textY = CENTER + textR * Math.sin(midAngle);
-              const textDeg = (idx + 0.5) * SECTOR_ANGLE - 90;
-
-              return (
-                <g key={sector.id}>
-                  <path
-                    d={pathData}
-                    fill={sector.color}
-                    stroke="#0b0f1a"
-                    strokeWidth="2.5"
-                    className="transition-colors hover:brightness-105"
-                  />
-                  {/* Clean text: Name & Mult */}
-                  <text
-                    x={textX}
-                    y={textY}
-                    transform={`rotate(${textDeg + 90}, ${textX}, ${textY})`}
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    fill={sector.textColor}
-                    fontSize="10"
-                    fontWeight="900"
-                    fontFamily="monospace"
-                    className="select-none pointer-events-none drop-shadow"
-                  >
-                    {sector.mult > 0 ? `${sector.name.toUpperCase()} ${sector.mult}x` : "BUST"}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Brass Outer Border */}
-            <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="none" stroke="#facc15" strokeWidth="3" />
-
-            {/* Sleek Golden Center Hub */}
-            <circle cx={CENTER} cy={CENTER} r="32" fill="#080c14" stroke="#facc15" strokeWidth="3" />
-            <circle cx={CENTER} cy={CENTER} r="25" fill="#131b2c" />
-            <text
-              x={CENTER}
-              y={CENTER}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill="#facc15"
-              fontSize="11"
-              fontWeight="900"
-              fontFamily="monospace"
-            >
-              SPIN
-            </text>
-          </svg>
-        </motion.div>
-
-        <div className="h-6 mt-3 flex items-center justify-center">
-          {isSpinning ? (
-            <span className="text-xs font-mono font-bold text-yellow-300 animate-pulse">
-              🎡 Decelerating wheel to color sector...
-            </span>
-          ) : (
-            <span className="text-xs font-mono text-gray-400">
-              Pick a full-color box below & test your fortune!
-            </span>
-          )}
+        <div className="text-xs font-mono text-gray-400">
+          Selected: <strong style={{ color: selectedObj.hex }}>{selectedObj.name}</strong>
         </div>
       </div>
 
-      {/* Box Choices: FULL SOLID COLORS AS REQUESTED */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full">
-        {PURE_COLOR_SECTORS.filter((s) => s.id !== "silver").map((s) => {
-          const isSelected = selectedTarget === s.id;
+      {/* 6 Color Bet Buttons (Perya Board) */}
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 w-full">
+        {PERYA_COLORS.map((col) => {
+          const isSelected = selectedColor === col.id;
           return (
             <button
-              key={s.id}
+              key={col.id}
               type="button"
-              disabled={isSpinning}
+              disabled={isRolling}
               onClick={() => {
                 soundEngine.playClick();
-                setSelectedTarget(s.id);
+                setSelectedColor(col.id);
               }}
-              style={{ backgroundColor: s.color, color: s.textColor }}
-              className={`p-3 rounded-xl font-mono font-black text-xs flex items-center justify-between transition-all cursor-pointer shadow-md ${
+              className={`py-3 px-2 rounded-xl font-mono font-bold text-xs sm:text-sm flex flex-col items-center justify-center space-y-1 transition-all border cursor-pointer ${
                 isSelected
-                  ? "ring-4 ring-white ring-offset-2 ring-offset-black scale-105 shadow-[0_0_20px_rgba(255,255,255,0.6)]"
-                  : "opacity-85 hover:opacity-100 hover:scale-102"
+                  ? "scale-105 shadow-lg border-white ring-2 ring-white"
+                  : "hover:scale-102 border-transparent opacity-85 hover:opacity-100"
               }`}
+              style={{
+                backgroundColor: col.hex,
+                color: col.textColor,
+                boxShadow: isSelected ? `0 0 20px ${col.hex}90` : undefined,
+              }}
             >
-              <span className="uppercase tracking-wider">{s.name}</span>
-              <span className="px-2 py-0.5 rounded-md bg-black/30 text-white font-bold text-[10px]">
-                {s.mult}x
-              </span>
+              <span className="text-base">{col.emoji}</span>
+              <span className="font-black uppercase tracking-wider">{col.name}</span>
             </button>
           );
         })}
       </div>
 
-      {/* Silver Safe Zone Universal Refund Notice */}
-      <div className="w-full p-2.5 rounded-xl bg-slate-800/40 border border-slate-600/30 text-[11px] font-mono text-slate-300 flex items-center justify-center space-x-2">
-        <span>🛡️ <strong>Silver Safe Zone:</strong> If the needle stops on Silver (1.0x), your entire bet is refunded!</span>
-      </div>
+      {/* Universal Bet Presets */}
+      <BetSelector
+        bet={bet}
+        setBet={setBet}
+        disabled={isRolling}
+        astriteBalance={astriteBalance}
+        onInsufficient={(needed) => setInsufficientNeeded(needed)}
+      />
 
-      {/* Bet & Spin Button */}
-      <div className="w-full space-y-2 pt-1">
-        <div className="flex gap-2">
-          {BET_PRESETS.map((amt) => (
-            <button
-              key={amt}
-              type="button"
-              disabled={isSpinning}
-              onClick={() => {
-                if (amt > astriteBalance) {
-                  soundEngine.playInsufficient();
-                  setInsufficientNeeded(amt);
-                  return;
-                }
-                soundEngine.playClick();
-                setBet(amt);
-              }}
-              className={`flex-1 py-1.5 rounded-lg border font-mono text-xs font-bold transition-all cursor-pointer ${
-                bet === amt
-                  ? "bg-amber-400/20 border-amber-400 text-yellow-300"
-                  : "bg-white/5 border-white/10 text-gray-400 hover:text-white"
-              }`}
-            >
-              {amt}
-            </button>
-          ))}
-        </div>
+      {/* Big Roll Dice Button */}
+      <button
+        type="button"
+        disabled={isRolling}
+        onClick={handleRollDice}
+        className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-black font-black uppercase text-sm tracking-wider transition-all shadow-[0_0_20px_rgba(250,204,21,0.35)] hover:scale-101 active:scale-98 flex items-center justify-center space-x-2 cursor-pointer"
+      >
+        <Dices className="w-5 h-5" />
+        <span>{isRolling ? "ROLLING DICE..." : `ROLL DICE (${bet.toLocaleString()} ASTRITES)`}</span>
+      </button>
 
-        <button
-          type="button"
-          disabled={isSpinning}
-          onClick={handleSpinWheel}
-          className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-black font-black uppercase text-sm tracking-wider transition-all shadow-[0_0_20px_rgba(250,204,21,0.35)] cursor-pointer"
-        >
-          {isSpinning ? "SPINNING WHEEL..." : `SPIN WHEEL (${bet.toLocaleString()} ASTRITES)`}
-        </button>
-      </div>
-
+      {/* Outcome Modal */}
       <MinigameOutcomeModal
         outcome={outcomeModal}
-        onPlayAgain={() => {
-          setOutcomeModal(null);
-          handleSpinWheel();
-        }}
+        onPlayAgain={handleRollDice}
         onClose={() => setOutcomeModal(null)}
       />
 
+      {/* Insufficient Warning */}
       {insufficientNeeded !== null && (
         <InsufficientAlertModal
           needed={insufficientNeeded}
@@ -2090,7 +1995,6 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
     </div>
   );
 };
-
 // ============================================================================
 // SUB-GAME 6: MYSTERY SCRATCHCARDS - Lupa
 // 3x3 Grid (9 Panels), 4 Multipliers, First to 3 Matches Wins, 800ms Delay
@@ -2113,9 +2017,9 @@ const MULTIPLIER_DEFS: Record<MultiplierType, ScratchIconInfo> = {
 };
 
 const SCRATCH_CARD_TIERS = [
-  { id: "bronze", name: "Bronze Ticket", cost: 50, maxWin: 500 },
-  { id: "silver", name: "Silver Ticket", cost: 200, maxWin: 2000 },
-  { id: "gold", name: "Gold Ticket", cost: 500, maxWin: 5000 },
+  { id: "tier100", name: "100 ✦ Ticket", cost: 100, maxWin: 1000 },
+  { id: "tier500", name: "500 ✦ Ticket", cost: 500, maxWin: 5000 },
+  { id: "tier1000", name: "1000 ✦ Ticket", cost: 1000, maxWin: 10000 },
 ];
 
 const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites }) => {
@@ -2188,35 +2092,36 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
         if (counts[type] >= 3) {
           // Found first 3-of-a-kind!
           const def = MULTIPLIER_DEFS[type];
-          const prize = Math.floor(selectedTier.cost * def.mult);
 
           // 800ms delay so user inspects the 3rd matching symbol on the 3x3 grid
           setTimeout(() => {
             if (def.mult > 1) {
-              onUpdateAstrites(prize);
+              const profit = selectedTier.cost * def.mult;
+              const totalPayout = profit + selectedTier.cost;
+              onUpdateAstrites(totalPayout);
               soundEngine.playAstriteGain();
               setOutcomeModal({
                 type: "win",
-                title: def.mult >= 10 ? "10X SUPER JACKPOT!" : "3 MATCHES FOUND!",
-                landedTitle: "Matched 3 Symbols",
-                landedValue: `${def.icon} ${def.label}`,
+                title: "WIN!",
+                landedTitle: "Result",
+                landedValue: `${def.icon} ${def.mult}x`,
                 landedColor: def.color,
-                betTitle: "Ticket Tier",
-                betValue: `${selectedTier.name} (${selectedTier.cost} ✦)`,
-                deltaAmount: prize - selectedTier.cost,
-                multiplier: `${def.mult}x Payout`,
+                betTitle: "Ticket",
+                betValue: `${selectedTier.cost.toLocaleString()} ✦`,
+                deltaAmount: profit,
+                multiplier: `${def.mult}x`,
               });
             } else if (def.mult === 1) {
-              onUpdateAstrites(prize);
+              onUpdateAstrites(selectedTier.cost);
               soundEngine.playAstriteGain();
               setOutcomeModal({
                 type: "push",
-                title: "TICKET REFUND! (1.0x BREAK-EVEN)",
-                landedTitle: "Matched 3 Symbols",
-                landedValue: `${def.icon} ${def.label}`,
+                title: "REFUND",
+                landedTitle: "Result",
+                landedValue: `${def.icon} 1.0x`,
                 landedColor: def.color,
-                betTitle: "Ticket Tier",
-                betValue: `${selectedTier.name} (${selectedTier.cost} ✦)`,
+                betTitle: "Ticket",
+                betValue: `${selectedTier.cost.toLocaleString()} ✦`,
                 deltaAmount: 0,
                 multiplier: "1.0x Refund",
               });
@@ -2224,12 +2129,12 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
               soundEngine.playMissWhoosh();
               setOutcomeModal({
                 type: "loss",
-                title: "3 MISSES BUST",
-                landedTitle: "Matched 3 Symbols",
-                landedValue: "❌ 3 Misses",
+                title: "LOSE",
+                landedTitle: "Result",
+                landedValue: "❌ Miss",
                 landedColor: "#f43f5e",
-                betTitle: "Ticket Tier",
-                betValue: `${selectedTier.name} (${selectedTier.cost} ✦)`,
+                betTitle: "Ticket",
+                betValue: `${selectedTier.cost.toLocaleString()} ✦`,
                 deltaAmount: -selectedTier.cost,
               });
             }

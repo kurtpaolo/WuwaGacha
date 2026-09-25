@@ -804,7 +804,12 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
     });
 
     // If navigated with initialOpponentUsername (e.g. from visiting profile without a room code)
-    if (!initialRoomCode && initialOpponentUsername && initialOpponentUsername !== currentUsername) {
+    if (
+      !initialRoomCode &&
+      initialOpponentUsername &&
+      initialOpponentUsername !== currentUsername &&
+      (!initialTab || initialTab === "search")
+    ) {
       setLobbyTab("search");
       setSelectedBet(0);
       setIsRealtimeMatch(false);

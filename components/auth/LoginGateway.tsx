@@ -38,11 +38,13 @@ import { ExternalRedirectModal } from "@/components/modals/ExternalRedirectModal
 interface LoginGatewayProps {
   onLoginSuccess: (user: SupabaseUser, profile: UserProfile | null, isNewAccount?: boolean) => void;
   onEnterSandbox?: () => void;
+  onClose?: () => void;
 }
 
 export const LoginGateway: React.FC<LoginGatewayProps> = ({
   onLoginSuccess,
   onEnterSandbox,
+  onClose,
 }) => {
   const [hasAcceptedBeta, setHasAcceptedBeta] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -272,6 +274,20 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
           >
             {/* Top Branded Accent Bar */}
             <div className="h-1.5 w-full bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-300 shadow-[0_0_15px_rgba(250,204,21,0.6)]" />
+
+            {onClose && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundEngine.playClick();
+                  onClose();
+                }}
+                className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
 
         <div className="p-6 sm:p-8 space-y-5">
           {/* Header & Logo */}

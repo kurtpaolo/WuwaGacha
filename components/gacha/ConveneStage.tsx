@@ -120,7 +120,7 @@ export function formatAstriteCount(num: number): string {
 
 export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) => {
   // Active states
-  const [activeView, setActiveView] = useState<"plaza" | "convene">("plaza");
+  const [activeView, setActiveView] = useState<"plaza" | "convene">("convene");
   const bannerMode: BannerMode = "character_limited";
   const [activeHourlyCharacters, setActiveHourlyCharacters] = useState<string[]>(() =>
     getHourlyRotatedCharacters()
@@ -162,7 +162,8 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
   }>({ needed: 160, current: 0 });
 
   // Sandbox Mode (Guest Test Mode)
-  const [isSandboxGuest, setIsSandboxGuest] = useState<boolean>(false);
+  const [isSandboxGuest, setIsSandboxGuest] = useState<boolean>(true);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
 
   // Hourly Banner Rotation & Free Astrites Idle Accumulator (GMT+8)
   const [rotationTimerText, setRotationTimerText] = useState<string>(
@@ -283,6 +284,7 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
     getAuthUser()
       .then(async (user) => {
         if (user) {
+          setIsSandboxGuest(false);
           setCurrentUser(user);
           setClientSimContext(user.id, false);
           flushPendingProfileSync(user.id).catch(() => {});
@@ -345,7 +347,8 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
             }
           }
         } else {
-          setClientSimContext(null, false);
+          setIsSandboxGuest(true);
+          setClientSimContext(null, true);
           setCurrentUser(null);
           fetchState();
         }
@@ -353,7 +356,8 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
       })
       .catch((e) => {
         console.error("Auth check failed:", e);
-        setClientSimContext(null, false);
+        setIsSandboxGuest(true);
+        setClientSimContext(null, true);
         setCurrentUser(null);
         setAuthChecking(false);
         fetchState();
@@ -709,9 +713,10 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
       soundEngine.playClick();
       setIsGamesMenuOpen(false);
       setPvpInitialTab(tab);
-      if (opponentUsername) {
-        setPvpOpponentUsername(opponentUsername);
-      }
+      setPvpOpponentUsername(opponentUsername || undefined);
+      setPvpRoomCode(undefined);
+      setPvpBet(undefined);
+      setPvpIsHost(undefined);
       setEnteringGameModeTitle(title);
       setIsEnteringGameMode(true);
 
@@ -858,64 +863,36 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
     );
   }
 
-  if (!currentUser && !isSandboxGuest) {
+  if (isLoggingOut) {
     return (
-      <>
-        <LoginGateway
-          onLoginSuccess={handleLoginSuccess}
-          onEnterSandbox={() => {
-            soundEngine.playClick();
-            setIsSandboxGuest(true);
-            setClientSimContext(null, true);
-            toggleClientSandbox(true);
-            const data = getClientStateData(null, true);
-            if (data.user) setUserState(data.user);
-            if (data.pity) setPityMap(data.pity as any);
-            setWinRateStats(get5050Stats(null, true));
-            if (data.user?.selectedLimitedChar) {
-              setSelectedCharId(data.user.selectedLimitedChar);
-            }
-          }}
-        />
-        {/* Logout Loading Transition Overlay */}
-        <AnimatePresence>
-          {isLoggingOut && (
+      <div className="fixed inset-0 z-[150] bg-[#07090e] flex flex-col items-center justify-center p-6 text-center select-none">
+        <div className="flex flex-col items-center space-y-5 max-w-sm">
+          <div className="relative flex items-center justify-center w-20 h-20">
+            <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping pointer-events-none" />
+            <div className="relative p-5 rounded-2xl bg-[#10141d] border border-yellow-400/50 text-yellow-400 shadow-[0_0_35px_rgba(250,204,21,0.3)]">
+              <Sparkles className="w-8 h-8 animate-spin" />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <h3 className="text-lg sm:text-xl font-black uppercase tracking-widest text-white font-display">
+              LOGGING OUT
+            </h3>
+            <p className="text-xs font-mono text-yellow-400/80 tracking-wider">
+              Disconnecting Resonance Terminal...
+            </p>
+          </div>
+
+          <div className="w-44 h-1 bg-white/10 rounded-full overflow-hidden">
             <motion.div
-              initial={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.35, ease: "easeInOut" }}
-              className="fixed inset-0 z-[150] bg-[#07090e] flex flex-col items-center justify-center p-6 text-center select-none"
-            >
-              <div className="flex flex-col items-center space-y-5 max-w-sm">
-                <div className="relative flex items-center justify-center w-20 h-20">
-                  <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping pointer-events-none" />
-                  <div className="relative p-5 rounded-2xl bg-[#10141d] border border-yellow-400/50 text-yellow-400 shadow-[0_0_35px_rgba(250,204,21,0.3)]">
-                    <Sparkles className="w-8 h-8 animate-spin" />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <h3 className="text-lg sm:text-xl font-black uppercase tracking-widest text-white font-display">
-                    LOGGING OUT
-                  </h3>
-                  <p className="text-xs font-mono text-yellow-400/80 tracking-wider">
-                    Disconnecting Resonance Terminal...
-                  </p>
-                </div>
-
-                <div className="w-44 h-1 bg-white/10 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ x: "-100%" }}
-                    animate={{ x: "100%" }}
-                    transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut" }}
-                    className="w-1/2 h-full bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-500 rounded-full shadow-[0_0_12px_rgba(250,204,21,0.8)]"
-                  />
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </>
+              initial={{ x: "-100%" }}
+              animate={{ x: "100%" }}
+              transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut" }}
+              className="w-1/2 h-full bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-500 rounded-full shadow-[0_0_12px_rgba(250,204,21,0.8)]"
+            />
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -1128,6 +1105,11 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
               setActiveView("convene");
             } else if (view === "arena") {
               soundEngine.playClick();
+              setPvpOpponentUsername(undefined);
+              setPvpRoomCode(undefined);
+              setPvpBet(undefined);
+              setPvpIsHost(undefined);
+              setPvpInitialTab("gym");
               setIsGamesMenuOpen(true);
             }
           }}
@@ -1356,12 +1338,16 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
                 <span className="hidden sm:inline">SANDBOX</span>
               </div>
               <button
-                onClick={handleExitSandbox}
+                type="button"
+                onClick={() => {
+                  soundEngine.playClick();
+                  setIsLoginModalOpen(true);
+                }}
                 className="flex items-center space-x-1.5 h-[38px] sm:h-[40px] px-3 rounded-xl bg-yellow-400 hover:bg-yellow-300 text-black font-black uppercase text-[11px] sm:text-xs font-mono tracking-wider transition-all shadow-[0_0_15px_rgba(250,204,21,0.3)] hover:scale-105 active:scale-95 cursor-pointer"
-                title="Exit Sandbox Mode and return to Login"
+                title="Sign In or Create Account"
               >
-                <LogOut className="w-4 h-4" />
-                <span>Exit</span>
+                <User className="w-4 h-4" />
+                <span>Sign In</span>
               </button>
             </div>
           ) : (
@@ -2118,6 +2104,7 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
           setIsAccountModalOpen(true);
         }}
         onOpenPvpArena={(targetUsername) => {
+          setIsPlayerProfileOpen(false);
           handleLaunchGameMode("search", "Player Challenge", targetUsername);
         }}
       />
@@ -2133,6 +2120,10 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
         }}
         onBackToGames={() => {
           setIsPvpArenaOpen(false);
+          setPvpOpponentUsername(undefined);
+          setPvpRoomCode(undefined);
+          setPvpBet(undefined);
+          setPvpIsHost(undefined);
           setIsGamesMenuOpen(true);
         }}
         currentUserId={isSandboxGuest ? undefined : currentUser?.id}
@@ -2612,6 +2603,40 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
           >
             <Sparkles className="w-4 h-4 text-yellow-400 animate-pulse flex-shrink-0" />
             <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Login & Cloud Sync Modal */}
+      <AnimatePresence>
+        {isLoginModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[160]"
+          >
+            <LoginGateway
+              onLoginSuccess={(user, prof, isNew) => {
+                handleLoginSuccess(user, prof, isNew);
+                setIsLoginModalOpen(false);
+              }}
+              onEnterSandbox={() => {
+                soundEngine.playClick();
+                setIsSandboxGuest(true);
+                setIsLoginModalOpen(false);
+                setClientSimContext(null, true);
+                toggleClientSandbox(true);
+                const data = getClientStateData(null, true);
+                if (data.user) setUserState(data.user);
+                if (data.pity) setPityMap(data.pity as any);
+                setWinRateStats(get5050Stats(null, true));
+                if (data.user?.selectedLimitedChar) {
+                  setSelectedCharId(data.user.selectedLimitedChar);
+                }
+              }}
+              onClose={() => setIsLoginModalOpen(false)}
+            />
           </motion.div>
         )}
       </AnimatePresence>
