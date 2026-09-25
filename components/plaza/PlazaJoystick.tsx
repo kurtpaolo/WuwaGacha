@@ -1,183 +1,186 @@
 "use client";
 
-import React, { useState } from "react";
-import {
-  ChevronUp,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Compass,
-} from "lucide-react";
+import React, { useState, useRef, useCallback } from "react";
+import { Compass } from "lucide-react";
+
+export interface JoystickVector {
+  x: number; // -1 to 1 (cosine of angle * intensity)
+  y: number; // -1 to 1 (sine of angle * intensity)
+  angle: number; // 0 to 360 degrees
+  intensity: number; // 0 to 1
+}
 
 interface PlazaJoystickProps {
-  onDirectionDown: (dir: "UP" | "DOWN" | "LEFT" | "RIGHT") => void;
-  onDirectionUp: (dir: "UP" | "DOWN" | "LEFT" | "RIGHT") => void;
+  onMove?: (vector: JoystickVector) => void;
+  onStop?: () => void;
+  onDirectionDown?: (dir: "UP" | "DOWN" | "LEFT" | "RIGHT") => void;
+  onDirectionUp?: (dir: "UP" | "DOWN" | "LEFT" | "RIGHT") => void;
   avatarUrl?: string;
 }
 
+const MAX_RADIUS = 38; // Maximum knob distance from center in px
+
 export const PlazaJoystick: React.FC<PlazaJoystickProps> = ({
+  onMove,
+  onStop,
   onDirectionDown,
   onDirectionUp,
   avatarUrl,
 }) => {
-  const [activeDirs, setActiveDirs] = useState<Set<string>>(new Set());
-  const [isPressed, setIsPressed] = useState(false);
+  const [knobPos, setKnobPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const baseRef = useRef<HTMLDivElement | null>(null);
+  const activePointerIdRef = useRef<number | null>(null);
+  const lastDirRef = useRef<"UP" | "DOWN" | "LEFT" | "RIGHT" | null>(null);
 
-  const handlePointerDown = (
-    e: React.PointerEvent,
-    dir: "UP" | "DOWN" | "LEFT" | "RIGHT"
-  ) => {
+  const updateJoystickFromPointer = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!baseRef.current) return;
+      const rect = baseRef.current.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+
+      const dx = clientX - centerX;
+      const dy = clientY - centerY;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist === 0) {
+        setKnobPos({ x: 0, y: 0 });
+        onStop?.();
+        return;
+      }
+
+      const clampedDist = Math.min(dist, MAX_RADIUS);
+      const intensity = Math.min(1, dist / MAX_RADIUS);
+      const angleRad = Math.atan2(dy, dx);
+      let angleDeg = (angleRad * 180) / Math.PI;
+      if (angleDeg < 0) angleDeg += 360;
+
+      const knobX = Math.cos(angleRad) * clampedDist;
+      const knobY = Math.sin(angleRad) * clampedDist;
+
+      setKnobPos({ x: knobX, y: knobY });
+
+      // Normalized direction vector scaled by intensity
+      const vecX = (knobX / MAX_RADIUS) * intensity;
+      const vecY = (knobY / MAX_RADIUS) * intensity;
+
+      onMove?.({
+        x: vecX,
+        y: vecY,
+        angle: angleDeg,
+        intensity,
+      });
+
+      // Backward compatibility direction triggers
+      let primaryDir: "UP" | "DOWN" | "LEFT" | "RIGHT" | null = null;
+      if (intensity > 0.25) {
+        if (angleDeg >= 45 && angleDeg < 135) primaryDir = "DOWN";
+        else if (angleDeg >= 135 && angleDeg < 225) primaryDir = "LEFT";
+        else if (angleDeg >= 225 && angleDeg < 315) primaryDir = "UP";
+        else primaryDir = "RIGHT";
+      }
+
+      if (primaryDir !== lastDirRef.current) {
+        if (lastDirRef.current && onDirectionUp) {
+          onDirectionUp(lastDirRef.current);
+        }
+        if (primaryDir && onDirectionDown) {
+          onDirectionDown(primaryDir);
+        }
+        lastDirRef.current = primaryDir;
+      }
+    },
+    [onMove, onStop, onDirectionDown, onDirectionUp]
+  );
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsPressed(true);
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    setActiveDirs((prev) => new Set(prev).add(dir));
-    onDirectionDown(dir);
-  };
+    setIsDragging(true);
+    activePointerIdRef.current = e.pointerId;
 
-  const handlePointerUp = (
-    e: React.PointerEvent,
-    dir: "UP" | "DOWN" | "LEFT" | "RIGHT"
-  ) => {
-    e.preventDefault();
-    e.stopPropagation();
     try {
-      if ((e.target as HTMLElement).hasPointerCapture(e.pointerId)) {
-        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+
+    updateJoystickFromPointer(e.clientX, e.clientY);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging || activePointerIdRef.current !== e.pointerId) return;
+    updateJoystickFromPointer(e.clientX, e.clientY);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activePointerIdRef.current === e.pointerId) {
+      try {
+        if ((e.target as HTMLElement).hasPointerCapture(e.pointerId)) {
+          (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+        }
+      } catch {}
+
+      activePointerIdRef.current = null;
+      setIsDragging(false);
+      setKnobPos({ x: 0, y: 0 });
+
+      if (lastDirRef.current && onDirectionUp) {
+        onDirectionUp(lastDirRef.current);
+        lastDirRef.current = null;
       }
-    } catch {
-      // safe fallback
+
+      onStop?.();
     }
-    setActiveDirs((prev) => {
-      const next = new Set(prev);
-      next.delete(dir);
-      if (next.size === 0) {
-        setIsPressed(false);
-      }
-      return next;
-    });
-    onDirectionUp(dir);
   };
-
-  const handlePointerCancel = (
-    e: React.PointerEvent,
-    dir: "UP" | "DOWN" | "LEFT" | "RIGHT"
-  ) => {
-    handlePointerUp(e, dir);
-  };
-
-  const isTapped = activeDirs.size > 0 || isPressed;
 
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      onPointerDown={() => setIsPressed(true)}
-      onPointerUp={() => {
-        if (activeDirs.size === 0) setIsPressed(false);
-      }}
-      onPointerCancel={() => {
-        if (activeDirs.size === 0) setIsPressed(false);
-      }}
-      className={`select-none pointer-events-auto transition-all duration-200 ${
-        isTapped
-          ? "opacity-100"
-          : "opacity-20 hover:opacity-70"
+      className={`select-none pointer-events-auto touch-none transition-opacity duration-200 ${
+        isDragging ? "opacity-100" : "opacity-40 hover:opacity-85"
       }`}
-      title="On-Screen D-Pad Controller"
+      title="Analog Touch/Drag Joystick (360° Movement)"
     >
-      {/* 3x3 D-Pad Grid without Outer Box */}
-      <div className="grid grid-cols-3 grid-rows-3 gap-1.5 w-28 h-28 sm:w-32 sm:h-32">
-        {/* Top-Left Empty */}
-        <div />
+      {/* Outer Joystick Base Ring */}
+      <div
+        ref={baseRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-black/45 backdrop-blur-md border-2 border-yellow-400/35 shadow-[0_0_20px_rgba(0,0,0,0.7),inset_0_0_15px_rgba(250,204,21,0.15)] flex items-center justify-center cursor-grab active:cursor-grabbing"
+      >
+        {/* Cardinal Direction Notches */}
+        <div className="absolute top-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-yellow-400/50 pointer-events-none" />
+        <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-yellow-400/50 pointer-events-none" />
+        <div className="absolute left-1.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-yellow-400/50 pointer-events-none" />
+        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-yellow-400/50 pointer-events-none" />
 
-        {/* UP */}
-        <button
-          type="button"
-          onPointerDown={(e) => handlePointerDown(e, "UP")}
-          onPointerUp={(e) => handlePointerUp(e, "UP")}
-          onPointerCancel={(e) => handlePointerCancel(e, "UP")}
-          className={`flex items-center justify-center rounded-xl border backdrop-blur-xs transition-all cursor-pointer touch-none ${
-            activeDirs.has("UP")
-              ? "bg-yellow-400 border-yellow-400 text-black scale-95 shadow-[0_0_12px_rgba(250,204,21,0.8)]"
-              : "bg-black/50 border-white/20 hover:bg-black/70 text-gray-200 active:scale-95"
-          }`}
-          aria-label="Move Up"
-        >
-          <ChevronUp className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
-        </button>
+        {/* Inner concentric guide circle */}
+        <div className="w-16 h-16 rounded-full border border-dashed border-white/15 pointer-events-none" />
 
-        {/* Top-Right Empty */}
-        <div />
-
-        {/* LEFT */}
-        <button
-          type="button"
-          onPointerDown={(e) => handlePointerDown(e, "LEFT")}
-          onPointerUp={(e) => handlePointerUp(e, "LEFT")}
-          onPointerCancel={(e) => handlePointerCancel(e, "LEFT")}
-          className={`flex items-center justify-center rounded-xl border backdrop-blur-xs transition-all cursor-pointer touch-none ${
-            activeDirs.has("LEFT")
-              ? "bg-yellow-400 border-yellow-400 text-black scale-95 shadow-[0_0_12px_rgba(250,204,21,0.8)]"
-              : "bg-black/50 border-white/20 hover:bg-black/70 text-gray-200 active:scale-95"
-          }`}
-          aria-label="Move Left"
-        >
-          <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
-        </button>
-
-        {/* CENTER ICON / AVATAR */}
+        {/* Floating Thumb Knob */}
         <div
-          className="flex items-center justify-center rounded-xl bg-black/50 border border-white/20 overflow-hidden p-1 transition-all pointer-events-none"
-          title="Rover"
+          style={{
+            transform: `translate(${knobPos.x}px, ${knobPos.y}px)`,
+            transition: isDragging ? "none" : "transform 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+          }}
+          className="absolute w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-[#1b2438] via-[#0d1322] to-[#070b14] border-2 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.6)] flex items-center justify-center pointer-events-none"
         >
           {avatarUrl ? (
-            <img
-              src={avatarUrl}
-              alt="Rover"
-              className="w-full h-full object-contain filter drop-shadow [image-rendering:pixelated]"
-            />
+            <div className="w-8 h-8 rounded-full overflow-hidden border border-yellow-400/60 bg-black/60">
+              <img
+                src={avatarUrl}
+                alt="Joystick Head"
+                className="w-full h-full object-cover [image-rendering:pixelated]"
+              />
+            </div>
           ) : (
-            <Compass className="w-5 h-5 text-yellow-400" />
+            <div className="w-4 h-4 rounded-full bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.9)] flex items-center justify-center">
+              <Compass className="w-3 h-3 text-black stroke-[3]" />
+            </div>
           )}
         </div>
-
-        {/* RIGHT */}
-        <button
-          type="button"
-          onPointerDown={(e) => handlePointerDown(e, "RIGHT")}
-          onPointerUp={(e) => handlePointerUp(e, "RIGHT")}
-          onPointerCancel={(e) => handlePointerCancel(e, "RIGHT")}
-          className={`flex items-center justify-center rounded-xl border backdrop-blur-xs transition-all cursor-pointer touch-none ${
-            activeDirs.has("RIGHT")
-              ? "bg-yellow-400 border-yellow-400 text-black scale-95 shadow-[0_0_12px_rgba(250,204,21,0.8)]"
-              : "bg-black/50 border-white/20 hover:bg-black/70 text-gray-200 active:scale-95"
-          }`}
-          aria-label="Move Right"
-        >
-          <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
-        </button>
-
-        {/* Bottom-Left Empty */}
-        <div />
-
-        {/* DOWN */}
-        <button
-          type="button"
-          onPointerDown={(e) => handlePointerDown(e, "DOWN")}
-          onPointerUp={(e) => handlePointerUp(e, "DOWN")}
-          onPointerCancel={(e) => handlePointerCancel(e, "DOWN")}
-          className={`flex items-center justify-center rounded-xl border backdrop-blur-xs transition-all cursor-pointer touch-none ${
-            activeDirs.has("DOWN")
-              ? "bg-yellow-400 border-yellow-400 text-black scale-95 shadow-[0_0_12px_rgba(250,204,21,0.8)]"
-              : "bg-black/50 border-white/20 hover:bg-black/70 text-gray-200 active:scale-95"
-          }`}
-          aria-label="Move Down"
-        >
-          <ChevronDown className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
-        </button>
-
-        {/* Bottom-Right Empty */}
-        <div />
       </div>
     </div>
   );

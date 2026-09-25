@@ -154,8 +154,39 @@ const PlazaMiniMapModalContent: React.FC<PlazaMiniMapModalProps> = ({
     return { direction, dist };
   };
 
+  // Clamping function to guarantee map never pans outside the container bounds
+  const clampPan = (targetX: number, targetY: number, targetZoom: number): { x: number; y: number } => {
+    if (targetZoom <= 1 || !containerRef.current) {
+      return { x: 0, y: 0 };
+    }
+    const w = containerRef.current.clientWidth || 0;
+    const h = containerRef.current.clientHeight || 0;
+    const minX = w * (1 - targetZoom);
+    const maxX = 0;
+    const minY = h * (1 - targetZoom);
+    const maxY = 0;
+
+    return {
+      x: Math.min(maxX, Math.max(minX, targetX)),
+      y: Math.min(maxY, Math.max(minY, targetY)),
+    };
+  };
+
+  // Direction angle calculation for local player heading arrow
+  const playerHeadingDeg = useMemo(() => {
+    if (localPlayer?.isMoving && localPlayer.targetX !== undefined && localPlayer.targetY !== undefined) {
+      const dx = localPlayer.targetX - playerX;
+      const dy = localPlayer.targetY - playerY;
+      if (Math.hypot(dx, dy) > 0.05) {
+        return Math.atan2(dy, dx) * (180 / Math.PI);
+      }
+    }
+    return localPlayer?.facing === "left" ? 180 : 0;
+  }, [localPlayer?.isMoving, localPlayer?.targetX, localPlayer?.targetY, localPlayer?.facing, playerX, playerY]);
+
   // Pointer drag events for panning map
   const handlePointerDown = (e: React.PointerEvent) => {
+    if (zoom <= 1) return; // At 1x, panning is completely locked edge-to-edge
     setIsDragging(true);
     dragStartRef.current = {
       x: e.clientX,
@@ -173,10 +204,7 @@ const PlazaMiniMapModalContent: React.FC<PlazaMiniMapModalProps> = ({
     if (!isDragging) return;
     const dx = e.clientX - dragStartRef.current.x;
     const dy = e.clientY - dragStartRef.current.y;
-    setPan({
-      x: dragStartRef.current.panX + dx,
-      y: dragStartRef.current.panY + dy,
-    });
+    setPan(clampPan(dragStartRef.current.panX + dx, dragStartRef.current.panY + dy, zoom));
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
@@ -194,19 +222,21 @@ const PlazaMiniMapModalContent: React.FC<PlazaMiniMapModalProps> = ({
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY < 0 ? 0.25 : -0.25;
-    setZoom((prev) => Math.min(4, Math.max(1, +(prev + delta).toFixed(2))));
+    const nextZoom = Math.min(4, Math.max(1, +(zoom + delta).toFixed(2)));
+    setZoom(nextZoom);
+    setPan((prev) => clampPan(prev.x, prev.y, nextZoom));
   };
 
   const handleZoomIn = () => {
-    setZoom((prev) => Math.min(4, +(prev + 0.5).toFixed(1)));
+    const nextZoom = Math.min(4, +(zoom + 0.5).toFixed(1));
+    setZoom(nextZoom);
+    setPan((prev) => clampPan(prev.x, prev.y, nextZoom));
   };
 
   const handleZoomOut = () => {
-    setZoom((prev) => {
-      const next = Math.max(1, +(prev - 0.5).toFixed(1));
-      if (next === 1) setPan({ x: 0, y: 0 });
-      return next;
-    });
+    const nextZoom = Math.max(1, +(zoom - 0.5).toFixed(1));
+    setZoom(nextZoom);
+    setPan((prev) => (nextZoom <= 1 ? { x: 0, y: 0 } : clampPan(prev.x, prev.y, nextZoom)));
   };
 
   const handleReset = () => {
@@ -216,15 +246,15 @@ const PlazaMiniMapModalContent: React.FC<PlazaMiniMapModalProps> = ({
 
   const handleCenterOnPlayer = () => {
     if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
+    const w = containerRef.current.clientWidth || 0;
+    const h = containerRef.current.clientHeight || 0;
     const targetZoom = Math.max(zoom, 2);
     setZoom(targetZoom);
-    const targetPxX = (playerX / 100) * rect.width;
-    const targetPxY = (playerY / 100) * rect.height;
-    setPan({
-      x: rect.width / 2 - targetPxX * targetZoom,
-      y: rect.height / 2 - targetPxY * targetZoom,
-    });
+    const targetPxX = (playerX / 100) * w;
+    const targetPxY = (playerY / 100) * h;
+    const targetPanX = w / 2 - targetPxX * targetZoom;
+    const targetPanY = h / 2 - targetPxY * targetZoom;
+    setPan(clampPan(targetPanX, targetPanY, targetZoom));
   };
 
   return (
@@ -337,8 +367,9 @@ const PlazaMiniMapModalContent: React.FC<PlazaMiniMapModalProps> = ({
                           }}
                         />
                       </div>
-                      <div className="mt-0.5 px-1 py-0.2 rounded bg-black/90 border border-yellow-400/60 text-[8px] font-mono font-bold text-yellow-300 whitespace-nowrap shadow flex items-center space-x-0.5">
+                      <div className="mt-0.5 px-1.5 py-0.5 rounded bg-black/90 border border-yellow-400/60 text-[8px] sm:text-[9px] font-mono font-bold text-yellow-300 whitespace-nowrap shadow flex items-center space-x-1">
                         <span>{npc.name}</span>
+                        {npc.title && <span className="text-gray-400 font-normal">({npc.title})</span>}
                         {isTracked && <span className="text-yellow-400 font-black">★</span>}
                         {isNearby && <span className="ml-1 text-emerald-400">●</span>}
                       </div>
@@ -377,16 +408,42 @@ const PlazaMiniMapModalContent: React.FC<PlazaMiniMapModalProps> = ({
                   );
                 })}
 
-                {/* LOCAL PLAYER ("YOU") ON MAP */}
+                {/* LOCAL PLAYER ("YOU") ON MAP - SUBSTANTIALLY ENLARGED WITH HEADING ARROW */}
                 <div
                   style={{ left: `${playerX}%`, top: `${playerY}%` }}
                   className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center pointer-events-none z-30 transition-all duration-75"
                 >
-                  <div className="absolute w-7 h-7 -top-1 rounded-full bg-yellow-400/40 animate-ping" />
-                  <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full overflow-hidden border-2 border-white shadow-[0_0_12px_rgba(255,255,255,0.9)] bg-yellow-400 flex items-center justify-center">
-                    <div className="w-2 h-2 rounded-full bg-black" />
+                  {/* Outer Pulsing Beacon Wave */}
+                  <div className="absolute w-12 h-12 rounded-full bg-yellow-400/30 animate-ping pointer-events-none" />
+
+                  {/* Rotating Directional Arrow Container */}
+                  <div
+                    style={{ transform: `rotate(${playerHeadingDeg + 90}deg)` }}
+                    className="absolute w-12 h-12 flex items-start justify-center pointer-events-none transition-transform duration-100"
+                  >
+                    {/* Bold Gold Arrow Pointing in Facing/Movement Direction */}
+                    <div className="w-0 h-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[14px] border-b-yellow-300 drop-shadow-[0_0_8px_rgba(250,204,21,1)] -mt-2" />
                   </div>
-                  <div className="mt-0.5 px-1.5 py-0.2 rounded-full bg-yellow-400 text-black text-[8px] font-mono font-black tracking-wider whitespace-nowrap shadow-md">
+
+                  {/* High-Visibility Avatar Ring */}
+                  <div className="relative w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden border-2 border-white shadow-[0_0_16px_rgba(250,204,21,0.95)] bg-yellow-400 ring-2 ring-yellow-400/80 flex items-center justify-center z-10">
+                    <img
+                      src={
+                        (localPlayer.avatarId && SPRITE_MAP[localPlayer.avatarId]) ||
+                        `/assets/inventory_portraits/${getPortraitFileName(localPlayer.avatarId)}`
+                      }
+                      alt="You"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.currentTarget as HTMLImageElement;
+                        target.onerror = null;
+                        target.src = `/assets/inventory_portraits/${DEFAULT_AVATAR_ID}.jpeg`;
+                      }}
+                    />
+                  </div>
+
+                  {/* High-Contrast "YOU" Badge */}
+                  <div className="mt-1 px-2 py-0.5 rounded-full bg-yellow-400 text-black text-[9px] font-mono font-black tracking-widest uppercase whitespace-nowrap shadow-[0_2px_8px_rgba(0,0,0,0.8)] border border-black/40 z-10">
                     YOU
                   </div>
                 </div>

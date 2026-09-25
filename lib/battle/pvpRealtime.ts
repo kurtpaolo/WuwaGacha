@@ -94,6 +94,7 @@ export type RealtimeBattleAction =
       senderId: string;
       senderTrainer?: BattleTrainer;
       timeline?: any[];
+      nextTurnUserId?: string;
     }
   | {
       type: "ultimate_interrupt";

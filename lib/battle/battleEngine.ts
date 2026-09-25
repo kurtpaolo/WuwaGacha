@@ -724,20 +724,45 @@ export function advanceTimeline(
     return { nextUnit, updatedTimeline: list };
   }
 
-  const minAv = list[0].actionValue;
-  for (const entry of list) {
-    entry.actionValue = Math.max(0, entry.actionValue - minAv);
-  }
+  // 1. Shift the currently acting unit out of the timeline
+  const actingUnit = list.shift()!;
 
-  const nextUnit = list.shift()!;
-  const standardAv = calculateActionValue(nextUnit.speed);
+  // 2. Reinsert the acting unit with standard AV based on its speed
+  const standardAv = calculateActionValue(actingUnit.speed);
   const reinserted: TimelineEntry = {
-    ...nextUnit,
+    ...actingUnit,
     actionValue: Math.max(1, Math.round(standardAv * avDelayMultiplier)),
+    isInterrupt: false,
   };
   list.push(reinserted);
+
+  // 3. Sort by current action value
   list.sort((a, b) => a.actionValue - b.actionValue);
 
+  // 4. Fair turn anti-monopoly safeguard:
+  // If the same unit that just completed a turn is still at index 0 without an extra turn,
+  // ensure living opposing units get their turn before this unit acts again consecutively.
+  const hasOpposingUnit = list.some((e) => e.isPlayer !== actingUnit.isPlayer);
+  if (hasOpposingUnit && list[0].isPlayer === actingUnit.isPlayer && list[0].teamIndex === actingUnit.teamIndex) {
+    const firstOppIdx = list.findIndex((e) => e.isPlayer !== actingUnit.isPlayer);
+    if (firstOppIdx !== -1) {
+      const oppAv = list[firstOppIdx].actionValue;
+      const actingUnitEntry = list.shift()!;
+      actingUnitEntry.actionValue = oppAv + 1;
+      list.push(actingUnitEntry);
+      list.sort((a, b) => a.actionValue - b.actionValue);
+    }
+  }
+
+  // 5. Advance time: deduct the lowest action value from all units so the next unit reaches 0 AV!
+  const timeDelta = list[0].actionValue;
+  if (timeDelta > 0) {
+    for (const entry of list) {
+      entry.actionValue = Math.max(0, entry.actionValue - timeDelta);
+    }
+  }
+
+  const nextUnit = list[0];
   return { nextUnit, updatedTimeline: list };
 }
 

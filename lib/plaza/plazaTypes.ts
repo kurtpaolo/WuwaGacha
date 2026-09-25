@@ -35,7 +35,18 @@ export interface PlazaPlayer {
 
 export interface PlazaNpcAction {
   label: string;
-  actionId: "convene" | "arena" | "inventory" | "profile" | "tacet";
+  actionId:
+    | "convene"
+    | "arena"
+    | "inventory"
+    | "profile"
+    | "tacet"
+    | "minigame_coinflip"
+    | "minigame_slots"
+    | "minigame_blackjack"
+    | "minigame_dice"
+    | "minigame_wheel"
+    | "minigame_scratch";
   variant?: "primary" | "secondary" | "accent";
 }
 

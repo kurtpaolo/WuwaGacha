@@ -213,26 +213,136 @@ export function getTimeUntilGmt8Reset(): {
 
 export function getStoredResonatorLevels(userId?: string): Record<string, number> {
   if (typeof window === "undefined") return {};
+  const merged: Record<string, number> = {};
+
+  // Check legacy/unprefixed storage
   try {
-    const raw = localStorage.getItem(`wuwa_resonator_levels_${userId || "guest"}`);
-    if (raw) return JSON.parse(raw);
+    const raw = localStorage.getItem("wuwa_resonator_levels");
+    if (raw) Object.assign(merged, JSON.parse(raw));
   } catch {}
-  return {};
+
+  // Check guest levels
+  try {
+    const raw = localStorage.getItem("wuwa_resonator_levels_guest");
+    if (raw) Object.assign(merged, JSON.parse(raw));
+  } catch {}
+
+  // If userId provided, overlay user-specific levels
+  if (userId && userId !== "guest") {
+    try {
+      const raw = localStorage.getItem(`wuwa_resonator_levels_${userId}`);
+      if (raw) Object.assign(merged, JSON.parse(raw));
+    } catch {}
+  }
+
+  return merged;
 }
 
 export function getResonatorLevel(charId: string, userId?: string): number {
+  if (!charId) return 50;
   const levels = getStoredResonatorLevels(userId);
-  return Math.min(100, levels[charId] || 50); // Default Lv 50, capped at 100
+  const norm = charId.toLowerCase().trim();
+  const val = levels[norm] ?? levels[charId];
+  if (typeof val === "number" && !isNaN(val) && val >= 1) {
+    return Math.min(100, Math.max(1, val));
+  }
+  return 50; // Default Lv 50, capped at 100
 }
 
 export function setResonatorLevel(charId: string, level: number, userId?: string): void {
-  const levels = getStoredResonatorLevels(userId);
-  levels[charId] = Math.min(100, Math.max(40, level));
-  if (typeof window !== "undefined") {
+  if (!charId || typeof window === "undefined") return;
+  const clampedLevel = Math.min(100, Math.max(1, level));
+  const norm = charId.toLowerCase().trim();
+
+  // Save to user storage if userId exists
+  if (userId && userId !== "guest") {
     try {
-      localStorage.setItem(`wuwa_resonator_levels_${userId || "guest"}`, JSON.stringify(levels));
+      const userRaw = localStorage.getItem(`wuwa_resonator_levels_${userId}`);
+      const userLevels: Record<string, number> = userRaw ? JSON.parse(userRaw) : {};
+      userLevels[norm] = clampedLevel;
+      userLevels[charId] = clampedLevel;
+      localStorage.setItem(`wuwa_resonator_levels_${userId}`, JSON.stringify(userLevels));
     } catch {}
   }
+
+  // ALSO save to guest storage as fallback/migration
+  try {
+    const guestRaw = localStorage.getItem("wuwa_resonator_levels_guest");
+    const guestLevels: Record<string, number> = guestRaw ? JSON.parse(guestRaw) : {};
+    guestLevels[norm] = clampedLevel;
+    guestLevels[charId] = clampedLevel;
+    localStorage.setItem("wuwa_resonator_levels_guest", JSON.stringify(guestLevels));
+  } catch {}
+
+  // Dispatch custom event for real-time reactivity across components
+  try {
+    window.dispatchEvent(
+      new CustomEvent("wuwa_resonator_level_changed", {
+        detail: { characterId: norm, level: clampedLevel, userId },
+      })
+    );
+  } catch {}
+}
+
+export function getActivatedSequence(charId: string, maxAvailable: number = 6, userId?: string): number {
+  if (typeof window === "undefined" || !charId) return 0;
+  const norm = charId.toLowerCase().trim();
+
+  // Check if auto-activation is enabled in dev/settings
+  try {
+    if (localStorage.getItem("wuwa_auto_activate_sequences") === "true") {
+      return maxAvailable;
+    }
+  } catch {}
+
+  const keysToCheck = [
+    userId && userId !== "guest" ? `wuwa_seq_activated_${userId}_${norm}` : null,
+    userId && userId !== "guest" ? `wuwa_seq_activated_${userId}_${charId}` : null,
+    `wuwa_seq_activated_${norm}`,
+    `wuwa_seq_activated_${charId}`,
+  ].filter(Boolean) as string[];
+
+  let maxFound = 0;
+  for (const key of keysToCheck) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw !== null) {
+        const parsed = parseInt(raw, 10);
+        if (!isNaN(parsed) && parsed > maxFound) {
+          maxFound = parsed;
+        }
+      }
+    } catch {}
+  }
+
+  return Math.min(maxAvailable, Math.max(0, maxFound));
+}
+
+export function setActivatedSequence(charId: string, level: number, userId?: string): void {
+  if (typeof window === "undefined" || !charId) return;
+  const norm = charId.toLowerCase().trim();
+  const clamped = Math.min(6, Math.max(0, level));
+
+  // Write to both user-scoped and global keys
+  if (userId && userId !== "guest") {
+    try {
+      localStorage.setItem(`wuwa_seq_activated_${userId}_${norm}`, String(clamped));
+      localStorage.setItem(`wuwa_seq_activated_${userId}_${charId}`, String(clamped));
+    } catch {}
+  }
+
+  try {
+    localStorage.setItem(`wuwa_seq_activated_${norm}`, String(clamped));
+    localStorage.setItem(`wuwa_seq_activated_${charId}`, String(clamped));
+  } catch {}
+
+  try {
+    window.dispatchEvent(
+      new CustomEvent("wuwa_sequence_activated", {
+        detail: { characterId: norm, level: clamped, userId },
+      })
+    );
+  } catch {}
 }
 
 export function getCombatExp(userId?: string): number {

@@ -106,13 +106,13 @@ export interface AuthResult {
 }
 
 /**
- * Register a new account with Username, Password, and Security Question/Answer.
+ * Register a new account with Username, Password, and Date of Birth.
  */
 export async function signUpWithUsername(
   username: string,
   password: string,
-  securityQuestion?: string,
-  securityAnswer?: string
+  birthday?: string,
+  _deprecatedAnswer?: string
 ): Promise<AuthResult> {
   if (!isSupabaseConfigured()) {
     return {
@@ -135,12 +135,10 @@ export async function signUpWithUsername(
     return { user: null, session: null, error: "Password must be at least 6 characters long." };
   }
 
+  const cleanBirthday = birthday?.trim();
+
   try {
     const email = formatUsernameEmail(trimmedUser);
-    let answerHash: string | undefined;
-    if (securityAnswer && securityAnswer.trim()) {
-      answerHash = await sha256(securityAnswer.trim());
-    }
 
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -148,8 +146,7 @@ export async function signUpWithUsername(
       options: {
         data: {
           username: trimmedUser,
-          security_question: securityQuestion?.trim() || undefined,
-          security_answer_hash: answerHash,
+          birthday: cleanBirthday || undefined,
         },
       },
     });
@@ -165,14 +162,15 @@ export async function signUpWithUsername(
       return { user: null, session: null, error: error.message };
     }
 
-    // Also ensure profiles table has security_question and security_answer_hash
-    if (data.user && (securityQuestion || answerHash)) {
+    // Also ensure profiles table has username, birthday, and initial cooldown timestamp
+    if (data.user) {
       try {
+        const nowIso = new Date().toISOString();
         await supabase.from("profiles").upsert({
           id: data.user.id,
           username: trimmedUser,
-          security_question: securityQuestion?.trim() || null,
-          security_answer_hash: answerHash || null,
+          birthday: cleanBirthday || null,
+          birthday_last_changed_at: cleanBirthday ? nowIso : null,
         });
       } catch {}
     }
@@ -773,6 +771,172 @@ export async function resetPasswordWithSecurityAnswer(
     if (data && typeof data === "object") {
       if (!data.success) {
         return { success: false, error: data.error || "Incorrect answer to security question." };
+      }
+      return { success: true };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to reset password." };
+  }
+}
+
+/**
+ * Calculates a user's age from their birthday (YYYY-MM-DD).
+ */
+export function calculateAge(birthdayStr?: string | null): number {
+  if (!birthdayStr) return 0;
+  const birth = new Date(birthdayStr);
+  if (isNaN(birth.getTime())) return 0;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age;
+}
+
+export const BIRTHDAY_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+export function getBirthdayCooldownRemainingMs(lastChangedAt?: string | null): number {
+  if (!lastChangedAt) return 0;
+  const changedTime = new Date(lastChangedAt).getTime();
+  if (isNaN(changedTime)) return 0;
+  const elapsed = Date.now() - changedTime;
+  const remaining = BIRTHDAY_COOLDOWN_MS - elapsed;
+  return remaining > 0 ? remaining : 0;
+}
+
+/**
+ * Updates a user's birthday in Supabase profiles with 24-hour cooldown enforcement.
+ */
+export async function updateUserBirthday(
+  userId: string,
+  birthday: string
+): Promise<{ success: boolean; error?: string | null; lastChangedAt?: string }> {
+  if (!isSupabaseConfigured() || !userId) {
+    return { success: false, error: "Database not configured." };
+  }
+
+  const cleanDate = birthday.trim();
+  if (!cleanDate) {
+    return { success: false, error: "Please enter your date of birth." };
+  }
+
+  const birthObj = new Date(cleanDate);
+  if (isNaN(birthObj.getTime())) {
+    return { success: false, error: "Invalid date format." };
+  }
+
+  const currentYear = new Date().getFullYear();
+  const birthYear = birthObj.getFullYear();
+  if (birthYear < 1900 || birthYear > currentYear) {
+    return { success: false, error: "Please enter a valid birth year." };
+  }
+
+  try {
+    // 1. Try RPC first
+    try {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc("update_user_birthday", {
+        p_user_id: userId,
+        p_birthday: cleanDate,
+      });
+
+      if (!rpcErr && rpcData) {
+        if (!rpcData.success) {
+          return { success: false, error: rpcData.error };
+        }
+        return {
+          success: true,
+          lastChangedAt: rpcData.birthday_last_changed_at || new Date().toISOString(),
+        };
+      }
+    } catch {}
+
+    // 2. Direct fallback
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("birthday_last_changed_at")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (profile?.birthday_last_changed_at) {
+      const remaining = getBirthdayCooldownRemainingMs(profile.birthday_last_changed_at);
+      if (remaining > 0) {
+        const hours = Math.ceil(remaining / (1000 * 60 * 60));
+        return {
+          success: false,
+          error: `Birthday was changed recently. Please wait ${hours} hour(s) before changing again.`,
+        };
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+    const { error: updateErr } = await supabase
+      .from("profiles")
+      .update({
+        birthday: cleanDate,
+        birthday_last_changed_at: nowIso,
+        updated_at: nowIso,
+      })
+      .eq("id", userId);
+
+    if (updateErr) {
+      return { success: false, error: updateErr.message };
+    }
+
+    return { success: true, lastChangedAt: nowIso };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to update birthday." };
+  }
+}
+
+/**
+ * Resets user password by verifying their birthday through Supabase RPC.
+ */
+export async function resetPasswordWithBirthday(
+  username: string,
+  birthday: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: string | null }> {
+  if (!isSupabaseConfigured()) {
+    return { success: false, error: "Database not configured." };
+  }
+
+  const trimmedUser = username.trim().toLowerCase();
+  const trimmedBirthday = birthday.trim();
+
+  if (!trimmedUser) {
+    return { success: false, error: "Please enter your username." };
+  }
+  if (!trimmedBirthday) {
+    return { success: false, error: "Please enter your date of birth." };
+  }
+  if (!newPassword || newPassword.length < 6) {
+    return { success: false, error: "New password must be at least 6 characters long." };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc("reset_password_with_birthday", {
+      p_username: trimmedUser,
+      p_birthday: trimmedBirthday,
+      p_new_password: newPassword,
+    });
+
+    if (error) {
+      if (error.message.includes("function") && error.message.includes("does not exist")) {
+        return {
+          success: false,
+          error: "Database reset function not found. Please run the SQL in supabase_schema.sql inside your Supabase SQL editor.",
+        };
+      }
+      return { success: false, error: error.message };
+    }
+
+    if (data && typeof data === "object") {
+      if (!data.success) {
+        return { success: false, error: data.error || "Incorrect birthday entered." };
       }
       return { success: true };
     }

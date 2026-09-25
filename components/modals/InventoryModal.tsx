@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { getPortraitFileName } from "@/lib/data/portraits";
 import { ResonatorDetailModal } from "@/components/modals/ResonatorDetailModal";
+import { getActivatedSequence } from "@/lib/battle/pvpService";
 
 interface ResonatorInventoryCardProps {
   item: UserInventoryItem;
@@ -30,6 +31,7 @@ interface ResonatorInventoryCardProps {
   isReadOnly: boolean;
   onToggleFavorite: (id: string) => void;
   onInspectCard: (item: UserInventoryItem) => void;
+  currentUserId?: string;
 }
 
 const ResonatorInventoryCard: React.FC<ResonatorInventoryCardProps> = React.memo(({
@@ -38,6 +40,7 @@ const ResonatorInventoryCard: React.FC<ResonatorInventoryCardProps> = React.memo
   isReadOnly,
   onToggleFavorite,
   onInspectCard,
+  currentUserId,
 }) => {
   const res = RESONATORS[item.character_id];
   const artistInfo = getResonatorArtist(item.character_id);
@@ -45,21 +48,12 @@ const ResonatorInventoryCard: React.FC<ResonatorInventoryCardProps> = React.memo
   const element = res?.element || "Spectro";
   const maxWavebands = Math.max(0, Math.min(6, item.count - 1));
   const [activeSeq, setActiveSeq] = useState<number>(() => {
-    if (typeof window === "undefined") return maxWavebands;
-    if (localStorage.getItem("wuwa_auto_activate_sequences") === "true") return maxWavebands;
-    const saved = localStorage.getItem(`wuwa_seq_activated_${item.character_id}`);
-    return saved !== null ? Math.min(maxWavebands, Math.max(0, parseInt(saved, 10) || 0)) : 0;
+    return getActivatedSequence(item.character_id, maxWavebands, currentUserId);
   });
 
   useEffect(() => {
     const updateActive = () => {
-      if (typeof window === "undefined") return;
-      if (localStorage.getItem("wuwa_auto_activate_sequences") === "true") {
-        setActiveSeq(maxWavebands);
-        return;
-      }
-      const saved = localStorage.getItem(`wuwa_seq_activated_${item.character_id}`);
-      setActiveSeq(saved !== null ? Math.min(maxWavebands, Math.max(0, parseInt(saved, 10) || 0)) : 0);
+      setActiveSeq(getActivatedSequence(item.character_id, maxWavebands, currentUserId));
     };
     window.addEventListener("wuwa_sequence_activated", updateActive);
     window.addEventListener("wuwa_auto_activate_changed", updateActive);
@@ -67,7 +61,7 @@ const ResonatorInventoryCard: React.FC<ResonatorInventoryCardProps> = React.memo
       window.removeEventListener("wuwa_sequence_activated", updateActive);
       window.removeEventListener("wuwa_auto_activate_changed", updateActive);
     };
-  }, [item.character_id, maxWavebands]);
+  }, [item.character_id, maxWavebands, currentUserId]);
 
   const wavebandsUnlocked = activeSeq;
   const isS6 = wavebandsUnlocked >= 6;
@@ -621,6 +615,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                           isReadOnly={isReadOnly}
                           onToggleFavorite={toggleFavorite}
                           onInspectCard={setInspectedItem}
+                          currentUserId={currentUserId}
                         />
                       ))}
                     </div>
@@ -664,6 +659,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
           item={inspectedItem}
           onClose={() => setInspectedItem(null)}
           onBack={() => setInspectedItem(null)}
+          currentUserId={currentUserId}
         />
       </div>
     </AnimatePresence>

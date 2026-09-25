@@ -224,6 +224,96 @@ export const BINAN_GUIDE_NPCS: PlazaNpc[] = [
       { label: "YES", actionId: "tacet", variant: "primary" },
     ],
   },
+  {
+    // BRANT: Coinflip - Double or Nothing (South-West Courtyard / Alberto Heritage Grounds)
+    id: "npc_brant",
+    name: "Brant",
+    spriteId: "brant",
+    title: "Coinflip",
+    service: "Double or Nothing",
+    x: ((75 + 0.5) / BINAN_GRID_COLS) * 100,
+    y: ((145 + 0.5) / BINAN_GRID_ROWS) * 100,
+    facing: "right",
+    greeting: "Heh, feeling lucky today Rover? Put your Astrites on the line. Heads or Tails — double or nothing!",
+    actions: [
+      { label: "PLAY COINFLIP", actionId: "minigame_coinflip", variant: "primary" },
+    ],
+  },
+  {
+    // CARLOTTA: Echo Slots - 3-Reel Retro Machine (North-East Riverside Promenade)
+    id: "npc_carlotta",
+    name: "Carlotta",
+    spriteId: "carlotta",
+    title: "Echo Slots",
+    service: "Retro 3-Reel Slots",
+    x: ((205 + 0.5) / BINAN_GRID_COLS) * 100,
+    y: ((70 + 0.5) / BINAN_GRID_ROWS) * 100,
+    facing: "left",
+    greeting: "Step right up, Rover! Pull the lever on the Echo Slot machine — hit 3 of a kind or the 100x Gold Star Jackpot!",
+    actions: [
+      { label: "PLAY SLOTS", actionId: "minigame_slots", variant: "primary" },
+    ],
+  },
+  {
+    // YINLIN: Tacet Blackjack 21 - North-West Heritage Pavilion
+    id: "npc_yinlin",
+    name: "Yinlin",
+    spriteId: "yinlin",
+    title: "Blackjack 21",
+    service: "Tacet Blackjack",
+    x: ((70 + 0.5) / BINAN_GRID_COLS) * 100,
+    y: ((55 + 0.5) / BINAN_GRID_ROWS) * 100,
+    facing: "right",
+    greeting: "Let's see if your nerve holds under pressure. Standard 21 — Hit, Stand, or Double Down against the house.",
+    actions: [
+      { label: "PLAY BLACKJACK", actionId: "minigame_blackjack", variant: "primary" },
+    ],
+  },
+  {
+    // CANTARELLA: Tacet Dice Multiplier Ladder - Far North Terrace Overlook
+    id: "npc_cantarella",
+    name: "Cantarella",
+    spriteId: "cantarella",
+    title: "Dice Ladder",
+    service: "Multiplier Ladder",
+    x: ((140 + 0.5) / BINAN_GRID_COLS) * 100,
+    y: ((35 + 0.5) / BINAN_GRID_ROWS) * 100,
+    facing: "left",
+    greeting: "Roll the cyber dice from 1 to 30 and guess Higher or Lower. Climb the ladder up to 30x!",
+    actions: [
+      { label: "PLAY DICE LADDER", actionId: "minigame_dice", variant: "primary" },
+    ],
+  },
+  {
+    // PHOEBE: Wheel of Fortune - Lucky Color Roulette (Far South Esplanade)
+    id: "npc_phoebe",
+    name: "Phoebe",
+    spriteId: "phoebe",
+    title: "Wheel of Fortune",
+    service: "Lucky Color Roulette",
+    x: ((140 + 0.5) / BINAN_GRID_COLS) * 100,
+    y: ((170 + 0.5) / BINAN_GRID_ROWS) * 100,
+    facing: "right",
+    greeting: "Spin the wheel of fortune! Bet on your favorite color and win up to 20x!",
+    actions: [
+      { label: "SPIN WHEEL", actionId: "minigame_wheel", variant: "primary" },
+    ],
+  },
+  {
+    // LUPA: Mystery Scratchcards (Far East Bazaar Arcade)
+    id: "npc_lupa",
+    name: "Lupa",
+    spriteId: "lupa",
+    title: "Scratchcards",
+    service: "Mystery Scratchcards",
+    x: ((235 + 0.5) / BINAN_GRID_COLS) * 100,
+    y: ((110 + 0.5) / BINAN_GRID_ROWS) * 100,
+    facing: "left",
+    greeting: "Grab a 3x3 scratchcard, Rover! Match 3 of the same multiplier before 3 misses!",
+    actions: [
+      { label: "SCRATCH CARDS", actionId: "minigame_scratch", variant: "primary" },
+    ],
+  },
 ];
 
 // Default spawn location: Red box area at San Isidro courtyard (col 151, row 125)
@@ -258,9 +348,24 @@ export function isTileWalkable(col: number, row: number): boolean {
   if (col < 0 || col >= BINAN_GRID_COLS || row < 0 || row >= BINAN_GRID_ROWS) {
     return false;
   }
-  const { collision } = getBinanMapData();
+  const { collision, tiles } = getBinanMapData();
   const index = row * BINAN_GRID_COLS + col;
-  return collision[index] === 1;
+  // Walkable if collision flag is 1 or tile is water (Biñan River is walkable/swimmable)
+  return collision[index] === 1 || tiles[index] === BinanTileType.WATER;
+}
+
+export function isTileWater(col: number, row: number): boolean {
+  if (col < 0 || col >= BINAN_GRID_COLS || row < 0 || row >= BINAN_GRID_ROWS) {
+    return false;
+  }
+  const { tiles } = getBinanMapData();
+  const index = row * BINAN_GRID_COLS + col;
+  return tiles[index] === BinanTileType.WATER;
+}
+
+export function isWaterPercent(pctX: number, pctY: number): boolean {
+  const { col, row } = percentToTile(pctX, pctY);
+  return isTileWater(col, row);
 }
 
 export function isRoadWalkablePercent(pctX: number, pctY: number): boolean {

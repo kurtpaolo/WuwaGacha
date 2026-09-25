@@ -160,12 +160,12 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({
               </p>
             </div>
 
-            {/* 5. Free Astrite Battery & Daily Streaks */}
+            {/* 5. Free Astrite Battery & VIP Storage */}
             <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
               <div className="flex items-center space-x-2 text-amber-400">
                 <Flame className="w-4 h-4 flex-shrink-0" />
                 <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
-                  5. Free Astrite Battery &amp; Login Streaks
+                  5. Free Astrite Battery &amp; VIP Storage
                 </h3>
               </div>
               <p className="text-xs font-mono text-gray-300 leading-relaxed">
@@ -174,15 +174,15 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">
                 <div className="p-2 rounded-lg bg-black/40 border border-white/5">
                   <span className="text-yellow-300 font-bold block">Recharge Rate:</span>
-                  <span className="text-gray-300"><strong>1 pull (160 Astrite) every 4.5 minutes</strong></span>
+                  <span className="text-gray-300"><strong>1 pull (160 Astrite) every 6 minutes</strong></span>
                 </div>
                 <div className="p-2 rounded-lg bg-black/40 border border-white/5">
-                  <span className="text-amber-300 font-bold block">Starting Tank:</span>
-                  <span className="text-gray-300">Holds up to <strong>12 hours (160 pulls)</strong></span>
+                  <span className="text-amber-300 font-bold block">Base Tank:</span>
+                  <span className="text-gray-300">Holds up to <strong>12 hours (120 pulls / 19,200 ✦)</strong></span>
                 </div>
               </div>
               <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] font-mono text-amber-200/90">
-                🔥 <strong>Daily Streaks (00:00 GMT+8 reset):</strong> Check in daily to permanently expand your battery capacity at 2, 5, 9, and 14 days, up to <strong>18 hours (240 pulls)</strong>!
+                👑 <strong>VIP Membership Perk:</strong> VIP Rovers receive a +50% tank expansion, holding up to <strong>18 hours (180 pulls / 28,800 ✦)</strong>!
               </div>
             </div>
 

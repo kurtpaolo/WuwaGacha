@@ -60,12 +60,9 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
   // Discord Webhooks state
   const [webhooks, setWebhooks] = useState<DiscordWebhookItem[]>([]);
   const [isLoadingWebhooks, setIsLoadingWebhooks] = useState<boolean>(false);
-  const [isAddingWebhook, setIsAddingWebhook] = useState<boolean>(false);
   const [testingWebhookId, setTestingWebhookId] = useState<string | null>(null);
   const [deletingWebhookId, setDeletingWebhookId] = useState<string | null>(null);
   const [isBroadcastingAll, setIsBroadcastingAll] = useState<boolean>(false);
-  const [newWebhookUrl, setNewWebhookUrl] = useState<string>("");
-  const [newWebhookName, setNewWebhookName] = useState<string>("");
   const [webhookStatus, setWebhookStatus] = useState<{
     type: "success" | "error";
     message: string;
@@ -188,48 +185,6 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
     }
   }, [isOpen]);
 
-  const handleAddWebhook = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newWebhookUrl.trim()) return;
-
-    soundEngine.playClick();
-    setIsAddingWebhook(true);
-    setWebhookStatus(null);
-
-    try {
-      const res = await fetch("/api/webhooks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: newWebhookUrl.trim(),
-          name: newWebhookName.trim() || "Discord Channel",
-        }),
-      });
-      const data = await res.json();
-
-      if (data.success && data.webhook) {
-        setWebhooks((prev) => [...prev, data.webhook]);
-        setNewWebhookUrl("");
-        setNewWebhookName("");
-        setWebhookStatus({
-          type: "success",
-          message: "Webhook added successfully!",
-        });
-      } else {
-        setWebhookStatus({
-          type: "error",
-          message: data.error || "Failed to add webhook.",
-        });
-      }
-    } catch (err: any) {
-      setWebhookStatus({
-        type: "error",
-        message: err.message || "Failed to add webhook.",
-      });
-    } finally {
-      setIsAddingWebhook(false);
-    }
-  };
 
   const handleToggleWebhook = async (id: string, currentActive: boolean) => {
     soundEngine.playClick();
@@ -417,11 +372,12 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
                   max="100"
                   value={masterVol}
                   onChange={(e) => handleMasterChange(Number(e.target.value))}
-                  className="w-full h-1.5 bg-white/15 rounded-lg appearance-none cursor-pointer accent-yellow-400 hover:accent-yellow-300"
+                  onInput={(e) => handleMasterChange(Number((e.target as HTMLInputElement).value))}
+                  className="w-full h-2 bg-white/15 rounded-lg appearance-none cursor-pointer accent-yellow-400 hover:accent-yellow-300 touch-none"
                 />
               </div>
 
-              {/* Music Volume (wuwamenu BGM) */}
+              {/* Music Volume (Anime Adventures Theme BGM) */}
               <div className="space-y-2 p-3.5 rounded-xl bg-white/[0.03] border border-white/10">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2 text-white text-xs font-bold uppercase tracking-wide">
@@ -433,7 +389,7 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
                   </span>
                 </div>
                 <p className="text-[11px] text-gray-400 font-mono">
-                  Background Music
+                  Background Music (Anime Adventures Theme)
                 </p>
                 <input
                   type="range"
@@ -441,7 +397,8 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
                   max="100"
                   value={musicVol}
                   onChange={(e) => handleMusicChange(Number(e.target.value))}
-                  className="w-full h-1.5 bg-white/15 rounded-lg appearance-none cursor-pointer accent-yellow-400 hover:accent-yellow-300"
+                  onInput={(e) => handleMusicChange(Number((e.target as HTMLInputElement).value))}
+                  className="w-full h-2 bg-white/15 rounded-lg appearance-none cursor-pointer accent-yellow-400 hover:accent-yellow-300 touch-none"
                 />
               </div>
 
@@ -465,7 +422,8 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
                   max="100"
                   value={summonVol}
                   onChange={(e) => handleSummonChange(Number(e.target.value))}
-                  className="w-full h-1.5 bg-white/15 rounded-lg appearance-none cursor-pointer accent-yellow-400 hover:accent-yellow-300"
+                  onInput={(e) => handleSummonChange(Number((e.target as HTMLInputElement).value))}
+                  className="w-full h-2 bg-white/15 rounded-lg appearance-none cursor-pointer accent-yellow-400 hover:accent-yellow-300 touch-none"
                 />
               </div>
             </div>
@@ -579,41 +537,13 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
                   </div>
                 )}
 
-                {/* Add Webhook Form */}
-                <form onSubmit={handleAddWebhook} className="space-y-2">
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="url"
-                      value={newWebhookUrl}
-                      onChange={(e) => setNewWebhookUrl(e.target.value)}
-                      placeholder="https://discord.com/api/webhooks/..."
-                      className="flex-1 bg-black/40 border border-white/15 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 font-mono focus:outline-none focus:border-yellow-400 transition-colors"
-                      disabled={isAddingWebhook}
-                    />
-                    <input
-                      type="text"
-                      value={newWebhookName}
-                      onChange={(e) => setNewWebhookName(e.target.value)}
-                      placeholder="Channel (optional)"
-                      className="sm:w-36 bg-black/40 border border-white/15 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 font-mono focus:outline-none focus:border-yellow-400 transition-colors"
-                      disabled={isAddingWebhook}
-                    />
-                    <button
-                      type="submit"
-                      disabled={isAddingWebhook || !newWebhookUrl.trim()}
-                      className="inline-flex items-center justify-center space-x-1 px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed text-black text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex-shrink-0"
-                    >
-                      {isAddingWebhook ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <>
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Add</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </form>
+                {/* Direct Database Management Notice */}
+                <div className="p-2.5 rounded-lg bg-black/40 border border-white/10 text-[11px] font-mono text-gray-400 flex items-center justify-between">
+                  <span>Webhooks are configured directly via Supabase SQL database (no duplicates).</span>
+                  <span className="text-[10px] text-yellow-400/90 bg-yellow-400/10 px-2 py-0.5 rounded border border-yellow-400/20 font-bold uppercase shrink-0 ml-2">
+                    Direct DB
+                  </span>
+                </div>
 
                 {/* Auto-Broadcast Schedule Banner & Manual Dispatch */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-yellow-400/5 border border-yellow-400/20 text-[11px] font-mono">

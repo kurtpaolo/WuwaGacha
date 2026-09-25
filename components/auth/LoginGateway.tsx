@@ -6,10 +6,7 @@ import { soundEngine } from "@/lib/audio/soundEngine";
 import {
   signInWithUsername,
   signUpWithUsername,
-  getUserSecurityQuestion,
-  resetPasswordWithSecurityAnswer,
-  PRESET_SECURITY_QUESTIONS,
-  ALL_RESONATORS_LIST,
+  resetPasswordWithBirthday,
 } from "@/lib/supabase/auth";
 import { fetchUserProfile, UserProfile } from "@/lib/supabase/profile";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
@@ -28,12 +25,13 @@ import {
   Infinity,
   X,
   Layers,
+  Cake,
+  Calendar,
 } from "lucide-react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { DetailsModal } from "@/components/modals/DetailsModal";
 import { PrivacyModal } from "@/components/modals/PrivacyModal";
 import { HowToPlayModal } from "@/components/modals/HowToPlayModal";
-import { ScrollableSelect } from "@/components/ui/ScrollableSelect";
 import { SlowDownModal } from "@/components/modals/SlowDownModal";
 import { ExternalRedirectModal } from "@/components/modals/ExternalRedirectModal";
 
@@ -56,15 +54,12 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
   const [username, setUsername] = useState<string>("");
   const [password, setPassword] = useState<string>("");
 
-  // Sign up security question state
-  const [securityQuestion, setSecurityQuestion] = useState<string>(PRESET_SECURITY_QUESTIONS[0]);
-  const [securityAnswer, setSecurityAnswer] = useState<string>("");
+  // Sign up Date of Birth state
+  const [birthday, setBirthday] = useState<string>("");
 
   // Forgot password flow state
   const [forgotUsername, setForgotUsername] = useState<string>("");
-  const [recoveredQuestion, setRecoveredQuestion] = useState<string | null>(null);
-  const [forgotAnswer, setForgotAnswer] = useState<string>("");
-  const [isManualForgotAnswer, setIsManualForgotAnswer] = useState<boolean>(false);
+  const [forgotBirthday, setForgotBirthday] = useState<string>("");
   const [newPassword, setNewPassword] = useState<string>("");
   const [confirmNewPassword, setConfirmNewPassword] = useState<string>("");
   const [resetSuccess, setResetSuccess] = useState<boolean>(false);
@@ -76,16 +71,6 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
   const [showHowToPlay, setShowHowToPlay] = useState<boolean>(false);
   const [showSandboxWarning, setShowSandboxWarning] = useState<boolean>(false);
 
-  const resonatorSelectOptions = useMemo(
-    () =>
-      ALL_RESONATORS_LIST.map((r) => ({
-        value: r.name,
-        label: r.name,
-        rarity: r.rarity,
-      })),
-    []
-  );
-
   const supabaseReady = isSupabaseConfigured();
 
   // Reset errors when switching modes
@@ -96,9 +81,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
     setResetSuccess(false);
     if (newMode === "forgot") {
       setForgotUsername(username || "");
-      setRecoveredQuestion(null);
-      setForgotAnswer("");
-      setIsManualForgotAnswer(false);
+      setForgotBirthday("");
       setNewPassword("");
       setConfirmNewPassword("");
     }
@@ -123,8 +106,8 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
       return;
     }
 
-    if (mode === "signup" && (!securityAnswer || !securityAnswer.trim())) {
-      setErrorMsg("Please select a resonator for your security question.");
+    if (mode === "signup" && (!birthday || !birthday.trim())) {
+      setErrorMsg("Please enter your date of birth.");
       return;
     }
 
@@ -148,8 +131,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
         const res = await signUpWithUsername(
           cleanUser,
           password,
-          securityQuestion,
-          securityAnswer.trim()
+          birthday.trim()
         );
         if (res.error) {
           setErrorMsg(res.error);
@@ -172,46 +154,20 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
     }
   };
 
-  // Step 1: Find security question for username
-  const handleFindQuestion = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-
-    const clean = forgotUsername.trim();
-    if (!clean) {
-      setErrorMsg("Please enter your username.");
-      return;
-    }
-
-    setLoading(true);
-    soundEngine.playClick();
-
-    try {
-      const res = await getUserSecurityQuestion(clean);
-      if (res.error) {
-        setErrorMsg(res.error);
-        setLoading(false);
-        return;
-      }
-      if (res.question) {
-        setRecoveredQuestion(res.question);
-      } else {
-        setErrorMsg("No security question was found for this username.");
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || "Failed to find user account.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Step 2: Submit security answer and new password
+  // Submit birthday and new password to reset account password
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!forgotAnswer.trim()) {
-      setErrorMsg("Please answer your security question.");
+    const cleanUser = forgotUsername.trim();
+    const cleanDate = forgotBirthday.trim();
+
+    if (!cleanUser) {
+      setErrorMsg("Please enter your username.");
+      return;
+    }
+    if (!cleanDate) {
+      setErrorMsg("Please enter your date of birth.");
       return;
     }
     if (!newPassword || newPassword.length < 6) {
@@ -227,25 +183,25 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
     soundEngine.playClick();
 
     try {
-      const res = await resetPasswordWithSecurityAnswer(
-        forgotUsername.trim(),
-        forgotAnswer.trim(),
+      const res = await resetPasswordWithBirthday(
+        cleanUser,
+        cleanDate,
         newPassword
       );
 
       if (!res.success) {
-        setErrorMsg(res.error || "Incorrect answer to security question.");
+        setErrorMsg(res.error || "Incorrect birthday entered.");
         setLoading(false);
         return;
       }
 
       setResetSuccess(true);
       setTimeout(() => {
-        setUsername(forgotUsername.trim());
+        setUsername(cleanUser);
         setPassword("");
         setMode("signin");
         setResetSuccess(false);
-        setRecoveredQuestion(null);
+        setForgotBirthday("");
       }, 1600);
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to reset password.");
@@ -477,36 +433,32 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
                 </div>
               </div>
 
-              {/* Sign Up: Security Question & Answer */}
+              {/* Sign Up: Date of Birth */}
               {mode === "signup" && (
-                <div className="space-y-3 pt-1 border-t border-white/10 text-left">
-                  <div className="space-y-1.5">
+                <div className="space-y-2 pt-1 border-t border-white/10 text-left">
+                  <div className="flex items-center justify-between">
                     <label className="text-[11px] font-mono uppercase tracking-wider text-yellow-400 font-bold flex items-center space-x-1.5">
-                      <HelpCircle className="w-3.5 h-3.5" />
-                      <span>Security Question (For Password Recovery)</span>
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>Date of Birth</span>
                     </label>
-                    <ScrollableSelect
-                      value={securityQuestion}
-                      onChange={(val) => setSecurityQuestion(val)}
-                      options={PRESET_SECURITY_QUESTIONS}
-                      placeholder="Select a question"
+                    <span className="text-[10px] font-mono text-gray-500">18+ for Casino Games</span>
+                  </div>
+                  <div className="relative flex items-center">
+                    <div className="absolute left-3.5 text-gray-500 pointer-events-none">
+                      <Cake className="w-4 h-4 text-yellow-400/80" />
+                    </div>
+                    <input
+                      type="date"
+                      required
+                      max={new Date().toISOString().split("T")[0]}
+                      value={birthday}
+                      onChange={(e) => setBirthday(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 bg-black/60 border border-white/15 focus:border-yellow-400 rounded-xl text-sm font-mono text-white placeholder-gray-600 focus:outline-none transition-all shadow-inner [color-scheme:dark]"
                     />
                   </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold block">
-                      Choose Resonator
-                    </label>
-                    <ScrollableSelect
-                      value={securityAnswer}
-                      onChange={(val) => setSecurityAnswer(val)}
-                      options={resonatorSelectOptions}
-                      placeholder="-- Select a Resonator --"
-                    />
-                    <p className="text-[10px] font-mono text-gray-400">
-                      Answer this question if you ever forget your password to recover your account.
-                    </p>
-                  </div>
+                  <p className="text-[10px] font-mono text-gray-400 leading-relaxed">
+                    Used for password recovery and age verification in Jinzhou Plaza casino games.
+                  </p>
                 </div>
               )}
 
@@ -565,159 +517,125 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
           ) : (
             /* Forgot Password Flow */
             <div className="space-y-4 text-left">
-              {!recoveredQuestion ? (
-                /* Step 1: Enter Username */
-                <form onSubmit={handleFindQuestion} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold block">
-                      Enter Your Username
+              <form onSubmit={handleResetPassword} className="space-y-3.5">
+                {/* Enter Username */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold block">
+                    Your Username
+                  </label>
+                  <div className="relative flex items-center">
+                    <div className="absolute left-3.5 text-gray-500 pointer-events-none">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      autoFocus
+                      placeholder="e.g. rover_main"
+                      value={forgotUsername}
+                      onChange={(e) => setForgotUsername(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 bg-black/60 border border-white/15 focus:border-yellow-400 rounded-xl text-sm font-mono text-white placeholder-gray-600 focus:outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Enter Birthday */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold flex items-center space-x-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-yellow-400/80" />
+                      <span>Date of Birth</span>
                     </label>
-                    <div className="relative flex items-center">
-                      <div className="absolute left-3.5 text-gray-500 pointer-events-none">
-                        <User className="w-4 h-4" />
-                      </div>
-                      <input
-                        type="text"
-                        required
-                        autoFocus
-                        placeholder="e.g. rover_main"
-                        value={forgotUsername}
-                        onChange={(e) => setForgotUsername(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 bg-black/60 border border-white/15 focus:border-yellow-400 rounded-xl text-sm font-mono text-white placeholder-gray-600 focus:outline-none transition-all"
-                      />
-                    </div>
+                    <span className="text-[10px] font-mono text-gray-500">Account verification</span>
                   </div>
-
-                  {errorMsg && (
-                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center space-x-2.5 text-xs text-red-300">
-                      <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                      <span>{errorMsg}</span>
+                  <div className="relative flex items-center">
+                    <div className="absolute left-3.5 text-gray-500 pointer-events-none">
+                      <Cake className="w-4 h-4 text-yellow-400/80" />
                     </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full py-3 px-4 rounded-xl bg-yellow-400 hover:bg-yellow-300 text-black font-black uppercase text-xs tracking-wider transition-all shadow-[0_0_20px_rgba(250,204,21,0.35)] active:scale-95 disabled:opacity-50 flex items-center justify-center space-x-2 cursor-pointer"
-                  >
-                    <span>{loading ? "Searching..." : "Find Account & Question"}</span>
-                    {!loading && <ArrowRight className="w-4 h-4 stroke-[2.5]" />}
-                  </button>
-                </form>
-              ) : (
-                /* Step 2: Answer Question & Set New Password */
-                <form onSubmit={handleResetPassword} className="space-y-3.5">
-                  {/* Retrieved Question Box */}
-                  <div className="p-3 rounded-xl bg-yellow-400/10 border border-yellow-400/30 space-y-1">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-yellow-400 font-bold block">
-                      Security Question for @{forgotUsername}:
-                    </span>
-                    <p className="text-xs font-bold text-white font-mono">
-                      {recoveredQuestion}
-                    </p>
+                    <input
+                      type="date"
+                      required
+                      max={new Date().toISOString().split("T")[0]}
+                      value={forgotBirthday}
+                      onChange={(e) => setForgotBirthday(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 bg-black/60 border border-white/15 focus:border-yellow-400 rounded-xl text-sm font-mono text-white placeholder-gray-600 focus:outline-none transition-all [color-scheme:dark]"
+                    />
                   </div>
+                </div>
 
-                  {/* Security Answer Input / Dropdown */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold block">
-                        Your Resonator Answer
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          soundEngine.playClick();
-                          setIsManualForgotAnswer((prev) => !prev);
-                        }}
-                        className="text-[10px] font-mono text-yellow-400/80 hover:text-yellow-400 transition-colors cursor-pointer"
-                      >
-                        {isManualForgotAnswer ? "Pick from dropdown" : "Can't find? Type manually"}
-                      </button>
+                {/* New Password */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold block">
+                    New Password
+                  </label>
+                  <div className="relative flex items-center">
+                    <div className="absolute left-3.5 text-gray-500 pointer-events-none">
+                      <Lock className="w-4 h-4" />
                     </div>
-                    {isManualForgotAnswer ? (
-                      <input
-                        type="text"
-                        required
-                        autoFocus
-                        placeholder="Enter resonator name"
-                        value={forgotAnswer}
-                        onChange={(e) => setForgotAnswer(e.target.value)}
-                        className="w-full px-3.5 py-2 bg-black/60 border border-white/15 focus:border-yellow-400 rounded-xl text-sm font-mono text-white placeholder-gray-600 focus:outline-none transition-all"
-                      />
-                    ) : (
-                      <ScrollableSelect
-                        value={forgotAnswer}
-                        onChange={(val) => setForgotAnswer(val)}
-                        options={resonatorSelectOptions}
-                        placeholder="-- Select your Resonator --"
-                      />
-                    )}
-                  </div>
-
-                  {/* New Password */}
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold block">
-                      New Password
-                    </label>
                     <input
                       type="password"
                       required
                       placeholder="At least 6 characters"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full px-3.5 py-2 bg-black/60 border border-white/15 focus:border-yellow-400 rounded-xl text-sm font-mono text-white placeholder-gray-600 focus:outline-none transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-black/60 border border-white/15 focus:border-yellow-400 rounded-xl text-sm font-mono text-white placeholder-gray-600 focus:outline-none transition-all"
                     />
                   </div>
+                </div>
 
-                  {/* Confirm New Password */}
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold block">
-                      Confirm New Password
-                    </label>
+                {/* Confirm New Password */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold block">
+                    Confirm New Password
+                  </label>
+                  <div className="relative flex items-center">
+                    <div className="absolute left-3.5 text-gray-500 pointer-events-none">
+                      <Lock className="w-4 h-4" />
+                    </div>
                     <input
                       type="password"
                       required
                       placeholder="Re-enter new password"
                       value={confirmNewPassword}
                       onChange={(e) => setConfirmNewPassword(e.target.value)}
-                      className="w-full px-3.5 py-2 bg-black/60 border border-white/15 focus:border-yellow-400 rounded-xl text-sm font-mono text-white placeholder-gray-600 focus:outline-none transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-black/60 border border-white/15 focus:border-yellow-400 rounded-xl text-sm font-mono text-white placeholder-gray-600 focus:outline-none transition-all"
                     />
                   </div>
+                </div>
 
-                  {errorMsg && (
-                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center space-x-2.5 text-xs text-red-300">
-                      <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                      <span>{errorMsg}</span>
-                    </div>
-                  )}
-
-                  {resetSuccess && (
-                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center space-x-2.5 text-xs text-emerald-300">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                      <span>Password reset successfully! Returning to Sign In...</span>
-                    </div>
-                  )}
-
-                  <div className="flex items-center space-x-2 pt-1">
-                    <button
-                      type="button"
-                      disabled={loading}
-                      onClick={() => setRecoveredQuestion(null)}
-                      className="py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-gray-300 border border-white/10 transition-colors"
-                    >
-                      Change User
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={loading || resetSuccess}
-                      className="flex-1 py-2.5 px-4 rounded-xl bg-yellow-400 hover:bg-yellow-300 text-black font-black uppercase text-xs tracking-wider transition-all shadow-[0_0_20px_rgba(250,204,21,0.35)] active:scale-95 disabled:opacity-50 flex items-center justify-center space-x-2 cursor-pointer"
-                    >
-                      <KeyRound className="w-3.5 h-3.5" />
-                      <span>{loading ? "Resetting..." : "Reset Password"}</span>
-                    </button>
+                {errorMsg && (
+                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center space-x-2.5 text-xs text-red-300">
+                    <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                    <span>{errorMsg}</span>
                   </div>
-                </form>
-              )}
+                )}
+
+                {resetSuccess && (
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center space-x-2.5 text-xs text-emerald-300">
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    <span>Password reset successfully! Returning to Sign In...</span>
+                  </div>
+                )}
+
+                <div className="flex items-center space-x-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => handleSwitchMode("signin")}
+                    className="py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-gray-300 border border-white/10 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading || resetSuccess}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-yellow-400 hover:bg-yellow-300 text-black font-black uppercase text-xs tracking-wider transition-all shadow-[0_0_20px_rgba(250,204,21,0.35)] active:scale-95 disabled:opacity-50 flex items-center justify-center space-x-2 cursor-pointer"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>{loading ? "Resetting..." : "Reset Password"}</span>
+                  </button>
+                </div>
+              </form>
             </div>
           )}
         </div>

@@ -1,85 +1,56 @@
 // Free Astrites Idle Accumulator
-// Generates 160 Astrite (1 pull) every 4.5 minutes (4m 30s).
-// Base Cap: 25,600 Astrite (160 pulls / 12.0 hours).
-// Streak Tiers (+20 pulls / +3,200 ✦ / +1.5h each):
-//   - Tier 1 (2 Days):  28,800 ✦ (180 pulls / 13.5h)
-//   - Tier 2 (5 Days):  32,000 ✦ (200 pulls / 15.0h)
-//   - Tier 3 (9 Days):  35,200 ✦ (220 pulls / 16.5h)
-//   - Tier 4 (14 Days): 38,400 ✦ (240 pulls / 18.0h - Regular Max)
-// VIP Bonus: +50% of base (+80 pulls / +12,800 ✦ / +6.0h).
-// VIP + Tier 4 (14 Days): 51,200 ✦ (320 pulls / 24.0h - Exactly 2x Double Cap!)
+// Generates 160 Astrite (1 pull) every 6.0 minutes (6m 00s).
+// Base Cap: 19,200 Astrite (120 pulls / 12.0 hours).
+// VIP Bonus: +50% of base (+60 pulls / +9,600 ✦ / +6.0h).
+// VIP Total Cap: 28,800 ✦ (180 pulls / 18.0h).
 // Supports offline earnings so players can claim accumulated Astrite upon return.
 
 import { getStoredUserIsVip } from "@/lib/supabase/profile";
 import { getStoredLoginStreak } from "./loginStreak";
 
-export const TICK_INTERVAL_MS = 4.5 * 60 * 1000; // 4.5 minutes (4m 30s)
+export const TICK_INTERVAL_MS = 6 * 60 * 1000; // 6.0 minutes (360,000 ms)
 export const ASTRITE_PER_TICK = 160;
 
-export const BASE_MAX_TACET_ASTRITE = 25600; // 160 ticks = 160 pulls = 12.0 hours
-export const STREAK_TIER_ASTRITE_BONUS = 3200; // +20 pulls = +1.5 hours per tier
-export const VIP_ASTRITE_BONUS = 12800; // +80 pulls = +6.0 hours (+50% of base cap)
+export const BASE_MAX_TACET_ASTRITE = 19200; // 120 ticks = 120 pulls = 12.0 hours
+export const VIP_ASTRITE_BONUS = 9600; // +60 pulls = +6.0 hours (+50% of base cap)
 
 // Legacy backwards-compatibility exports
 export const MAX_TACET_ASTRITE = BASE_MAX_TACET_ASTRITE;
-export const VIP_MAX_TACET_ASTRITE = BASE_MAX_TACET_ASTRITE + (STREAK_TIER_ASTRITE_BONUS * 4) + VIP_ASTRITE_BONUS; // 51,200
+export const VIP_MAX_TACET_ASTRITE = BASE_MAX_TACET_ASTRITE + VIP_ASTRITE_BONUS; // 28,800
 
 /**
- * Calculates additional Astrite and duration gained from login streak milestones (Option 3: 2, 5, 9, 14 days).
+ * Streak bonuses have been removed; titles and streaks no longer increase the bank.
+ * Kept for backwards compatibility returning 0 bonus.
  */
-export function getTacetStreakBonus(maxLoginStreak: number = 0): {
+export function getTacetStreakBonus(_maxLoginStreak: number = 0): {
   bonusAstrite: number;
   bonusPulls: number;
   bonusHours: number;
   unlockedTiers: number;
 } {
-  let bonusAstrite = 0;
-  let unlockedTiers = 0;
-
-  if (maxLoginStreak >= 2) {
-    bonusAstrite += STREAK_TIER_ASTRITE_BONUS;
-    unlockedTiers++;
-  }
-  if (maxLoginStreak >= 5) {
-    bonusAstrite += STREAK_TIER_ASTRITE_BONUS;
-    unlockedTiers++;
-  }
-  if (maxLoginStreak >= 9) {
-    bonusAstrite += STREAK_TIER_ASTRITE_BONUS;
-    unlockedTiers++;
-  }
-  if (maxLoginStreak >= 14) {
-    bonusAstrite += STREAK_TIER_ASTRITE_BONUS;
-    unlockedTiers++;
-  }
-
-  const bonusPulls = bonusAstrite / ASTRITE_PER_TICK;
-  const bonusHours = (bonusPulls * 4.5) / 60;
-  return { bonusAstrite, bonusPulls, bonusHours, unlockedTiers };
+  return { bonusAstrite: 0, bonusPulls: 0, bonusHours: 0, unlockedTiers: 0 };
 }
 
 /**
- * Calculates true maximum Astrite capacity based on permanent maxLoginStreak and VIP status.
+ * Calculates maximum Astrite capacity. Only VIP increases capacity.
  */
 export function calculateMaxTacetAstrite(
-  maxLoginStreak: number = 0,
+  _maxLoginStreak: number = 0,
   isVip: boolean = false
 ): number {
-  const { bonusAstrite } = getTacetStreakBonus(maxLoginStreak);
-  const vipBonus = isVip ? VIP_ASTRITE_BONUS : 0;
-  return BASE_MAX_TACET_ASTRITE + bonusAstrite + vipBonus;
+  return isVip ? BASE_MAX_TACET_ASTRITE + VIP_ASTRITE_BONUS : BASE_MAX_TACET_ASTRITE;
 }
 
 /**
- * Returns battery storage duration in hours (e.g., 12.0h up to 24.0h).
+ * Returns battery storage duration in hours (e.g., 12.0h or 18.0h for VIP).
  */
 export function getTacetBatteryHours(
-  maxLoginStreak: number = 0,
+  _maxLoginStreak: number = 0,
   isVip: boolean = false
 ): number {
-  const cap = calculateMaxTacetAstrite(maxLoginStreak, isVip);
+  const cap = calculateMaxTacetAstrite(0, isVip);
   const pulls = cap / ASTRITE_PER_TICK;
-  return Number(((pulls * 4.5) / 60).toFixed(1));
+  return Number(((pulls * 6.0) / 60).toFixed(1));
 }
 
 interface TacetFieldState {

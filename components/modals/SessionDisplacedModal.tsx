@@ -57,19 +57,6 @@ export const SessionDisplacedModal: React.FC<SessionDisplacedModalProps> = ({
               Hello <span className="text-amber-300 font-bold">@{username}</span>. This account was recently opened in another browser tab or device.
             </p>
           </div>
-
-          {/* Detailed Notice */}
-          <div className="p-3.5 rounded-xl bg-black/40 border border-white/10 text-left text-xs font-mono text-gray-300 space-y-2 mb-6">
-            <div className="flex items-start space-x-2">
-              <span className="text-amber-400 mt-0.5">•</span>
-              <p>Only one active session is permitted at a time to keep your inventory, balance, and PvP rank in sync.</p>
-            </div>
-            <div className="flex items-start space-x-2">
-              <span className="text-amber-400 mt-0.5">•</span>
-              <p>Would you like to reclaim this tab as your primary active session?</p>
-            </div>
-          </div>
-
           {/* Primary Action Button */}
           <button
             type="button"

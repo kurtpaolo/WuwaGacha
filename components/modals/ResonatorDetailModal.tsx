@@ -19,7 +19,12 @@ import { RESONATORS, ElementType, getResonatorArtist } from "@/lib/data/items";
 import { getCharacterFocalPoint } from "@/lib/data/focalPoints";
 import { RarityStars } from "@/components/ui/GameIcons";
 import { requestExternalRedirect } from "@/components/modals/ExternalRedirectModal";
-import { getResonatorLevel, setResonatorLevel } from "@/lib/battle/pvpService";
+import {
+  getResonatorLevel,
+  setResonatorLevel,
+  getActivatedSequence,
+  setActivatedSequence,
+} from "@/lib/battle/pvpService";
 import { ResonatorInfoModal } from "./ResonatorInfoModal";
 
 interface ResonatorDetailModalProps {
@@ -27,6 +32,7 @@ interface ResonatorDetailModalProps {
   onClose: () => void;
   item: UserInventoryItem | null;
   onBack?: () => void;
+  currentUserId?: string;
 }
 
 // Coordinate positions matching the S-curve constellation formation (Bottom-to-Top: S1 at bottom, S6 at top)
@@ -94,26 +100,27 @@ export const ResonatorDetailModal: React.FC<ResonatorDetailModalProps> = ({
   onClose,
   item,
   onBack,
+  currentUserId,
 }) => {
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number>(1);
   const [activatedLevel, setActivatedLevel] = useState<number>(0);
   const [resLevel, setResLevel] = useState<number>(() => {
-    return item ? getResonatorLevel(item.character_id) : 1;
+    return item ? getResonatorLevel(item.character_id, currentUserId) : 1;
   });
   const [isKitModalOpen, setIsKitModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     if (item && isOpen) {
-      setResLevel(getResonatorLevel(item.character_id));
+      setResLevel(getResonatorLevel(item.character_id, currentUserId));
     }
-  }, [item, isOpen]);
+  }, [item, isOpen, currentUserId]);
 
   const handleLevelUp = () => {
     if (!item) return;
     soundEngine.playClick();
     const nextLevel = Math.min(100, resLevel + 10);
     if (nextLevel === resLevel) return;
-    setResonatorLevel(item.character_id, nextLevel);
+    setResonatorLevel(item.character_id, nextLevel, currentUserId);
     setResLevel(nextLevel);
   };
 
@@ -136,41 +143,29 @@ export const ResonatorDetailModal: React.FC<ResonatorDetailModalProps> = ({
   useEffect(() => {
     if (!item || !isOpen) return;
 
-    const checkAuto = typeof window !== "undefined" && localStorage.getItem("wuwa_auto_activate_sequences") === "true";
-    if (checkAuto) {
-      setActivatedLevel(maxAvailableSequence);
-      setSelectedNodeIndex(maxAvailableSequence > 0 ? maxAvailableSequence : 1);
-      return;
-    }
-
-    // Manual mode (default)
-    const storageKey = `wuwa_seq_activated_${item.character_id}`;
-    const saved = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
-    let current = 0;
-    if (saved !== null) {
-      const parsed = parseInt(saved, 10);
-      current = Math.min(maxAvailableSequence, Math.max(0, isNaN(parsed) ? 0 : parsed));
-    }
+    const current = getActivatedSequence(item.character_id, maxAvailableSequence, currentUserId);
     setActivatedLevel(current);
     if (current < maxAvailableSequence) {
       setSelectedNodeIndex(current + 1);
     } else {
       setSelectedNodeIndex(current > 0 ? current : 1);
     }
-  }, [item, isOpen, maxAvailableSequence]);
+  }, [item, isOpen, maxAvailableSequence, currentUserId]);
 
-  // Listen for settings change
+  // Listen for settings change or sequence activation event
   useEffect(() => {
-    const handleSettingsChanged = () => {
+    const handleUpdate = () => {
       if (!item) return;
-      const checkAuto = typeof window !== "undefined" && localStorage.getItem("wuwa_auto_activate_sequences") === "true";
-      if (checkAuto) {
-        setActivatedLevel(maxAvailableSequence);
-      }
+      const current = getActivatedSequence(item.character_id, maxAvailableSequence, currentUserId);
+      setActivatedLevel(current);
     };
-    window.addEventListener("wuwa_auto_activate_changed", handleSettingsChanged);
-    return () => window.removeEventListener("wuwa_auto_activate_changed", handleSettingsChanged);
-  }, [item, maxAvailableSequence]);
+    window.addEventListener("wuwa_auto_activate_changed", handleUpdate);
+    window.addEventListener("wuwa_sequence_activated", handleUpdate);
+    return () => {
+      window.removeEventListener("wuwa_auto_activate_changed", handleUpdate);
+      window.removeEventListener("wuwa_sequence_activated", handleUpdate);
+    };
+  }, [item, maxAvailableSequence, currentUserId]);
 
   // Keyboard escape handler
   useEffect(() => {
@@ -187,16 +182,10 @@ export const ResonatorDetailModal: React.FC<ResonatorDetailModalProps> = ({
 
   // Action: Manually activate sequence up to selected node
   const handleActivateSelected = () => {
-    if (selectedNodeIndex > maxAvailableSequence || selectedNodeIndex <= activatedLevel) return;
+    if (!item || selectedNodeIndex > maxAvailableSequence || selectedNodeIndex <= activatedLevel) return;
     const newLevel = selectedNodeIndex;
     setActivatedLevel(newLevel);
-    if (typeof window !== "undefined") {
-      const storageKey = `wuwa_seq_activated_${item.character_id}`;
-      localStorage.setItem(storageKey, String(newLevel));
-      window.dispatchEvent(new CustomEvent("wuwa_sequence_activated", {
-        detail: { characterId: item.character_id, level: newLevel },
-      }));
-    }
+    setActivatedSequence(item.character_id, newLevel, currentUserId);
   };
 
   const isSelectedActivated = selectedNodeIndex <= activatedLevel;

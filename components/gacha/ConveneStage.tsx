@@ -496,6 +496,19 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
     }
   }, [currentUser, isSandboxGuest, userProfile?.is_vip, userProfile?.max_login_streak, fetchState, activeView]);
 
+  const handleUpdateAstrites = useCallback((delta: number) => {
+    const isSandbox = isSandboxGuest;
+    const targetUserId = isSandbox ? null : currentUser?.id;
+    const updatedState = grantClientCurrency(delta, targetUserId, isSandbox);
+    setUserState(updatedState);
+    if (currentUser && !isSandbox) {
+      updateUserProfile(currentUser.id, {
+        astrite: updatedState.astrite,
+      }).catch(() => {});
+    }
+    return updatedState.astrite;
+  }, [currentUser, isSandboxGuest]);
+
   const handleLoginSuccess = useCallback((user: SupabaseUser, profile: UserProfile | null, isNewAccount: boolean = false) => {
     setIsLoggingIn(true);
     setCurrentUser(user);
@@ -1169,6 +1182,18 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
           onExitSandbox={handleExitSandbox}
           onClaimTacetField={handleClaimTacetField}
           tacetStatus={tacetStatus}
+          onUpdateAstrites={handleUpdateAstrites}
+          onBirthdayChanged={(newBirthday, newLastChanged) => {
+            setUserProfile((prev: any) =>
+              prev
+                ? {
+                    ...prev,
+                    birthday: newBirthday,
+                    birthday_last_changed_at: newLastChanged,
+                  }
+                : prev
+            );
+          }}
         />
 
       {/* ========================================================================= */}
@@ -1259,7 +1284,7 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
               title={
                 tacetStatus.isMaxed
                   ? `Free Astrite MAX (${tacetStatus.maxCap.toLocaleString()} Astrite / ${tacetStatus.batteryHours}h) - Click to claim!`
-                  : `Free Astrite: ${tacetStatus.accumulated.toLocaleString()} / ${tacetStatus.maxCap.toLocaleString()} (${tacetStatus.batteryHours}h Cap, 160 every 4.5m)`
+                  : `Free Astrite: ${tacetStatus.accumulated.toLocaleString()} / ${tacetStatus.maxCap.toLocaleString()} (${tacetStatus.batteryHours}h Cap, 160 every 6m)`
               }
             >
               <Sparkles
@@ -2350,6 +2375,19 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
         currentUsername={userProfile?.username || currentUser?.user_metadata?.username || "Player"}
         currentAvatarId={currentAvatarId}
         createdAt={currentUser?.created_at}
+        currentBirthday={userProfile?.birthday}
+        birthdayLastChangedAt={userProfile?.birthday_last_changed_at}
+        onBirthdayChanged={(newBirthday, newLastChanged) => {
+          setUserProfile((prev: any) =>
+            prev
+              ? {
+                  ...prev,
+                  birthday: newBirthday,
+                  birthday_last_changed_at: newLastChanged,
+                }
+              : prev
+          );
+        }}
         onUsernameChanged={(newUsername) => {
           if (userProfile) {
             setUserProfile((prev) => (prev ? { ...prev, username: newUsername } : null));
@@ -2543,7 +2581,7 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
                   </button>
                 ) : (
                   <p className="text-[11px] font-mono text-gray-400 text-center px-2 py-1 bg-white/[0.03] border border-white/5 rounded-lg">
-                    Earn 160 Free Astrite every 4.5 mins (top right) or +800 Astrites via 5★ Cash Back!
+                    Earn 160 Free Astrite every 6 mins (top right) or +800 Astrites via 5★ Cash Back!
                   </p>
                 )}
 

@@ -149,17 +149,29 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     };
   }, [phase]);
 
-  const effectiveSummonVol = soundEngine.getEffectiveSummonVolume();
+  const [effectiveSummonVol, setEffectiveSummonVol] = useState<number>(() =>
+    soundEngine.getEffectiveSummonVolume()
+  );
 
   useEffect(() => {
+    return soundEngine.subscribe((settings) => {
+      setEffectiveSummonVol(settings.masterVolume * settings.summonVolume);
+    });
+  }, []);
+
+  useEffect(() => {
+    const isZero = effectiveSummonVol <= 0.001;
     if (videoRef.current) {
       videoRef.current.volume = effectiveSummonVol;
+      videoRef.current.muted = isZero;
     }
   }, [effectiveSummonVol, phase]);
 
   useEffect(() => {
+    const isZero = effectiveSummonVol <= 0.001;
     if (cutsceneVideoRef.current) {
       cutsceneVideoRef.current.volume = effectiveSummonVol;
+      cutsceneVideoRef.current.muted = isZero;
     }
   }, [effectiveSummonVol, cutsceneUrl]);
 

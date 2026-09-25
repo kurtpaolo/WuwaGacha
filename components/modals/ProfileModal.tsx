@@ -15,6 +15,9 @@ import {
   Camera,
   ArrowLeft,
   ShieldCheck,
+  Cake,
+  Calendar,
+  Clock,
 } from "lucide-react";
 import { soundEngine } from "@/lib/audio/soundEngine";
 import {
@@ -22,16 +25,14 @@ import {
   updateUserPassword,
   updateUserAvatar,
   getPreviousUsernames,
-  PRESET_SECURITY_QUESTIONS,
-  ALL_RESONATORS_LIST,
-  getUserSecurityQuestionById,
-  updateUserSecurityQuestion,
   getUsernameCooldownRemainingMs,
   getPasswordCooldownRemainingMs,
+  updateUserBirthday,
+  calculateAge,
+  getBirthdayCooldownRemainingMs,
 } from "@/lib/supabase/auth";
 import { triggerSlowDownModal } from "@/components/modals/SlowDownModal";
 import { INVENTORY_PORTRAITS, getPortraitFileName, DEFAULT_AVATAR_ID } from "@/lib/data/portraits";
-import { ScrollableSelect } from "@/components/ui/ScrollableSelect";
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -41,8 +42,11 @@ interface ProfileModalProps {
   currentUsername: string;
   currentAvatarId: string;
   createdAt?: string;
+  currentBirthday?: string;
+  birthdayLastChangedAt?: string;
   onUsernameChanged: (newUsername: string) => void;
   onAvatarChanged: (newAvatarId: string) => void;
+  onBirthdayChanged?: (newBirthday: string, newChangedAt: string) => void;
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({
@@ -53,8 +57,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   currentUsername,
   currentAvatarId,
   createdAt,
+  currentBirthday,
+  birthdayLastChangedAt,
   onUsernameChanged,
   onAvatarChanged,
+  onBirthdayChanged,
 }) => {
   // Avatar Selection State
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
@@ -81,23 +88,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
-  // Security Question Editing State
-  const [isEditingSecurity, setIsEditingSecurity] = useState(false);
-  const [securityQuestion, setSecurityQuestion] = useState<string>(PRESET_SECURITY_QUESTIONS[0]);
-  const [securityAnswer, setSecurityAnswer] = useState("");
-  const [securityLoading, setSecurityLoading] = useState(false);
-  const [securityError, setSecurityError] = useState<string | null>(null);
-  const [securitySuccess, setSecuritySuccess] = useState(false);
+  // Birthday Editing State & Cooldown (24 hours)
+  const [birthdayVal, setBirthdayVal] = useState<string>(currentBirthday || "");
+  const [birthdayLastChanged, setBirthdayLastChanged] = useState<string | undefined>(birthdayLastChangedAt);
+  const [isEditingBirthday, setIsEditingBirthday] = useState(false);
+  const [birthdayInput, setBirthdayInput] = useState(currentBirthday || "");
+  const [birthdayLoading, setBirthdayLoading] = useState(false);
+  const [birthdayError, setBirthdayError] = useState<string | null>(null);
+  const [birthdaySuccess, setBirthdaySuccess] = useState(false);
 
-  const resonatorSelectOptions = useMemo(
-    () =>
-      ALL_RESONATORS_LIST.map((r) => ({
-        value: r.name,
-        label: r.name,
-        rarity: r.rarity,
-      })),
-    []
-  );
+  // Calculate birthday 24h cooldown
+  const birthdayCooldownMs = getBirthdayCooldownRemainingMs(birthdayLastChanged);
+  const isBirthdayCooldownActive = birthdayCooldownMs > 0;
+  const birthdayCooldownHours = Math.floor(birthdayCooldownMs / (1000 * 60 * 60));
+  const birthdayCooldownMinutes = Math.floor((birthdayCooldownMs % (1000 * 60 * 60)) / (1000 * 60));
 
   // Previous Usernames
   const [previousUsernames, setPreviousUsernames] = useState<string[]>([]);
@@ -120,21 +124,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setPasswordError(null);
       setPasswordSuccess(false);
 
-      setIsEditingSecurity(false);
-      setSecurityAnswer("");
-      setSecurityError(null);
-      setSecuritySuccess(false);
+      setBirthdayVal(currentBirthday || "");
+      setBirthdayLastChanged(birthdayLastChangedAt);
+      setIsEditingBirthday(false);
+      setBirthdayInput(currentBirthday || "");
+      setBirthdayError(null);
+      setBirthdaySuccess(false);
 
       if (userId) {
         setPreviousUsernames(getPreviousUsernames(userId));
-        getUserSecurityQuestionById(userId).then((res) => {
-          if (res.question) {
-            setSecurityQuestion(res.question);
-          }
-        });
       }
     }
-  }, [isOpen, currentUsername, currentAvatarId, userId]);
+  }, [isOpen, currentUsername, currentAvatarId, currentBirthday, birthdayLastChangedAt, userId]);
 
   // Filtered portraits for avatar picker
   const filteredPortraits = useMemo(() => {
@@ -262,36 +263,48 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     }
   };
 
-  // Handle Security Question Save
-  const handleSaveSecurityQuestion = async (e: React.FormEvent) => {
+  // Handle Birthday Save with 24-Hour Cooldown
+  const handleSaveBirthday = async (e: React.FormEvent) => {
     e.preventDefault();
     soundEngine.playClick();
-    setSecurityError(null);
-    setSecuritySuccess(false);
+    setBirthdayError(null);
+    setBirthdaySuccess(false);
 
-    const trimmed = securityAnswer.trim();
-    if (!trimmed) {
-      setSecurityError("Please select a resonator from the list.");
+    const cleanDate = birthdayInput.trim();
+    if (!cleanDate) {
+      setBirthdayError("Please select a date of birth.");
       return;
     }
 
-    setSecurityLoading(true);
+    if (isBirthdayCooldownActive) {
+      setBirthdayError(
+        `Cooldown active: You can change your birthday again in ${birthdayCooldownHours}h ${birthdayCooldownMinutes}m.`
+      );
+      return;
+    }
+
+    setBirthdayLoading(true);
     try {
-      const res = await updateUserSecurityQuestion(userId, securityQuestion, trimmed);
+      const res = await updateUserBirthday(userId, cleanDate);
       if (!res.success) {
-        setSecurityError(res.error || "Failed to update security question.");
+        setBirthdayError(res.error || "Failed to update birthday.");
       } else {
-        setSecuritySuccess(true);
-        setSecurityAnswer("");
+        const newLastChanged = res.lastChangedAt || new Date().toISOString();
+        setBirthdayVal(cleanDate);
+        setBirthdayLastChanged(newLastChanged);
+        if (onBirthdayChanged) {
+          onBirthdayChanged(cleanDate, newLastChanged);
+        }
+        setBirthdaySuccess(true);
         setTimeout(() => {
-          setSecuritySuccess(false);
-          setIsEditingSecurity(false);
+          setBirthdaySuccess(false);
+          setIsEditingBirthday(false);
         }, 1800);
       }
     } catch (err: any) {
-      setSecurityError(err.message || "Failed to update security question.");
+      setBirthdayError(err.message || "Failed to update birthday.");
     } finally {
-      setSecurityLoading(false);
+      setBirthdayLoading(false);
     }
   };
 
@@ -699,20 +712,41 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 </AnimatePresence>
               </div>
 
-              {/* Security Question Section (Account Recovery & Favorite Resonator) */}
+              {/* Date of Birth Section (Account Recovery & 18+ Verification) */}
               <div className="p-3.5 sm:p-4 rounded-xl bg-white/[0.03] border border-white/10 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className="p-2 rounded-lg bg-yellow-400/10 border border-yellow-400/30 text-yellow-400">
-                      <ShieldCheck className="w-4 h-4" />
+                      <Cake className="w-4 h-4" />
                     </div>
                     <div>
-                      <span className="text-xs font-bold text-white block">
-                        Security Question (Account Recovery)
-                      </span>
-                      <span className="text-[11px] font-mono text-gray-400">
-                        {securityQuestion}
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs font-bold text-white block">
+                          Date of Birth
+                        </span>
+                        {birthdayVal && (
+                          <span
+                            className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                              calculateAge(birthdayVal) >= 18
+                                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                                : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+                            }`}
+                          >
+                            {calculateAge(birthdayVal) >= 18 ? "18+ Verified" : "Under 18"}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-2 mt-0.5">
+                        <span className="text-[11px] font-mono text-gray-400">
+                          {birthdayVal ? `${birthdayVal} (Age: ${calculateAge(birthdayVal)})` : "Not configured yet"}
+                        </span>
+                        {isBirthdayCooldownActive && (
+                          <span className="text-[10px] font-mono text-amber-400/90 flex items-center space-x-1 bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/20">
+                            <Clock className="w-3 h-3" />
+                            <span>Cooldown: {birthdayCooldownHours}h {birthdayCooldownMinutes}m</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -720,105 +754,101 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     type="button"
                     onClick={() => {
                       soundEngine.playClick();
-                      setIsEditingSecurity((prev) => !prev);
-                      setSecurityError(null);
-                      setSecurityAnswer("");
+                      if (isBirthdayCooldownActive && !isEditingBirthday) {
+                        setBirthdayError(`Cooldown active: You can change your birthday again in ${birthdayCooldownHours}h ${birthdayCooldownMinutes}m.`);
+                      } else {
+                        setBirthdayError(null);
+                      }
+                      setIsEditingBirthday((prev) => !prev);
+                      setBirthdayInput(birthdayVal || "");
                     }}
-                    className={`p-2 rounded-lg border transition-all ${
-                      isEditingSecurity
+                    className={`p-2 rounded-lg border transition-all cursor-pointer ${
+                      isEditingBirthday
                         ? "bg-yellow-400/20 text-yellow-400 border-yellow-400/60 shadow-[0_0_12px_rgba(250,204,21,0.3)]"
+                        : isBirthdayCooldownActive
+                        ? "bg-white/5 text-gray-500 border-white/5 hover:border-amber-400/30 hover:text-amber-400"
                         : "bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border-white/10 hover:border-yellow-400/40"
                     }`}
-                    title="Edit Security Question"
-                    aria-label="Edit Security Question"
+                    title={isBirthdayCooldownActive ? `Cooldown active (${birthdayCooldownHours}h ${birthdayCooldownMinutes}m)` : "Edit Date of Birth"}
+                    aria-label="Edit Date of Birth"
                   >
                     <Pencil className="w-4 h-4" />
                   </button>
                 </div>
 
-                {/* Inline Security Question Edit Form */}
+                {/* Inline Date of Birth Edit Form */}
                 <AnimatePresence>
-                  {isEditingSecurity && (
+                  {isEditingBirthday && (
                     <motion.form
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.2 }}
-                      onSubmit={handleSaveSecurityQuestion}
+                      onSubmit={handleSaveBirthday}
                       className="pt-3 border-t border-white/10 space-y-3"
                     >
-                      {/* Select Question */}
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-mono text-yellow-400 uppercase tracking-wider">
-                          Choose Question
-                        </label>
-                        <ScrollableSelect
-                          value={securityQuestion}
-                          onChange={(val) => setSecurityQuestion(val)}
-                          options={PRESET_SECURITY_QUESTIONS}
-                          placeholder="Select a question"
-                        />
-                      </div>
-
-                      {/* Resonator Answer Dropdown */}
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
-                          <label className="text-[11px] font-mono text-yellow-400 uppercase tracking-wider">
-                            Resonator Answer
+                          <label className="text-[11px] font-mono text-yellow-400 uppercase tracking-wider flex items-center space-x-1.5">
+                            <Calendar className="w-3.5 h-3.5" />
+                            <span>Select Date of Birth</span>
                           </label>
-                          <span className="text-[10px] font-mono text-gray-500">Select Character</span>
+                          <span className="text-[10px] font-mono text-gray-500">1 day edit cooldown</span>
                         </div>
-                        <ScrollableSelect
-                          value={securityAnswer}
-                          onChange={(val) => setSecurityAnswer(val)}
-                          options={resonatorSelectOptions}
-                          placeholder="-- Select a Resonator --"
+                        <input
+                          type="date"
+                          required
+                          disabled={isBirthdayCooldownActive}
+                          max={new Date().toISOString().split("T")[0]}
+                          value={birthdayInput}
+                          onChange={(e) => setBirthdayInput(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-black/60 border border-white/15 focus:border-yellow-400 rounded-xl text-sm font-mono text-white placeholder-gray-600 focus:outline-none transition-all [color-scheme:dark] disabled:opacity-50"
                         />
                         <p className="text-[10px] font-mono text-gray-400 leading-relaxed pt-0.5">
-                          This answer is securely hashed (SHA-256) and used to reset your password if you ever forget it.
+                          Used for account password recovery and 18+ age verification for Jinzhou Plaza casino games. Changing this triggers a 24-hour cooldown.
                         </p>
                       </div>
 
-                      {securityError && (
+                      {birthdayError && (
                         <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-red-950/40 border border-red-500/30 text-xs font-mono text-red-300">
                           <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
-                          <span>{securityError}</span>
+                          <span>{birthdayError}</span>
                         </div>
                       )}
 
-                      {securitySuccess && (
+                      {birthdaySuccess && (
                         <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-xs font-mono text-emerald-300">
                           <Check className="w-4 h-4 flex-shrink-0 text-emerald-400" />
-                          <span>Security question updated successfully!</span>
+                          <span>Date of Birth updated successfully!</span>
                         </div>
                       )}
 
                       <div className="flex items-center justify-end space-x-2 pt-1">
                         <button
                           type="button"
-                          disabled={securityLoading}
+                          disabled={birthdayLoading}
                           onClick={() => {
                             soundEngine.playClick();
-                            setIsEditingSecurity(false);
-                            setSecurityError(null);
-                            setSecurityAnswer("");
+                            setIsEditingBirthday(false);
+                            setBirthdayError(null);
+                            setBirthdayInput(birthdayVal || "");
                           }}
-                          className="px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-bold text-gray-300 hover:text-white border border-white/10 transition-colors"
+                          className="px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-bold text-gray-300 hover:text-white border border-white/10 transition-colors cursor-pointer"
                         >
                           Cancel
                         </button>
                         <button
                           type="submit"
-                          disabled={securityLoading}
-                          className="px-4 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-300 active:scale-95 text-black text-xs font-black uppercase tracking-wider flex items-center space-x-1.5 shadow-[0_0_15px_rgba(250,204,21,0.35)] transition-all disabled:opacity-50"
+                          disabled={birthdayLoading || isBirthdayCooldownActive}
+                          className="px-4 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-300 active:scale-95 text-black text-xs font-black uppercase tracking-wider flex items-center space-x-1.5 shadow-[0_0_15px_rgba(250,204,21,0.35)] transition-all disabled:opacity-50 cursor-pointer"
                         >
-                          {securityLoading ? (
+                          {birthdayLoading ? (
                             <>
                               <Sparkles className="w-3.5 h-3.5 animate-spin" />
-                              <span>Updating...</span>
+                              <span>Saving...</span>
                             </>
                           ) : (
-                            <span>Save Security Question</span>
+                            <span>Save Date of Birth</span>
                           )}
                         </button>
                       </div>

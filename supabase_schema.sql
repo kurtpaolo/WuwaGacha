@@ -52,6 +52,8 @@ alter table public.profiles add column if not exists pvp_streak integer not null
 alter table public.profiles add column if not exists pvp_max_streak integer not null default 0;
 alter table public.profiles add column if not exists pvp_points integer not null default 0;
 alter table public.profiles add column if not exists tower_run_state jsonb;
+alter table public.profiles add column if not exists birthday text;
+alter table public.profiles add column if not exists birthday_last_changed_at timestamptz;
 alter table public.profiles drop constraint if exists profiles_astrite_check;
 alter table public.profiles add constraint profiles_astrite_check check (astrite >= 0);
 
@@ -315,6 +317,85 @@ begin
   where id = v_user_id;
 
   return jsonb_build_object('success', true);
+end;
+$$ language plpgsql security definer;
+
+-- Securely resets user password when correct birthday (YYYY-MM-DD) is provided
+create or replace function public.reset_password_with_birthday(
+  p_username text,
+  p_birthday text,
+  p_new_password text
+) returns jsonb as $$
+declare
+  v_user_id uuid;
+  v_stored_birthday text;
+  v_clean_birthday text;
+begin
+  v_clean_birthday := trim(p_birthday);
+
+  select id, birthday::text into v_user_id, v_stored_birthday
+  from public.profiles
+  where lower(username) = lower(trim(p_username));
+
+  if v_user_id is null then
+    return jsonb_build_object('success', false, 'error', 'No account found with this username');
+  end if;
+
+  if v_stored_birthday is null or v_stored_birthday = '' then
+    return jsonb_build_object('success', false, 'error', 'No birthday configured for this account. Please log in or contact support.');
+  end if;
+
+  if v_stored_birthday <> v_clean_birthday then
+    return jsonb_build_object('success', false, 'error', 'Incorrect birthday entered. Access denied.');
+  end if;
+
+  if length(p_new_password) < 6 then
+    return jsonb_build_object('success', false, 'error', 'Password must be at least 6 characters long');
+  end if;
+
+  -- Update encrypted password in auth.users
+  update auth.users
+  set encrypted_password = crypt(p_new_password, gen_salt('bf')),
+      updated_at = now()
+  where id = v_user_id;
+
+  return jsonb_build_object('success', true);
+end;
+$$ language plpgsql security definer;
+
+-- Securely updates a user's birthday with strict 24-hour (1 day) cooldown
+create or replace function public.update_user_birthday(
+  p_user_id uuid,
+  p_birthday text
+) returns jsonb as $$
+declare
+  v_last_changed timestamptz;
+  v_clean_birthday text;
+begin
+  v_clean_birthday := trim(p_birthday);
+
+  if v_clean_birthday is null or length(v_clean_birthday) < 8 then
+    return jsonb_build_object('success', false, 'error', 'Invalid birthday format. Please use YYYY-MM-DD.');
+  end if;
+
+  select birthday_last_changed_at into v_last_changed
+  from public.profiles
+  where id = p_user_id;
+
+  if v_last_changed is not null and (now() - v_last_changed) < interval '1 day' then
+    return jsonb_build_object(
+      'success', false,
+      'error', 'Birthday was recently changed. Cooldown active (1 change per 24 hours).'
+    );
+  end if;
+
+  update public.profiles
+  set birthday = v_clean_birthday,
+      birthday_last_changed_at = now(),
+      updated_at = now()
+  where id = p_user_id;
+
+  return jsonb_build_object('success', true, 'birthday_last_changed_at', now());
 end;
 $$ language plpgsql security definer;
 
@@ -617,6 +698,8 @@ $$;
 -- Grant execution permissions
 grant execute on function public.get_user_security_question(text) to authenticated, anon;
 grant execute on function public.reset_password_with_security_answer(text, text, text) to authenticated, anon;
+grant execute on function public.reset_password_with_birthday(text, text, text) to authenticated, anon;
+grant execute on function public.update_user_birthday(uuid, text) to authenticated, anon;
 grant execute on function public.search_players(text) to authenticated, anon;
 grant execute on function public.get_player_profile(text) to authenticated, anon;
 grant execute on function public.save_player_showcase(uuid, text[]) to authenticated, anon;

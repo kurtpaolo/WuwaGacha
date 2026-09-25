@@ -23,7 +23,6 @@ import {
   ALL_PLAYER_TITLES,
   TITLE_RARITY_REWARDS,
 } from "@/lib/data/titles";
-import { getTacetBatteryHours, getTacetStreakBonus } from "@/lib/gacha/tacetField";
 
 interface TitlePickerModalProps {
   isOpen: boolean;
@@ -85,20 +84,6 @@ export const TitlePickerModal: React.FC<TitlePickerModalProps> = ({
     return { unlocked, total: ALL_PLAYER_TITLES.length };
   }, [titleContext]);
 
-  const streakInfo = useMemo(() => {
-    const maxStreak = titleContext.maxLoginStreak || 1;
-    const isVip = Boolean(titleContext.isVip);
-    const bonus = getTacetStreakBonus(maxStreak);
-    const batteryHours = getTacetBatteryHours(maxStreak, isVip);
-    let nextMilestone: { days: number; pulls: number } | null = null;
-    if (maxStreak < 2) nextMilestone = { days: 2, pulls: 20 };
-    else if (maxStreak < 5) nextMilestone = { days: 5, pulls: 20 };
-    else if (maxStreak < 9) nextMilestone = { days: 9, pulls: 20 };
-    else if (maxStreak < 14) nextMilestone = { days: 14, pulls: 20 };
-
-    return { maxStreak, isVip, bonus, batteryHours, nextMilestone };
-  }, [titleContext]);
-
   if (!isOpen) return null;
 
   return (
@@ -151,37 +136,6 @@ export const TitlePickerModal: React.FC<TitlePickerModalProps> = ({
             <span className="px-3 py-1 rounded-xl bg-yellow-400/15 border border-yellow-400/50 text-yellow-300 font-mono font-black text-xs sm:text-sm tracking-wide shadow-[0_0_15px_rgba(250,204,21,0.3)]">
               [{equippedTitle}]
             </span>
-          </div>
-
-          {/* Free Astrites Battery Storage Perk Banner */}
-          <div className="px-4 sm:px-6 py-2 bg-black/70 border-b border-amber-500/25 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-            <div className="flex items-center space-x-2">
-              <div className="p-1 rounded-md bg-amber-400/20 text-amber-300">
-                <Flame className="w-3.5 h-3.5" />
-              </div>
-              <span className="text-gray-300">
-                Free Astrites Battery: <strong className="text-amber-400 font-bold">{streakInfo.batteryHours}h Storage</strong>
-                {streakInfo.bonus.bonusPulls > 0 && (
-                  <span className="text-gray-400 ml-1">(+{streakInfo.bonus.bonusPulls} pulls / +{streakInfo.bonus.bonusHours}h)</span>
-                )}
-                {streakInfo.isVip && (
-                  <span className="text-amber-300 font-bold ml-1.5">[VIP +6.0h]</span>
-                )}
-              </span>
-            </div>
-
-            <div className="text-[11px] text-gray-400 flex items-center space-x-1.5">
-              {streakInfo.nextMilestone ? (
-                <span>
-                  Next: <strong className="text-yellow-300">{streakInfo.nextMilestone.days}-Day Streak</strong> (+{streakInfo.nextMilestone.pulls} pulls cap)
-                </span>
-              ) : (
-                <span className="text-green-400 font-bold flex items-center space-x-1">
-                  <CheckCircle2 className="w-3 h-3 text-green-400" />
-                  <span>Max Streak Battery Unlocked! ({streakInfo.isVip ? "24.0h VIP" : "18.0h"})</span>
-                </span>
-              )}
-            </div>
           </div>
 
           {/* Controls: Search & Category Tabs */}

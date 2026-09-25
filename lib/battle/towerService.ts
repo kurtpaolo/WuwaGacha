@@ -491,6 +491,86 @@ export function generateBlessingDraft(
   return shuffled.slice(0, count);
 }
 
+export interface AccumulatedBlessingStats {
+  atkPct: number;
+  defPct: number;
+  critRatePct: number;
+  critDmgPct: number;
+  energyPct: number;
+  barrierPct: number;
+  speedPct: number;
+  passives: { id: string; name: string; description: string; rarity: string }[];
+  totalActiveCount: number;
+}
+
+/**
+ * Calculate accumulated stacked percentage bonuses and unique passives from active blessings.
+ * Excludes one-time instant blessings (Heal / Revive) which are consumed immediately on draft.
+ */
+export function getAccumulatedBlessingStats(activeBlessings: TowerBlessing[]): AccumulatedBlessingStats {
+  const valid = (activeBlessings || []).filter(
+    (b) => b && b.effectType !== "heal" && b.effectType !== "revive"
+  );
+
+  let atkPct = 0;
+  let defPct = 0;
+  let critRatePct = 0;
+  let critDmgPct = 0;
+  let energyPct = 0;
+  let barrierPct = 0;
+  let speedPct = 0;
+  const passives: { id: string; name: string; description: string; rarity: string }[] = [];
+
+  for (const b of valid) {
+    let handled = false;
+    if (b.effectType === "damage" || b.effectType === "stat_atk") {
+      atkPct += b.value || 0;
+      handled = true;
+    }
+    if (b.effectType === "damage_reduction" || b.effectType === "stat_def") {
+      defPct += b.value || 0;
+      handled = true;
+    }
+    if (b.effectType === "crit" || b.effectType === "stat_crit" || b.id === "blessing_crit_mastery") {
+      critRatePct += b.value || 15;
+      handled = true;
+    }
+    if (b.effectType === "barrier" || b.effectType === "barrier_start" || b.id === "blessing_spectro_aegis") {
+      barrierPct += b.value || 0;
+      handled = true;
+    }
+    if (b.effectType === "energy" || b.effectType === "crit_energy") {
+      energyPct += b.value || 0;
+      handled = true;
+    }
+    if (b.effectType === "speed") {
+      speedPct += b.value || 0;
+      handled = true;
+    }
+
+    if (!handled || b.id === "blessing_liberation_overflow" || b.id === "blessing_adversity_resolve" || b.id === "blessing_executioner") {
+      passives.push({
+        id: b.id,
+        name: b.name,
+        description: b.description,
+        rarity: b.rarity,
+      });
+    }
+  }
+
+  return {
+    atkPct: Math.round(atkPct * 100) / 100,
+    defPct: Math.round(defPct * 100) / 100,
+    critRatePct: Math.round(critRatePct * 100) / 100,
+    critDmgPct: Math.round(critDmgPct * 100) / 100,
+    energyPct: Math.round(energyPct * 100) / 100,
+    barrierPct: Math.round(barrierPct * 100) / 100,
+    speedPct: Math.round(speedPct * 100) / 100,
+    passives,
+    totalActiveCount: valid.length,
+  };
+}
+
 /**
  * Storage helpers for Tower of Adversity run state with Supabase cloud persistence.
  */
@@ -518,9 +598,14 @@ export function getTowerRunState(userId?: string): TowerRunState {
         ? parsed.allTimeRecordFloor
         : parsedHighest;
 
+      // Filter out one-time consumable blessings (heal/revive) from persistent activeBlessings
+      const cleanBlessings = (parsed.activeBlessings || []).filter(
+        (b: TowerBlessing) => b && b.effectType !== "heal" && b.effectType !== "revive"
+      );
+
       return {
         currentFloor: parsed.currentFloor || 1,
-        activeBlessings: parsed.activeBlessings || [],
+        activeBlessings: cleanBlessings,
         partyHpMap: parsed.partyHpMap || {},
         isCompleted: Boolean(parsed.isCompleted),
         highestFloorCleared: parsedHighest,

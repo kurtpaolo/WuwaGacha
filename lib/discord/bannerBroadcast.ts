@@ -50,7 +50,7 @@ export async function dispatchBannerBroadcast(options?: {
 
   const supabase = getSupabase();
 
-  // Try to query with last_broadcast_cycle column if it exists in Supabase
+  // Try to query with last_broadcast_cycle & last_broadcast_at columns if they exist in Supabase
   let hasCycleCol = true;
   let webhooks: any[] = [];
   const { data: hooksWithCycle, error: dbError } = await supabase
@@ -59,12 +59,16 @@ export async function dispatchBannerBroadcast(options?: {
     .eq("is_active", true);
 
   if (dbError) {
-    if (dbError.code === "42703" || dbError.message?.includes("last_broadcast_cycle")) {
-      // Column does not exist in DB yet, query without it
+    if (
+      dbError.code === "42703" ||
+      dbError.message?.includes("last_broadcast_cycle") ||
+      dbError.message?.includes("last_broadcast_at")
+    ) {
+      // Columns do not exist in DB yet, query without them
       hasCycleCol = false;
       const { data: fallbackHooks, error: fallbackErr } = await supabase
         .from("discord_webhooks")
-        .select("id, url, name, is_active, last_broadcast_at")
+        .select("id, url, name, is_active")
         .eq("is_active", true);
       if (fallbackErr) {
         throw new Error(`Database error: ${fallbackErr.message}`);
@@ -112,20 +116,19 @@ export async function dispatchBannerBroadcast(options?: {
     }
   }
 
-  // Pre-lock in DB to prevent concurrent lambda race conditions
-  try {
-    const updatePayload: Record<string, any> = {
-      last_broadcast_at: new Date(nowMs).toISOString(),
-    };
-    if (hasCycleCol) {
-      updatePayload.last_broadcast_cycle = currentCycle;
+  // Pre-lock in DB to prevent concurrent lambda race conditions (only if columns exist)
+  if (hasCycleCol) {
+    try {
+      await supabase
+        .from("discord_webhooks")
+        .update({
+          last_broadcast_cycle: currentCycle,
+          last_broadcast_at: new Date(nowMs).toISOString(),
+        })
+        .in("id", webhooks.map((h: any) => h.id));
+    } catch (err) {
+      console.warn("Failed to pre-lock broadcast cycle in DB:", err);
     }
-    await supabase
-      .from("discord_webhooks")
-      .update(updatePayload)
-      .in("id", webhooks.map((h: any) => h.id));
-  } catch (err) {
-    console.warn("Failed to pre-lock broadcast cycle in DB:", err);
   }
 
   const hooksToNotify = webhooks;

@@ -12,6 +12,12 @@ const globalState = globalThis as unknown as {
  * banner updates without needing external cron requests.
  */
 export function startBroadcastScheduler() {
+  // On Vercel serverless environments, background timers freeze and thaw unpredictably during requests.
+  // Half-hourly broadcasts in production are handled by GitHub Actions cron (.github/workflows/banner_broadcast.yml).
+  if (process.env.VERCEL) {
+    return;
+  }
+
   if (globalState.__broadcastSchedulerRunning) return;
   globalState.__broadcastSchedulerRunning = true;
 

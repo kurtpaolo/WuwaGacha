@@ -29,6 +29,8 @@ export interface UserProfile {
   pvp_max_streak?: number;
   pvp_points?: number;
   tower_run_state?: any;
+  birthday?: string;
+  birthday_last_changed_at?: string;
 }
 
 export const DEFAULT_PROFILE: UserProfile = {
@@ -134,6 +136,8 @@ export async function fetchUserProfile(
         pvp_streak: data.pvp_streak ?? 0,
         pvp_max_streak: data.pvp_max_streak ?? 0,
         pvp_points: data.pvp_points ?? 0,
+        birthday: data.birthday || undefined,
+        birthday_last_changed_at: data.birthday_last_changed_at || undefined,
       };
     }
 
@@ -308,6 +312,12 @@ export async function updateUserProfile(
     }
     if (updates.pvp_points !== undefined) {
       payload.pvp_points = updates.pvp_points;
+    }
+    if (updates.birthday !== undefined) {
+      payload.birthday = updates.birthday;
+    }
+    if (updates.birthday_last_changed_at !== undefined) {
+      payload.birthday_last_changed_at = updates.birthday_last_changed_at;
     }
 
     const { error } = await supabase.from("profiles").update(payload).eq("id", userId);

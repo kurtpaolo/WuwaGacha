@@ -26,6 +26,7 @@ import {
   percentToTile,
   tileToPercent,
   getNearestWalkablePercent,
+  isWaterPercent,
 } from "@/lib/plaza/binanMapData";
 import { BinanOverworldCanvas, BinanOverworldCanvasHandle } from "./BinanOverworldCanvas";
 import { PlazaRealtimeManager } from "@/lib/plaza/plazaRealtime";
@@ -60,7 +61,14 @@ import {
   Settings,
   LogOut,
   Infinity as InfinityIcon,
+  Coins,
+  Cake,
+  Calendar,
+  ShieldAlert,
+  AlertTriangle,
 } from "lucide-react";
+import { PlazaMinigamesModal, MinigameId } from "./minigames/PlazaMinigamesModal";
+import { calculateAge, updateUserBirthday } from "@/lib/supabase/auth";
 
 interface JinzhouPlazaProps {
   currentUser: any;
@@ -83,6 +91,8 @@ interface JinzhouPlazaProps {
     maxCap: number;
     isMaxed: boolean;
   };
+  onUpdateAstrites?: (delta: number) => number;
+  onBirthdayChanged?: (newBirthday: string, newChangedAt: string) => void;
 }
 
 // Biñan Portals & NPCs stationed at historic and civic landmarks
@@ -106,6 +116,8 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
   onExitSandbox,
   onClaimTacetField,
   tacetStatus,
+  onUpdateAstrites,
+  onBirthdayChanged,
 }) => {
   const plazaRef = useRef<HTMLDivElement | null>(null);
   const realtimeRef = useRef<PlazaRealtimeManager | null>(null);
@@ -243,6 +255,8 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
     viewportWidth: MAP_VIEWPORT_WIDTH,
     viewportHeight: MAP_VIEWPORT_HEIGHT,
   });
+
+  const joystickVectorRef = useRef<{ x: number; y: number; intensity: number } | null>(null);
 
   // Dynamically track rendered viewport size for perfect camera centering across screen sizes
   useEffect(() => {
@@ -448,6 +462,117 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
   // Sound Mute Toggle
   const [isMuted, setIsMuted] = useState(false);
 
+  // Plaza Minigames Modal State (Slots, Blackjack, Coinflip, Dice, Wheel, Scratch)
+  const [minigamesModalState, setMinigamesModalState] = useState<{
+    isOpen: boolean;
+    initialGame: MinigameId;
+  }>({ isOpen: false, initialGame: "coinflip" });
+
+  // 18+ Age Gate & Missing Birthday Verification Modal State
+  const [pendingMinigame, setPendingMinigame] = useState<MinigameId | null>(null);
+  const [isAgeVerificationModalOpen, setIsAgeVerificationModalOpen] = useState(false);
+  const [isAgeRestrictedModalOpen, setIsAgeRestrictedModalOpen] = useState(false);
+  const [verificationBirthdayInput, setVerificationBirthdayInput] = useState("");
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [verificationLoading, setVerificationLoading] = useState(false);
+
+  // Active Full-Screen Modal Ref (freezes background 60fps tick loop to eliminate lag)
+  const isModalActiveRef = useRef(false);
+  useEffect(() => {
+    isModalActiveRef.current =
+      minigamesModalState.isOpen ||
+      isAgeVerificationModalOpen ||
+      isAgeRestrictedModalOpen;
+  }, [minigamesModalState.isOpen, isAgeVerificationModalOpen, isAgeRestrictedModalOpen]);
+
+  const handleCloseMinigames = useCallback(() => {
+    setMinigamesModalState((prev) => ({ ...prev, isOpen: false }));
+  }, []);
+
+  const handleUpdateMinigameAstrites = useCallback(
+    (delta: number) => {
+      if (onUpdateAstrites) {
+        return onUpdateAstrites(delta);
+      }
+      return userState?.astrite ?? 0;
+    },
+    [onUpdateAstrites, userState?.astrite]
+  );
+
+  // Checks age before opening any gambling minigame
+  const launchMinigameWithAgeGate = useCallback(
+    (gameId: MinigameId) => {
+      const userBirthday =
+        userProfile?.birthday ||
+        (typeof window !== "undefined"
+          ? localStorage.getItem(`wuwa_birthday_${currentUser?.id || "guest"}`)
+          : null);
+
+      if (!userBirthday) {
+        // Missing birthday -> prompt user to set it
+        setPendingMinigame(gameId);
+        setVerificationBirthdayInput("");
+        setVerificationError(null);
+        setIsAgeVerificationModalOpen(true);
+        return;
+      }
+
+      const age = calculateAge(userBirthday);
+      if (age < 18) {
+        // Underage -> blocked from gambling minigames
+        setIsAgeRestrictedModalOpen(true);
+        return;
+      }
+
+      // 18+ verified -> proceed to game
+      setMinigamesModalState({ isOpen: true, initialGame: gameId });
+    },
+    [userProfile?.birthday, currentUser?.id]
+  );
+
+  // Submit birthday from Age Verification prompt
+  const handleVerifyAgeAndPlay = async (e: React.FormEvent) => {
+    e.preventDefault();
+    soundEngine.playClick();
+    setVerificationError(null);
+
+    const cleanDate = verificationBirthdayInput.trim();
+    if (!cleanDate) {
+      setVerificationError("Please select your date of birth.");
+      return;
+    }
+
+    const age = calculateAge(cleanDate);
+    setVerificationLoading(true);
+
+    try {
+      const nowIso = new Date().toISOString();
+      if (currentUser?.id) {
+        await updateUserBirthday(currentUser.id, cleanDate);
+      }
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`wuwa_birthday_${currentUser?.id || "guest"}`, cleanDate);
+      }
+      if (onBirthdayChanged) {
+        onBirthdayChanged(cleanDate, nowIso);
+      }
+
+      setIsAgeVerificationModalOpen(false);
+
+      if (age < 18) {
+        setIsAgeRestrictedModalOpen(true);
+      } else {
+        if (pendingMinigame) {
+          setMinigamesModalState({ isOpen: true, initialGame: pendingMinigame });
+        }
+      }
+    } catch (err: any) {
+      setVerificationError(err.message || "Failed to save date of birth.");
+    } finally {
+      setVerificationLoading(false);
+    }
+  };
+
   // NPC Dialogue Action Trigger
   const handleNpcAction = useCallback(
     (actionId: string) => {
@@ -466,6 +591,24 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
         case "profile":
           onOpenProfile();
           break;
+        case "minigame_coinflip":
+          launchMinigameWithAgeGate("coinflip");
+          break;
+        case "minigame_slots":
+          launchMinigameWithAgeGate("slots");
+          break;
+        case "minigame_blackjack":
+          launchMinigameWithAgeGate("blackjack");
+          break;
+        case "minigame_dice":
+          launchMinigameWithAgeGate("dice");
+          break;
+        case "minigame_wheel":
+          launchMinigameWithAgeGate("wheel");
+          break;
+        case "minigame_scratch":
+          launchMinigameWithAgeGate("scratch");
+          break;
         case "tacet": {
           const currentAcc = tacetStatus.accumulated;
           onClaimTacetField();
@@ -480,7 +623,7 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
         }
       }
     },
-    [onNavigate, onOpenInventory, onOpenProfile, onClaimTacetField, tacetStatus]
+    [onNavigate, onOpenInventory, onOpenProfile, onClaimTacetField, tacetStatus, launchMinigameWithAgeGate]
   );
 
   // Loading transition state when confirming an NPC interaction
@@ -496,6 +639,12 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
 
     const primaryAction = npc.actions?.[0];
     if (!primaryAction) return;
+
+    // Minigame actions: open immediately without loading screen
+    if (primaryAction.actionId.startsWith("minigame_")) {
+      handleNpcAction(primaryAction.actionId);
+      return;
+    }
 
     // Zhezhi / Free Astrites: Claim immediately without loading transition
     if (primaryAction.actionId === "tacet" || npc.id === "npc_zhezhi" || npc.name.toLowerCase() === "zhezhi") {
@@ -880,6 +1029,12 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
         setShowMiniMap((prev) => !prev);
       }
 
+      // KeyT opens Plaza text chat (Minecraft style)
+      if ((e.code === "KeyT" || key === "t") && !selectedNpc && !showMiniMap) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("wuwa_open_plaza_chat"));
+      }
+
       // Escape closes dialogue or mini-map
       if (e.code === "Escape") {
         if (showMiniMap) {
@@ -927,6 +1082,11 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
 
     const tick = () => {
       const now = Date.now();
+      if (isModalActiveRef.current) {
+        lastFrameTimeRef.current = now;
+        animId = requestAnimationFrame(tick);
+        return;
+      }
       const dt = Math.min(0.05, Math.max(0.001, (now - lastFrameTimeRef.current) / 1000));
       lastFrameTimeRef.current = now;
 
@@ -960,6 +1120,12 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
           moveX *= Math.SQRT1_2;
           moveY *= Math.SQRT1_2;
         }
+      } else if (joystickVectorRef.current && joystickVectorRef.current.intensity > 0.05) {
+        moveX = joystickVectorRef.current.x;
+        moveY = joystickVectorRef.current.y;
+      }
+
+      if (moveX !== 0 || moveY !== 0) {
 
         const deltaX = moveX * speedX * dt;
         const deltaY = moveY * speedY * dt;
@@ -1614,6 +1780,8 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
               <MapIcon className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" />
             </button>
 
+
+
             {/* Zoom In/Out Controls */}
             <div className="flex items-center space-x-1 bg-black/75 backdrop-blur-md border border-white/20 rounded-xl p-1 shadow-[0_4px_16px_rgba(0,0,0,0.8)]">
               <button
@@ -1723,6 +1891,8 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
+                  const dist = Math.hypot(npc.x - playerPosRef.current.x, npc.y - playerPosRef.current.y);
+                  if (dist > NPC_PROXIMITY_RADIUS) return;
                   soundEngine.playClick();
                   setSelectedNpc(npc);
                 }}
@@ -1817,9 +1987,12 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
                   <span className="font-bold text-gray-200 group-hover:text-yellow-300">{peer.username}</span>
                 </div>
 
-                {/* Peer Sprite (No jumping/bounce when moving) */}
+                {/* Peer Sprite (Submerged in water clipping) */}
                 <div
-                  style={{ transform: `scaleX(${peer.facing === "left" ? -1 : 1})` }}
+                  style={{
+                    transform: `scaleX(${peer.facing === "left" ? -1 : 1})`,
+                    clipPath: isWaterPercent(peer.x, peer.y) ? "inset(0 0 40% 0)" : undefined,
+                  }}
                   className="w-7 h-7 sm:w-[30px] sm:h-[30px] flex items-center justify-center group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_rgba(250,204,21,0.7)] transition-all"
                 >
                   <img
@@ -1893,10 +2066,13 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
                   <span className="font-black text-yellow-300">You</span>
                 </div>
 
-                {/* Local Player Sprite (No jumping/bounce when moving) */}
+                {/* Local Player Sprite (Submerged in water clipping) */}
                 <div
-                  style={{ transform: `scaleX(${localPlayer.facing === "left" ? -1 : 1})` }}
-                  className="w-7 h-7 sm:w-[30px] sm:h-[30px] flex items-center justify-center"
+                  style={{
+                    transform: `scaleX(${localPlayer.facing === "left" ? -1 : 1})`,
+                    clipPath: isWaterPercent(localPlayer.x, localPlayer.y) ? "inset(0 0 40% 0)" : undefined,
+                  }}
+                  className="w-7 h-7 sm:w-[30px] sm:h-[30px] flex items-center justify-center transition-[clip-path] duration-200"
                 >
                   <img
                     src={
@@ -1985,8 +2161,12 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
         {/* On-Screen Joystick / D-Pad Positioned at Bottom-Right of Map */}
         <div className="absolute bottom-3 right-3 z-30 pointer-events-auto">
           <PlazaJoystick
-            onDirectionDown={(dir) => heldKeysRef.current.add(dir)}
-            onDirectionUp={(dir) => heldKeysRef.current.delete(dir)}
+            onMove={(vec) => {
+              joystickVectorRef.current = vec;
+            }}
+            onStop={() => {
+              joystickVectorRef.current = null;
+            }}
             avatarUrl={
               SPRITE_MAP[localPlayer.avatarId] ||
               `/assets/inventory_portraits/${getPortraitFileName(localPlayer.avatarId)}`
@@ -2083,7 +2263,7 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
                       if (tacetStatus.accumulated > 0) {
                         return `Hello, Rover! There are currently ${tacetStatus.accumulated.toLocaleString()} Free Astrites in the bank (${tacetStatus.accumulated.toLocaleString()} / ${tacetStatus.maxCap.toLocaleString()}). Would you like to collect them?`;
                       }
-                      return `Hello, Rover! You currently have 0 Free Astrites in the bank (accumulating 160 every 4.5m, cap: ${tacetStatus.maxCap.toLocaleString()}). Would you like to collect anyway?`;
+                      return `Hello, Rover! You currently have 0 Free Astrites in the bank (accumulating 160 every 6m, cap: ${tacetStatus.maxCap.toLocaleString()}). Would you like to collect anyway?`;
                     }
                     return selectedNpc.greeting;
                   })()}"
@@ -2477,6 +2657,166 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
           setSelectedNpc(npc);
         }}
       />
+
+      {/* ========================================================================= */}
+      {/* 8. PLAZA CASINO & ARCADE MINIGAMES MODAL (Slots, Blackjack, Coinflip, etc.) */}
+      {/* ========================================================================= */}
+      <PlazaMinigamesModal
+        isOpen={minigamesModalState.isOpen}
+        onClose={handleCloseMinigames}
+        initialGame={minigamesModalState.initialGame}
+        lockedGame={minigamesModalState.initialGame}
+        astriteBalance={userState?.astrite ?? 0}
+        onUpdateAstrites={handleUpdateMinigameAstrites}
+      />
+
+      {/* ========================================================================= */}
+      {/* 8B. AGE VERIFICATION MODAL (For existing users who haven't set birthday) */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {isAgeVerificationModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 pointer-events-auto select-none"
+            onClick={() => setIsAgeVerificationModalOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md rounded-2xl bg-[#0c1017]/98 border-2 border-yellow-400/50 shadow-[0_20px_60px_rgba(0,0,0,0.9),0_0_35px_rgba(250,204,21,0.2)] p-6 text-left font-mono space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 rounded-xl bg-yellow-400/15 border border-yellow-400/30 text-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.3)]">
+                  <Cake className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-white uppercase tracking-wider">
+                    Age Verification Required
+                  </h3>
+                  <p className="text-xs text-yellow-400/80 font-mono">
+                    Jinzhou Entertainment District
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-300 leading-relaxed">
+                Greetings, Rover! Before entering the Jinzhou entertainment minigames, the Magistracy requires age verification. Please provide your Date of Birth to proceed.
+              </p>
+
+              <form onSubmit={handleVerifyAgeAndPlay} className="space-y-3.5 pt-1">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-yellow-400 font-bold flex items-center space-x-1.5">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Select Date of Birth</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    autoFocus
+                    max={new Date().toISOString().split("T")[0]}
+                    value={verificationBirthdayInput}
+                    onChange={(e) => setVerificationBirthdayInput(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-black/60 border border-white/15 focus:border-yellow-400 rounded-xl text-sm font-mono text-white placeholder-gray-600 focus:outline-none transition-all [color-scheme:dark]"
+                  />
+                  <p className="text-[10px] text-gray-400">
+                    Your birthday is also used for account recovery. 18+ required to play.
+                  </p>
+                </div>
+
+                {verificationError && (
+                  <div className="flex items-center space-x-2 p-2.5 rounded-xl bg-red-950/40 border border-red-500/30 text-xs font-mono text-red-300">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0 text-red-400" />
+                    <span>{verificationError}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end space-x-2 pt-2">
+                  <button
+                    type="button"
+                    disabled={verificationLoading}
+                    onClick={() => {
+                      soundEngine.playClick();
+                      setIsAgeVerificationModalOpen(false);
+                      setPendingMinigame(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-gray-300 hover:text-white text-xs font-bold transition-all cursor-pointer active:scale-95"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={verificationLoading}
+                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-400 hover:from-yellow-300 hover:to-amber-300 text-black text-xs font-black tracking-wider uppercase shadow-[0_0_20px_rgba(250,204,21,0.4)] transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                  >
+                    {verificationLoading ? "Verifying..." : "Verify & Play"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* 8C. AGE RESTRICTED NOTICE MODAL (< 18 Rover Restriction) */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {isAgeRestrictedModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 pointer-events-auto select-none"
+            onClick={() => setIsAgeRestrictedModalOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md rounded-2xl bg-[#0c1017]/98 border-2 border-rose-500/60 shadow-[0_20px_60px_rgba(0,0,0,0.9),0_0_35px_rgba(244,63,94,0.3)] p-6 text-center font-mono space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-16 h-16 mx-auto rounded-full bg-rose-500/15 border-2 border-rose-500/40 flex items-center justify-center text-rose-400 shadow-[0_0_25px_rgba(244,63,94,0.4)]">
+                <ShieldAlert className="w-8 h-8 animate-pulse" />
+              </div>
+
+              <div>
+                <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30">
+                  18+ Rover Entertainment Only
+                </span>
+                <h3 className="text-lg font-black text-white mt-2 uppercase tracking-wide">
+                  Age Restriction Notice
+                </h3>
+              </div>
+
+              <p className="text-xs text-gray-300 leading-relaxed px-2">
+                Sorry, Rover! You must be at least 18 years old to access the Jinzhou entertainment games. Please enjoy exploring the city and other historic landmarks!
+              </p>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundEngine.playClick();
+                    setIsAgeRestrictedModalOpen(false);
+                    setPendingMinigame(null);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/50 text-rose-300 hover:text-white text-xs font-bold transition-all cursor-pointer active:scale-95 uppercase tracking-wider"
+                >
+                  Understood
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
 
     {/* ========================================================================= */}

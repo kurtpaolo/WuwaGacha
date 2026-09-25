@@ -1,5 +1,5 @@
 // High-fidelity Audio Engine for Wuthering Waves Convene replica
-// Supports background menu BGM (wuwamenu.mp3), summon cutscene audio controls,
+// Supports background menu BGM (anime_adventures_theme.mp3), summon cutscene audio controls,
 // rarity chord stingers, and configurable Master/Music/Summon volume sliders.
 
 export interface AudioSettings {
@@ -20,6 +20,8 @@ class SoundEngine {
   private ctx: AudioContext | null = null;
   private sfxGain: GainNode | null = null;
   private bgmAudio: HTMLAudioElement | null = null;
+  private bgmSource: MediaElementAudioSourceNode | null = null;
+  private bgmGain: GainNode | null = null;
   private settings: AudioSettings = { ...DEFAULT_SETTINGS };
   private isBgmPlaying: boolean = false;
   private isBgmDucked: boolean = false;
@@ -70,22 +72,79 @@ class SoundEngine {
       }
     }
     if (this.ctx && this.ctx.state === "suspended") {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
+    }
+  }
+
+  private ensureContextRunning() {
+    if (typeof window === "undefined") return;
+    if (!this.ctx) {
+      this.initContext();
+    }
+    if (this.ctx && this.ctx.state === "suspended") {
+      this.ctx.resume().catch(() => {});
+    }
+  }
+
+  private setupBgmAudioGraph() {
+    if (typeof window === "undefined" || !this.bgmAudio) return;
+    this.initContext();
+    if (!this.ctx || this.bgmSource) return;
+
+    try {
+      this.bgmGain = this.ctx.createGain();
+      const effectiveVol = this.isBgmDucked ? 0 : this.getEffectiveMusicVolume();
+      this.bgmGain.gain.setValueAtTime(effectiveVol <= 0.001 ? 0 : effectiveVol, this.ctx.currentTime);
+
+      this.bgmSource = this.ctx.createMediaElementSource(this.bgmAudio);
+      this.bgmSource.connect(this.bgmGain);
+      this.bgmGain.connect(this.ctx.destination);
+    } catch {
+      // createMediaElementSource may fail if already connected or on restricted cross-origin
     }
   }
 
   private initBgmAudio() {
     if (this.bgmAudio) return;
-    this.bgmAudio = new Audio("/assets/audio/wuwamenu.mp3");
+    this.bgmAudio = new Audio("/assets/audio/anime_adventures_theme.mp3");
     this.bgmAudio.loop = true;
     this.bgmAudio.preload = "auto";
+    (this.bgmAudio as any).playsInline = true;
     this.updateBgmVolume();
   }
 
   private updateBgmVolume() {
     if (!this.bgmAudio) return;
     const effectiveVol = this.isBgmDucked ? 0 : this.getEffectiveMusicVolume();
+    const isZero = effectiveVol <= 0.001;
+
+    // Standard DOM volume assignment
     this.bgmAudio.volume = Math.max(0, Math.min(1, effectiveVol));
+
+    // CRITICAL FIX FOR MOBILE (iOS Safari / Mobile WebKit):
+    // iOS Safari deliberately makes HTMLMediaElement.volume READ-ONLY and ignores volume assignments.
+    // Setting muted = true is universally supported and immediately silences audio on mobile.
+    this.bgmAudio.muted = isZero;
+
+    // Web Audio Gain Node (provides genuine proportional volume scaling on iOS Safari)
+    if (this.bgmGain && this.ctx) {
+      try {
+        this.bgmGain.gain.setValueAtTime(isZero ? 0 : effectiveVol, this.ctx.currentTime);
+      } catch {
+        // Fallback for edge cases
+      }
+    }
+
+    // Direct pause/play guard for complete mobile hardware silence when volume is 0
+    if (isZero) {
+      if (!this.bgmAudio.paused) {
+        this.bgmAudio.pause();
+      }
+    } else {
+      if (this.isBgmPlaying && !this.isBgmDucked && this.bgmAudio.paused) {
+        this.bgmAudio.play().catch(() => {});
+      }
+    }
   }
 
   private updateSfxGain() {
@@ -127,6 +186,8 @@ class SoundEngine {
   // Volume setters
   public setMasterVolume(vol: number) {
     this.settings.masterVolume = Math.max(0, Math.min(1, vol));
+    this.ensureContextRunning();
+    this.setupBgmAudioGraph();
     this.updateBgmVolume();
     this.updateSfxGain();
     this.saveSettings();
@@ -135,6 +196,8 @@ class SoundEngine {
 
   public setMusicVolume(vol: number) {
     this.settings.musicVolume = Math.max(0, Math.min(1, vol));
+    this.ensureContextRunning();
+    this.setupBgmAudioGraph();
     this.updateBgmVolume();
     this.saveSettings();
     this.notifyListeners();
@@ -142,6 +205,7 @@ class SoundEngine {
 
   public setSummonVolume(vol: number) {
     this.settings.summonVolume = Math.max(0, Math.min(1, vol));
+    this.ensureContextRunning();
     this.updateSfxGain();
     this.saveSettings();
     this.notifyListeners();
@@ -162,15 +226,22 @@ class SoundEngine {
   }
 
   // =========================================================================
-  // BACKGROUND MUSIC (wuwamenu.mp3)
+  // BACKGROUND MUSIC (anime_adventures_theme.mp3)
   // =========================================================================
   public startBGM() {
     if (typeof window === "undefined") return;
     this.initBgmAudio();
     if (!this.bgmAudio) return;
 
+    this.isBgmPlaying = true;
     this.isBgmDucked = false;
     this.updateBgmVolume();
+
+    // If volume is 0 or muted, do not start audible playback
+    if (this.getEffectiveMusicVolume() <= 0.001) {
+      this.bgmAudio.pause();
+      return;
+    }
 
     const playPromise = this.bgmAudio.play();
     if (playPromise !== undefined) {
@@ -181,16 +252,20 @@ class SoundEngine {
         .catch(() => {
           // Autoplay policy prevented immediate playback; resume on first user interaction
           const unlock = () => {
-            if (this.bgmAudio && !this.isBgmDucked) {
+            this.ensureContextRunning();
+            this.setupBgmAudioGraph();
+            if (this.bgmAudio && !this.isBgmDucked && this.getEffectiveMusicVolume() > 0.001) {
               this.bgmAudio.play().then(() => {
                 this.isBgmPlaying = true;
               }).catch(() => {});
             }
             window.removeEventListener("pointerdown", unlock);
+            window.removeEventListener("touchstart", unlock);
             window.removeEventListener("keydown", unlock);
           };
-          window.addEventListener("pointerdown", unlock, { once: true });
-          window.addEventListener("keydown", unlock, { once: true });
+          window.addEventListener("pointerdown", unlock, { once: true, passive: true });
+          window.addEventListener("touchstart", unlock, { once: true, passive: true });
+          window.addEventListener("keydown", unlock, { once: true, passive: true });
         });
     }
   }
@@ -205,7 +280,7 @@ class SoundEngine {
   public resumeBGM() {
     this.isBgmDucked = false;
     this.updateBgmVolume();
-    if (this.bgmAudio && this.bgmAudio.paused) {
+    if (this.bgmAudio && this.bgmAudio.paused && this.getEffectiveMusicVolume() > 0.001) {
       this.bgmAudio.play().catch(() => {});
     }
   }
@@ -775,6 +850,64 @@ class SoundEngine {
 
       osc.start(now + i * 0.05);
       osc.stop(now + i * 0.05 + 0.45);
+    });
+  }
+
+  /**
+   * Sparkling golden chime when Astrites or currency rewards are won/claimed.
+   */
+  public playAstriteGain() {
+    if (this.getEffectiveSummonVolume() <= 0) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGain) return;
+
+    const now = this.ctx.currentTime;
+    const notes = [587.33, 739.99, 880.0, 1174.66, 1479.98]; // D5, F#5, A5, D6, F#6
+    notes.forEach((freq, i) => {
+      if (!this.ctx || !this.sfxGain) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now + i * 0.04);
+
+      gain.gain.setValueAtTime(0.2, now + i * 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.04 + 0.35);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now + i * 0.04);
+      osc.stop(now + i * 0.04 + 0.35);
+    });
+  }
+
+  /**
+   * Warning buzzer/chime when Astrites are insufficient to place a wager.
+   */
+  public playInsufficient() {
+    if (this.getEffectiveSummonVolume() <= 0) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGain) return;
+
+    const now = this.ctx.currentTime;
+    const tones = [220, 185]; // Low rejection double tone
+    tones.forEach((freq, i) => {
+      if (!this.ctx || !this.sfxGain) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, now + i * 0.09);
+
+      gain.gain.setValueAtTime(0.25, now + i * 0.09);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.09 + 0.16);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+
+      osc.start(now + i * 0.09);
+      osc.stop(now + i * 0.09 + 0.16);
     });
   }
 }

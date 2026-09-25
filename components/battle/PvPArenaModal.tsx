@@ -32,6 +32,9 @@ import {
   Plus,
   Info,
   HelpCircle,
+  SlidersHorizontal,
+  Target,
+  Activity,
 } from "lucide-react";
 import { soundEngine } from "@/lib/audio/soundEngine";
 import { LiberationCutIn } from "./LiberationCutIn";
@@ -72,6 +75,7 @@ import {
   getTimeUntilGmt8Reset,
   getResonatorLevel,
   setResonatorLevel,
+  getActivatedSequence,
   getCombatExp,
   addCombatExp,
   spendCombatExp,
@@ -103,6 +107,8 @@ import {
   getTowerFloorsForPage,
   getTowerFloorInfo,
   getTowerFloorLevel,
+  getAccumulatedBlessingStats,
+  AccumulatedBlessingStats,
 } from "@/lib/battle/towerService";
 import { createBattleResonator, SPRITE_MAP } from "@/lib/battle/resonatorMoves";
 import { getPortraitFileName } from "@/lib/data/portraits";
@@ -448,6 +454,12 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
   const [towerPageBlock, setTowerPageBlock] = useState<number>(() => {
     return Math.floor(((towerRunState?.currentFloor || 1) - 1) / 5);
   });
+  const [showBlessingSummaryModal, setShowBlessingSummaryModal] = useState(false);
+
+  const accumulatedBlessingStats: AccumulatedBlessingStats = useMemo(
+    () => getAccumulatedBlessingStats(towerRunState?.activeBlessings || []),
+    [towerRunState?.activeBlessings]
+  );
 
   useEffect(() => {
     setTowerPageBlock(Math.floor(((towerRunState?.currentFloor || 1) - 1) / 5));
@@ -531,11 +543,16 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
     };
   }, []);
 
+  const screenRef = useRef(screen);
+  screenRef.current = screen;
+
   // Resync on tab focus / visibility change (recovers from Alt-Tab backgrounding)
   useEffect(() => {
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === "visible") {
-        realtimeManagerRef.current?.resyncOnFocus();
+        if (screenRef.current === "battle" || screenRef.current === "room_prep") {
+          realtimeManagerRef.current?.resyncOnFocus();
+        }
       }
     };
 
@@ -940,8 +957,9 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
 
     // Build player team with persistent Tower HP and active blessings
     const playerTeam = lockedIds.map((id) => {
-      const invItem = (inventory || []).find((i) => i.character_id === id);
-      const seq = Math.max(0, Math.min(6, (invItem?.count || 1) - 1));
+      const invItem = (inventory || []).find((i) => i.character_id.toLowerCase() === id.toLowerCase());
+      const maxSeq = Math.max(0, Math.min(6, (invItem?.count || 1) - 1));
+      const seq = getActivatedSequence(id, maxSeq, currentUserId);
       const lvl = getResonatorLevel(id, currentUserId);
       const res = createBattleResonator(id, lvl, seq);
 
@@ -1090,7 +1108,17 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
       }
     }
 
-    const updatedBlessings = [...towerRunState.activeBlessings, blessing];
+    const isOneTime =
+      blessing.effectType === "heal" ||
+      blessing.effectType === "revive" ||
+      blessing.id === "blessing_celestial_heal" ||
+      blessing.id === "bless_heal_floor" ||
+      blessing.id === "bless_revive_mythic";
+
+    const cleanCurrent = (towerRunState.activeBlessings || []).filter(
+      (b) => b && b.effectType !== "heal" && b.effectType !== "revive"
+    );
+    const updatedBlessings = isOneTime ? cleanCurrent : [...cleanCurrent, blessing];
     const updatedHpMap = { ...towerRunState.partyHpMap };
 
     // Healing blessing: restore % HP to alive party members
@@ -1143,7 +1171,9 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
       value: 70,
     };
 
-    const updatedBlessings = [...towerRunState.activeBlessings, blessing];
+    const updatedBlessings = (towerRunState.activeBlessings || []).filter(
+      (b) => b && b.effectType !== "heal" && b.effectType !== "revive"
+    );
     const updatedHpMap = { ...towerRunState.partyHpMap };
     const lvl = getResonatorLevel(resonatorId, currentUserId);
     const maxHp = 1000 + lvl * 35;
@@ -1182,8 +1212,9 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
 
     // Build player team using player's Gym resonator levels and Sequence counts
     const playerTeam = validIds.map((id) => {
-      const invItem = (inventory || []).find((i) => i.character_id === id);
-      const seq = Math.max(0, Math.min(6, (invItem?.count || 1) - 1));
+      const invItem = (inventory || []).find((i) => i.character_id.toLowerCase() === id.toLowerCase());
+      const maxSeq = Math.max(0, Math.min(6, (invItem?.count || 1) - 1));
+      const seq = getActivatedSequence(id, maxSeq, currentUserId);
       const lvl = getResonatorLevel(id, currentUserId);
       return createBattleResonator(id, lvl, seq);
     });
@@ -1285,8 +1316,9 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
     realtimeManagerRef.current?.leaveRoom();
 
     const playerTeam = validIds.map((id) => {
-      const invItem = (inventory || []).find((i) => i.character_id === id);
-      const seq = Math.max(0, Math.min(6, (invItem?.count || 1) - 1));
+      const invItem = (inventory || []).find((i) => i.character_id.toLowerCase() === id.toLowerCase());
+      const maxSeq = Math.max(0, Math.min(6, (invItem?.count || 1) - 1));
+      const seq = getActivatedSequence(id, maxSeq, currentUserId);
       return createBattleResonator(id, 100, seq);
     });
 
@@ -1401,8 +1433,9 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
     setCurrentGymChallenge(null);
 
     const playerTeam = validIds.map((id) => {
-      const invItem = (inventory || []).find((i) => i.character_id === id);
-      const seq = Math.max(0, Math.min(6, (invItem?.count || 1) - 1));
+      const invItem = (inventory || []).find((i) => i.character_id.toLowerCase() === id.toLowerCase());
+      const maxSeq = Math.max(0, Math.min(6, (invItem?.count || 1) - 1));
+      const seq = getActivatedSequence(id, maxSeq, currentUserId);
       return createBattleResonator(id, 100, seq);
     });
 
@@ -1419,15 +1452,20 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
 
     const manager = new PvpRealtimeManager({
       onOpponentJoined: (oppTrainer) => {
-        // Challenger arrived! Move to Room Prep phase!
-        setIsWaitingForChallenger(false);
-        setIsRealtimeMatch(true);
-        setIsOpponentReconnecting(false);
-        setOpponentTrainer(oppTrainer);
-        opponentTrainerRef.current = oppTrainer;
-        setScreen("room_prep");
-        setIsMyReady(false);
-        setIsOpponentReady(false);
+        // Challenger arrived! Only transition to room prep if in lobby or waiting
+        setScreen((prevScreen) => {
+          if (prevScreen === "battle" || prevScreen === "result") {
+            return prevScreen;
+          }
+          setIsWaitingForChallenger(false);
+          setIsRealtimeMatch(true);
+          setIsOpponentReconnecting(false);
+          setOpponentTrainer(oppTrainer);
+          opponentTrainerRef.current = oppTrainer;
+          setIsMyReady(false);
+          setIsOpponentReady(false);
+          return "room_prep";
+        });
       },
       onOpponentTeamUpdate: (updatedTrainer) => {
         setOpponentTrainer(updatedTrainer);
@@ -1477,8 +1515,9 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
     setCurrentGymChallenge(null);
 
     const playerTeam = validIds.map((id) => {
-      const invItem = (inventory || []).find((i) => i.character_id === id);
-      const seq = Math.max(0, Math.min(6, (invItem?.count || 1) - 1));
+      const invItem = (inventory || []).find((i) => i.character_id.toLowerCase() === id.toLowerCase());
+      const maxSeq = Math.max(0, Math.min(6, (invItem?.count || 1) - 1));
+      const seq = getActivatedSequence(id, maxSeq, currentUserId);
       return createBattleResonator(id, 100, seq);
     });
 
@@ -1495,16 +1534,21 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
 
     const manager = new PvpRealtimeManager({
       onOpponentWelcome: (hostTrainer, bet) => {
-        // Connected to Host! Move to Room Prep phase!
-        setIsConnectingRoom(false);
-        setIsRealtimeMatch(true);
-        setIsOpponentReconnecting(false);
-        setOpponentTrainer(hostTrainer);
-        opponentTrainerRef.current = hostTrainer;
-        if (bet !== undefined) setSelectedBet(bet);
-        setScreen("room_prep");
-        setIsMyReady(false);
-        setIsOpponentReady(false);
+        // Connected to Host! Only transition to room prep if not in active battle or result
+        setScreen((prevScreen) => {
+          if (prevScreen === "battle" || prevScreen === "result") {
+            return prevScreen;
+          }
+          setIsConnectingRoom(false);
+          setIsRealtimeMatch(true);
+          setIsOpponentReconnecting(false);
+          setOpponentTrainer(hostTrainer);
+          opponentTrainerRef.current = hostTrainer;
+          if (bet !== undefined) setSelectedBet(bet);
+          setIsMyReady(false);
+          setIsOpponentReady(false);
+          return "room_prep";
+        });
       },
       onOpponentTeamUpdate: (updatedTrainer) => {
         setOpponentTrainer(updatedTrainer);
@@ -1709,8 +1753,9 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
     const ownedSet = new Set((inventory || []).map((i) => i.character_id).filter((id) => LIMITED_RESONATOR_IDS.has(id)));
     const validIds = selectedPartyIds.filter((id) => ownedSet.has(id));
     const updatedTeam = validIds.map((id) => {
-      const inv = (inventory || []).find((i) => i.character_id === id);
-      const seq = Math.max(0, Math.min(6, (inv?.count || 1) - 1));
+      const inv = (inventory || []).find((i) => i.character_id.toLowerCase() === id.toLowerCase());
+      const maxSeq = Math.max(0, Math.min(6, (inv?.count || 1) - 1));
+      const seq = getActivatedSequence(id, maxSeq, currentUserId);
       const lvl = isRealtimeMatch ? 100 : getResonatorLevel(id, currentUserId);
       return createBattleResonator(id, lvl, seq);
     });
@@ -1804,6 +1849,10 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
 
   // Realtime 1v1: Apply synchronized state received from opponent (e.g. after alt-tab)
   const handleSyncState = (action: Extract<RealtimeBattleAction, { type: "sync_state" }>) => {
+    // Never allow a sync_state to yank player out of battle or result screen into room_prep
+    if (battleWinner || screenRef.current === "result") return;
+    if (action.screen === "room_prep" && screenRef.current === "battle") return;
+
     if (action.bet !== undefined && action.bet !== selectedBet) {
       setSelectedBet(action.bet);
     }
@@ -1857,6 +1906,8 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
   const handleOpponentDisconnect = () => {
     if (battleWinner) return;
     if (screen === "battle" && isRealtimeMatch && !currentTowerFloor && !currentGymChallenge) {
+      setIsBusy(false);
+      setIsPlayerTurn(false);
       setBattleLogs((prev) => [
         ...prev,
         {
@@ -1865,7 +1916,12 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
           type: "info",
         },
       ]);
-      handleBattleEnd("player");
+      soundEngine.playOneMoreStinger();
+      setStageEndBanner("VICTORY");
+      setTimeout(() => {
+        setStageEndBanner(null);
+        handleBattleEnd("player", true);
+      }, 1200);
     } else if (screen === "room_prep" || screen === "lobby") {
       setRoomError("Opponent left the match room.");
       setScreen("lobby");
@@ -1876,6 +1932,7 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
       setOpponentTrainer(null);
       opponentTrainerRef.current = null;
       realtimeManagerRef.current?.leaveRoom();
+      realtimeManagerRef.current = null;
     }
   };
 
@@ -1895,7 +1952,8 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
       opponentTrainerRef.current = action.trainer;
     } else if (action.type === "start_battle") {
       if (action.bet !== undefined) setSelectedBet(action.bet);
-      handleStartRealtimeBattle(currentP, currentO, false, action.bet);
+      const isMyFirst = action.firstTurnUserId ? action.firstTurnUserId === currentP.id : false;
+      handleStartRealtimeBattle(currentP, currentO, isMyFirst, action.bet);
     } else if (action.type === "bench_substitute") {
       if (action.senderTrainer) {
         setOpponentTrainer(action.senderTrainer);
@@ -1913,6 +1971,14 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
           type: "switch",
         },
       ]);
+      if (action.nextTurnUserId) {
+        if (action.nextTurnUserId === currentP.id) {
+          startPlayerTurn();
+        } else {
+          setIsPlayerTurn(false);
+          setIsBusy(false);
+        }
+      }
     } else if (action.type === "ultimate_interrupt") {
       if (action.senderTrainer) {
         setOpponentTrainer(action.senderTrainer);
@@ -2008,6 +2074,8 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
       return;
     } else if (action.type === "forfeit") {
       if (screen === "battle" && isRealtimeMatch && !currentTowerFloor && !currentGymChallenge) {
+        setIsBusy(false);
+        setIsPlayerTurn(false);
         setBattleLogs((prev) => [
           ...prev,
           {
@@ -2016,7 +2084,12 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
             type: "info",
           },
         ]);
-        handleBattleEnd("player");
+        soundEngine.playOneMoreStinger();
+        setStageEndBanner("VICTORY");
+        setTimeout(() => {
+          setStageEndBanner(null);
+          handleBattleEnd("player", true);
+        }, 1200);
       } else {
         setRoomError(`${currentO.username} left the match room.`);
         setScreen("lobby");
@@ -2027,6 +2100,7 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
         setOpponentTrainer(null);
         opponentTrainerRef.current = null;
         realtimeManagerRef.current?.leaveRoom();
+        realtimeManagerRef.current = null;
       }
     } else if (action.type === "move") {
       if (!oActive || !pActive) return;
@@ -2249,17 +2323,34 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
           handleBattleEnd("opponent");
           return;
         } else {
-          // Open interactive faint replacement picker for player to choose their next resonator
-          const followingTurn: "player" | "opponent" = action.triggeredOneMore
-            ? "opponent"
-            : action.nextTurnUserId
-            ? (action.nextTurnUserId === currentP.id ? "player" : "opponent")
-            : "player";
-          setPendingFaintTurnDecision(followingTurn);
-          setIsFaintPickerOpen(true);
-          setIsBusy(false);
-          setIsPlayerTurn(false);
-          return;
+          const frontlineIndices = currentP.activeIndices || [0, 1, 2].slice(0, currentP.team.length);
+          const faintedSlot = frontlineIndices.findIndex(
+            (idx) => idx === currentP.activeIdx || currentP.team[idx]?.isFainted || (currentP.team[idx]?.hp ?? 0) <= 0
+          );
+          const resolvedFaintedSlot = faintedSlot !== -1 ? faintedSlot : 0;
+
+          const hasBenchReserves = currentP.team.some(
+            (u, idx) => !frontlineIndices.includes(idx) && !u.isFainted && u.hp > 0
+          );
+
+          if (hasBenchReserves) {
+            // Open interactive faint replacement picker with clear casualty info
+            setFaintedSlotIndex(resolvedFaintedSlot);
+            setIsFaintReplaceModalOpen(true);
+            setIsBusy(false);
+            setIsPlayerTurn(false);
+            return;
+          } else {
+            // No bench reserves remain; point activeIdx to an alive frontline resonator
+            const livingFrontlineIdx = frontlineIndices.find(
+              (idx) => !currentP.team[idx]?.isFainted && (currentP.team[idx]?.hp ?? 0) > 0
+            );
+            if (livingFrontlineIdx !== undefined) {
+              currentP.activeIdx = livingFrontlineIdx;
+              playerTrainerRef.current = { ...currentP };
+              setPlayerTrainer({ ...currentP });
+            }
+          }
         }
       }
 
@@ -2332,25 +2423,35 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
     if (realtimeManagerRef.current) {
       realtimeManagerRef.current.updateCallbacks({
         onOpponentJoined: (oppTrainer) => {
-          setIsWaitingForChallenger(false);
-          setIsRealtimeMatch(true);
-          setIsOpponentReconnecting(false);
-          setOpponentTrainer(oppTrainer);
-          opponentTrainerRef.current = oppTrainer;
-          setScreen("room_prep");
-          setIsMyReady(false);
-          setIsOpponentReady(false);
+          setScreen((prevScreen) => {
+            if (prevScreen === "battle" || prevScreen === "result") {
+              return prevScreen;
+            }
+            setIsWaitingForChallenger(false);
+            setIsRealtimeMatch(true);
+            setIsOpponentReconnecting(false);
+            setOpponentTrainer(oppTrainer);
+            opponentTrainerRef.current = oppTrainer;
+            setIsMyReady(false);
+            setIsOpponentReady(false);
+            return "room_prep";
+          });
         },
         onOpponentWelcome: (hostTrainer, bet) => {
-          setIsConnectingRoom(false);
-          setIsRealtimeMatch(true);
-          setIsOpponentReconnecting(false);
-          setOpponentTrainer(hostTrainer);
-          opponentTrainerRef.current = hostTrainer;
-          if (bet !== undefined) setSelectedBet(bet);
-          setScreen("room_prep");
-          setIsMyReady(false);
-          setIsOpponentReady(false);
+          setScreen((prevScreen) => {
+            if (prevScreen === "battle" || prevScreen === "result") {
+              return prevScreen;
+            }
+            setIsConnectingRoom(false);
+            setIsRealtimeMatch(true);
+            setIsOpponentReconnecting(false);
+            setOpponentTrainer(hostTrainer);
+            opponentTrainerRef.current = hostTrainer;
+            if (bet !== undefined) setSelectedBet(bet);
+            setIsMyReady(false);
+            setIsOpponentReady(false);
+            return "room_prep";
+          });
         },
         onOpponentTeamUpdate: (updatedTrainer) => {
           setOpponentTrainer(updatedTrainer);
@@ -2492,6 +2593,23 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
   // Execute Player Move (3v3 Simultaneous Combat)
   const handlePlayerMove = async (move: BattleMove) => {
     if (!isPlayerTurn || isBusy || !playerTrainer || !opponentTrainer) return;
+
+    // Strict Frontline Active Verification:
+    // Only deployed frontline resonators are allowed to take combat actions!
+    const frontlineIndices = playerTrainer.activeIndices ?? [0, 1, 2].slice(0, playerTrainer.team.length);
+    if (!frontlineIndices.includes(playerTrainer.activeIdx)) {
+      const livingFrontlineIdx = frontlineIndices.find(
+        (idx) => !playerTrainer.team[idx]?.isFainted && (playerTrainer.team[idx]?.hp ?? 0) > 0
+      );
+      if (livingFrontlineIdx !== undefined) {
+        playerTrainer.activeIdx = livingFrontlineIdx;
+        playerTrainerRef.current = { ...playerTrainer };
+        setPlayerTrainer({ ...playerTrainer });
+      } else {
+        return; // No living deployed frontline unit
+      }
+    }
+
     const pActive = playerTrainer.team[playerTrainer.activeIdx];
     if (!pActive || pActive.isFainted) return;
 
@@ -3648,13 +3766,14 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
     ]);
 
     const activeSlot = playerTrainer.activeIndices?.indexOf(playerTrainer.activeIdx) ?? 0;
+    const oldActiveIdx = playerTrainer.activeIdx;
     deployReserveResonator(playerTrainer, activeSlot, targetIdx);
     playerTrainer.activeIdx = targetIdx;
     setPlayerTrainer({ ...playerTrainer });
     playerTrainerRef.current = { ...playerTrainer };
     setPlayerSwitchCooldown(2);
 
-    let updatedTimeline = removeUnitFromTimeline(actionTimeline, true, playerTrainer.activeIdx);
+    let updatedTimeline = removeUnitFromTimeline(actionTimeline, true, oldActiveIdx);
     updatedTimeline = addUnitToTimeline(updatedTimeline, playerTrainer, targetIdx, activeSlot, true);
 
     await new Promise((r) => setTimeout(r, 100));
@@ -3663,12 +3782,30 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
     const adv = advanceTimeline(updatedTimeline);
     if (adv) {
       setActionTimeline(adv.updatedTimeline);
+
+      if (isRealtimeMatch) {
+        realtimeManagerRef.current?.sendAction({
+          type: "bench_substitute",
+          slotIndex: activeSlot,
+          benchIndex: targetIdx,
+          senderId: playerTrainer.id,
+          senderTrainer: { ...playerTrainer },
+          timeline: adv.updatedTimeline,
+          nextTurnUserId: adv.updatedTimeline[0]?.isPlayer ? playerTrainer.id : opponentTrainer.id,
+        });
+      }
+
       if (adv.updatedTimeline[0]?.isPlayer) {
         playerTrainer.activeIdx = adv.updatedTimeline[0].teamIndex;
+        playerTrainerRef.current.activeIdx = adv.updatedTimeline[0].teamIndex;
+        setPlayerTrainer({ ...playerTrainer });
         setIsPlayerTurn(true);
         setIsBusy(false);
       } else {
         opponentTrainer.activeIdx = adv.updatedTimeline[0].teamIndex;
+        opponentTrainerRef.current = { ...opponentTrainer };
+        opponentTrainerRef.current.activeIdx = adv.updatedTimeline[0].teamIndex;
+        setOpponentTrainer({ ...opponentTrainer });
         setIsPlayerTurn(false);
         setIsBusy(true);
         if (!isRealtimeMatch) {
@@ -3679,13 +3816,13 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
   };
 
   // Handle Battle End
-  const handleBattleEnd = (winner: "player" | "opponent") => {
+  const handleBattleEnd = (winner: "player" | "opponent", isForfeit: boolean = false) => {
     if (battleWinner) return;
     clearPendingPvpNotice(currentUserId);
     setBattleWinner(winner);
     setScreen("result");
     const won = winner === "player";
-    const isEarlyForfeit = isRealtimeMatch && won && battleTurnCountRef.current < 3;
+    const isEarlyForfeit = !isForfeit && isRealtimeMatch && won && battleTurnCountRef.current < 3;
     setIsEarlyForfeitMatch(isEarlyForfeit);
 
     if (isRealtimeMatch) {
@@ -3880,6 +4017,13 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
         }
       }
     }
+
+    if (isRealtimeMatch) {
+      setTimeout(() => {
+        realtimeManagerRef.current?.leaveRoom();
+        realtimeManagerRef.current = null;
+      }, 1500);
+    }
   };
 
   const handleAttemptClose = () => {
@@ -3890,7 +4034,13 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
     } else {
       setSelectedBet(0);
       setIsRealtimeMatch(false);
+      setOpponentTrainer(null);
+      opponentTrainerRef.current = null;
+      setIsMyReady(false);
+      setIsOpponentReady(false);
+      setBattleWinner(null);
       realtimeManagerRef.current?.leaveRoom();
+      realtimeManagerRef.current = null;
       closeAllSubModals();
       clearPlayerSearch();
       onClose();
@@ -3931,14 +4081,26 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                 } else if (onBackToGames) {
                   setSelectedBet(0);
                   setIsRealtimeMatch(false);
+                  setOpponentTrainer(null);
+                  opponentTrainerRef.current = null;
+                  setIsMyReady(false);
+                  setIsOpponentReady(false);
+                  setBattleWinner(null);
                   realtimeManagerRef.current?.leaveRoom();
+                  realtimeManagerRef.current = null;
                   closeAllSubModals();
                   clearPlayerSearch();
                   onBackToGames();
                 } else {
                   setSelectedBet(0);
                   setIsRealtimeMatch(false);
+                  setOpponentTrainer(null);
+                  opponentTrainerRef.current = null;
+                  setIsMyReady(false);
+                  setIsOpponentReady(false);
+                  setBattleWinner(null);
                   realtimeManagerRef.current?.leaveRoom();
+                  realtimeManagerRef.current = null;
                   closeAllSubModals();
                   clearPlayerSearch();
                   handleAttemptClose();
@@ -4332,38 +4494,85 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Active Blessings Rack */}
-                    <div className="p-3 rounded-xl bg-[#0b101c] border border-purple-500/20 space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                        <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-purple-200">
-                          Drafted Tactical Blessings ({towerRunState.activeBlessings.length})
-                        </span>
+                    {/* Active Blessings Summary Rack */}
+                    <div className="p-3 rounded-xl bg-[#0b101c] border border-purple-500/25 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-purple-200">
+                            Tactical Blessings
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                            {accumulatedBlessingStats.totalActiveCount} Active
+                          </span>
+                        </div>
+
+                        {accumulatedBlessingStats.totalActiveCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowBlessingSummaryModal(true)}
+                            className="px-2.5 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/40 text-purple-200 text-xs font-mono font-bold transition-all flex items-center space-x-1.5 hover:scale-102 active:scale-98 shadow-sm"
+                          >
+                            <SlidersHorizontal className="w-3 h-3 text-purple-300" />
+                            <span>View Accumulated Bonuses</span>
+                          </button>
+                        )}
                       </div>
 
-                      {towerRunState.activeBlessings.length === 0 ? (
-                        <p className="text-[11px] font-mono text-gray-500 italic py-1">
-                          No blessings collected yet. Defeat floors to draft 3 tactical buffs after each stage!
+                      {accumulatedBlessingStats.totalActiveCount === 0 ? (
+                        <p className="text-[11px] font-mono text-gray-500 italic py-0.5">
+                          No permanent blessings collected yet. Defeat floors to draft tactical combat buffs!
                         </p>
                       ) : (
-                        <div className="flex flex-wrap gap-2">
-                          {towerRunState.activeBlessings.map((bless: TowerBlessing, i: number) => (
-                            <div
-                              key={bless.id + i}
-                              className={`px-2.5 py-1 rounded-lg border text-xs font-mono flex items-center space-x-1.5 ${
-                                bless.rarity === "mythic"
-                                  ? "bg-rose-600/20 border-rose-400/60 text-rose-300"
-                                  : bless.rarity === "legendary"
-                                  ? "bg-amber-500/15 border-amber-400/50 text-yellow-300"
-                                  : bless.rarity === "epic"
-                                  ? "bg-purple-500/15 border-purple-400/50 text-purple-300"
-                                  : "bg-cyan-500/15 border-cyan-400/50 text-cyan-300"
-                              }`}
-                              title={bless.description}
-                            >
-                              <span className="font-bold">{bless.name}</span>
-                            </div>
-                          ))}
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          {accumulatedBlessingStats.atkPct > 0 && (
+                            <span className="px-2 py-0.5 rounded-md bg-rose-500/15 border border-rose-400/40 text-rose-300 text-[11px] font-mono font-semibold">
+                              ATK +{accumulatedBlessingStats.atkPct}%
+                            </span>
+                          )}
+                          {accumulatedBlessingStats.defPct > 0 && (
+                            <span className="px-2 py-0.5 rounded-md bg-blue-500/15 border border-blue-400/40 text-blue-300 text-[11px] font-mono font-semibold">
+                              DEF +{accumulatedBlessingStats.defPct}%
+                            </span>
+                          )}
+                          {accumulatedBlessingStats.critRatePct > 0 && (
+                            <span className="px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-400/40 text-yellow-300 text-[11px] font-mono font-semibold">
+                              CR +{accumulatedBlessingStats.critRatePct}%
+                            </span>
+                          )}
+                          {accumulatedBlessingStats.critDmgPct > 0 && (
+                            <span className="px-2 py-0.5 rounded-md bg-orange-500/15 border border-orange-400/40 text-orange-300 text-[11px] font-mono font-semibold">
+                              CDMG +{accumulatedBlessingStats.critDmgPct}%
+                            </span>
+                          )}
+                          {accumulatedBlessingStats.energyPct > 0 && (
+                            <span className="px-2 py-0.5 rounded-md bg-yellow-500/15 border border-yellow-400/40 text-yellow-300 text-[11px] font-mono font-semibold">
+                              Energy +{accumulatedBlessingStats.energyPct}%
+                            </span>
+                          )}
+                          {accumulatedBlessingStats.barrierPct > 0 && (
+                            <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[11px] font-mono font-semibold">
+                              Barrier +{accumulatedBlessingStats.barrierPct}%
+                            </span>
+                          )}
+                          {accumulatedBlessingStats.speedPct > 0 && (
+                            <span className="px-2 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 text-[11px] font-mono font-semibold">
+                              Speed +{accumulatedBlessingStats.speedPct}%
+                            </span>
+                          )}
+                          {accumulatedBlessingStats.passives.length > 0 && (
+                            <span className="px-2 py-0.5 rounded-md bg-purple-500/20 border border-purple-400/50 text-purple-200 text-[11px] font-mono font-semibold">
+                              ★ Passives ({accumulatedBlessingStats.passives.length})
+                            </span>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => setShowBlessingSummaryModal(true)}
+                            className="text-[11px] font-mono text-purple-300/80 hover:text-purple-200 underline decoration-purple-500/40 hover:decoration-purple-400 ml-1 transition-colors"
+                          >
+                            Details &rarr;
+                          </button>
                         </div>
                       )}
                     </div>
@@ -5240,22 +5449,20 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                 </div>
 
                 {/* Tactical Blessings Strip (Tower Mode) */}
-                {lobbyTab === "tower" && towerRunState.activeBlessings && towerRunState.activeBlessings.length > 0 && (
-                  <div className="relative z-10 mt-1 flex items-center space-x-1.5 bg-[#0a0f1d]/90 border border-purple-500/30 rounded-lg px-2 py-0.5 backdrop-blur-md shadow-lg max-w-fit sm:ml-20">
+                {lobbyTab === "tower" && accumulatedBlessingStats.totalActiveCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowBlessingSummaryModal(true)}
+                    className="relative z-10 mt-1 flex items-center space-x-1.5 bg-[#0a0f1d]/90 hover:bg-[#0f172a] border border-purple-500/40 rounded-lg px-2.5 py-0.5 backdrop-blur-md shadow-lg max-w-fit sm:ml-20 transition-all hover:scale-102 cursor-pointer"
+                  >
                     <Sparkles className="w-3 h-3 text-purple-400 flex-shrink-0" />
-                    <span className="text-[9px] font-mono font-bold text-purple-200 hidden sm:inline">Blessings:</span>
-                    <div className="flex items-center space-x-1">
-                      {towerRunState.activeBlessings.map((bless: TowerBlessing, i: number) => (
-                        <span
-                          key={bless.id + i}
-                          className="px-1.5 py-0.2 rounded text-[8px] font-mono border bg-purple-500/20 border-purple-400/50 text-purple-300"
-                          title={bless.description}
-                        >
-                          {bless.name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+                    <span className="text-[9px] font-mono font-bold text-purple-200">
+                      Tactical Buffs ({accumulatedBlessingStats.totalActiveCount})
+                    </span>
+                    <span className="text-[9px] font-mono text-purple-400/80 underline decoration-purple-500/50">
+                      [View Stats]
+                    </span>
+                  </button>
                 )}
 
                 {/* 1 MORE! Overlay Banner */}
@@ -5816,22 +6023,17 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                               <img src={pRes.spriteUrl} alt={pRes.name} className="w-full h-full object-cover" />
                             </div>
 
-                            {/* Circular Ultimate Burst Button (Honkai: Star Rail Style) */}
+                            {/* Ultimate Energy Indicator (Active Resonator Only casts on their turn) */}
                             {hasBurstReady ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleTriggerUltimateInterrupt(slotIdx);
-                                }}
-                                className="absolute -bottom-1 -right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-tr from-yellow-500 via-amber-400 to-yellow-300 text-black font-black flex items-center justify-center shadow-[0_0_15px_rgba(250,204,21,0.9)] border border-yellow-200 animate-pulse hover:scale-115 active:scale-95 transition-transform cursor-pointer z-30"
-                                title="Interrupt Timeline with Ultimate!"
+                              <div
+                                className="absolute -bottom-1 -right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-tr from-yellow-500 via-amber-400 to-yellow-300 text-black font-black flex items-center justify-center shadow-[0_0_15px_rgba(250,204,21,0.9)] border border-yellow-200 animate-pulse z-30 pointer-events-none"
+                                title="Liberation Ready (Available on Turn)"
                               >
                                 <Zap className="w-3.5 h-3.5 fill-black" />
-                              </button>
+                              </div>
                             ) : (
                               <div
-                                className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-black/80 border border-cyan-400/40 flex items-center justify-center text-[7px] font-mono text-cyan-300"
+                                className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-black/80 border border-cyan-400/40 flex items-center justify-center text-[7px] font-mono text-cyan-300 pointer-events-none"
                                 title={`Energy: ${pRes.energy}%`}
                               >
                                 {pRes.energy}%
@@ -6042,6 +6244,16 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                               </div>
                             )}
 
+                            {/* Frosted Cooldown Overlay */}
+                            {onCooldown && (
+                              <div className="absolute inset-0 bg-black/85 backdrop-blur-[2px] rounded-xl flex items-center justify-center z-20 pointer-events-none border border-rose-500/30 shadow-lg">
+                                <span className="px-2 py-0.5 rounded font-mono text-[9px] sm:text-[10px] font-black uppercase tracking-wider flex items-center space-x-1 shadow-md bg-rose-500/25 text-rose-300 border border-rose-400/50">
+                                  <Clock className="w-3 h-3 text-rose-400" />
+                                  <span>COOLDOWN ({moveCd}T)</span>
+                                </span>
+                              </div>
+                            )}
+
                             <div className="flex items-center justify-between w-full">
                               <span className="text-xs font-bold text-white truncate max-w-[90px] sm:max-w-[120px]">
                                 {move.name}
@@ -6170,7 +6382,7 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
 
                     <button
                       type="button"
-                      disabled={isBusy}
+                      disabled={Boolean(stageEndBanner || liberationCutIn)}
                       onClick={() => setShowExitConfirm(true)}
                       className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-rose-500/20 border border-white/10 hover:border-rose-500/40 text-gray-400 hover:text-rose-300 text-xs font-mono font-bold uppercase transition-all cursor-pointer"
                       title="Forfeit Match"
@@ -6243,22 +6455,92 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="absolute inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4"
+                    className="absolute inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4"
                   >
-                    <div className="w-full max-w-md bg-[#0d1322] border border-cyan-500/40 rounded-2xl p-4 shadow-2xl space-y-3">
-                      <div className="flex items-center space-x-2 border-b border-white/10 pb-2">
-                        <AlertTriangle className="w-5 h-5 text-amber-400" />
-                        <div>
-                          <h4 className="text-sm font-bold text-white font-display">
-                            Deploy Reinforcements!
-                          </h4>
-                          <p className="text-[10px] text-gray-400 font-mono">
-                            Frontline Slot {faintedSlotIndex + 1} was downed. Choose a living reserve:
-                          </p>
+                    <div className="w-full max-w-lg bg-[#0a0f1d] border border-rose-500/50 rounded-2xl p-4 sm:p-5 shadow-[0_0_50px_rgba(244,63,94,0.35)] space-y-3.5">
+                      {/* Casualty Header */}
+                      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                        <div className="flex items-center space-x-2.5">
+                          <div className="p-2 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                            <Skull className="w-5 h-5 animate-pulse" />
+                          </div>
+                          <div>
+                            <h4 className="text-sm sm:text-base font-bold text-white font-display uppercase tracking-wider flex items-center space-x-2">
+                              <span>Casualty In Slot #{faintedSlotIndex + 1}</span>
+                              <span className="px-1.5 py-0.2 rounded bg-rose-500/30 text-rose-300 text-[10px] font-mono border border-rose-400/40">
+                                DOWNED
+                              </span>
+                            </h4>
+                            <p className="text-[11px] text-gray-400 font-mono">
+                              Deploy a living bench reserve to reinforce Frontline Slot {faintedSlotIndex + 1}.
+                            </p>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                      {/* Fallen Resonator Showcase Card */}
+                      {(() => {
+                        const faintedTeamIdx = playerTrainer.activeIndices?.[faintedSlotIndex];
+                        const faintedRes = faintedTeamIdx !== undefined ? playerTrainer.team[faintedTeamIdx] : undefined;
+                        if (!faintedRes) return null;
+                        const elemColor = ELEMENT_COLORS[faintedRes.element] || {
+                          bg: "bg-purple-500/20",
+                          text: "text-purple-300",
+                          border: "border-purple-500/40",
+                        };
+
+                        return (
+                          <div className="p-2.5 rounded-xl bg-rose-950/20 border border-rose-500/30 flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-black/60 border border-rose-500/50 shrink-0">
+                                <img
+                                  src={faintedRes.portraitUrl || faintedRes.spriteUrl}
+                                  alt={faintedRes.name}
+                                  className="w-full h-full object-cover filter grayscale contrast-125"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = faintedRes.spriteUrl;
+                                  }}
+                                />
+                                <div className="absolute inset-0 bg-red-950/70 flex items-center justify-center">
+                                  <span className="text-[8px] font-mono font-bold text-rose-300 tracking-wider">
+                                    FALLEN
+                                  </span>
+                                </div>
+                              </div>
+                              <div>
+                                <div className="flex items-center space-x-1.5">
+                                  <span
+                                    className={`text-[8px] font-mono font-bold px-1 py-0.2 rounded border uppercase ${elemColor.bg} ${elemColor.text} ${elemColor.border}`}
+                                  >
+                                    {faintedRes.element}
+                                  </span>
+                                  <span className="text-xs font-bold text-white font-display">
+                                    {faintedRes.name}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-gray-400">
+                                    Lv.{faintedRes.level}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-rose-400 font-mono mt-0.5 block">
+                                  Knocked down in Frontline Slot #{faintedSlotIndex + 1}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-xs font-mono font-bold text-rose-400/80 bg-rose-500/10 px-2 py-1 rounded border border-rose-500/20">
+                              0/{faintedRes.maxHp} HP
+                            </span>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Section Title */}
+                      <div className="flex items-center space-x-1 text-[11px] font-mono text-cyan-300 uppercase font-bold tracking-wider pt-1">
+                        <ArrowRightLeft className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Available Bench Reinforcements:</span>
+                      </div>
+
+                      {/* Living Bench Reserves List */}
+                      <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
                         {playerTrainer.team
                           .map((r, i) => ({ r, i }))
                           .filter(({ i, r }) => !playerTrainer.activeIndices?.includes(i) && !r.isFainted && r.hp > 0)
@@ -6267,17 +6549,23 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                               key={`faint_sub_${i}`}
                               type="button"
                               onClick={() => handleSelectBenchSubstitute(i)}
-                              className="w-full p-2 rounded-xl border border-cyan-500/30 hover:border-cyan-400 bg-cyan-950/30 hover:bg-cyan-900/40 text-left flex items-center justify-between transition-all cursor-pointer group"
+                              className="w-full p-2.5 rounded-xl border border-cyan-500/30 hover:border-cyan-400 bg-cyan-950/30 hover:bg-cyan-900/40 text-left flex items-center justify-between transition-all cursor-pointer group active:scale-[0.99]"
                             >
                               <div className="flex items-center space-x-2.5">
-                                <img
-                                  src={r.spriteUrl}
-                                  alt={r.name}
-                                  className="w-10 h-10 object-contain group-hover:scale-105 transition-transform"
-                                  style={{ imageRendering: "pixelated" }}
-                                />
+                                <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-black/60 border border-cyan-500/30 shrink-0">
+                                  <img
+                                    src={r.portraitUrl || r.spriteUrl}
+                                    alt={r.name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).src = r.spriteUrl;
+                                    }}
+                                  />
+                                </div>
                                 <div>
-                                  <p className="text-xs font-bold text-white">{r.name}</p>
+                                  <p className="text-xs font-bold text-white group-hover:text-cyan-200 transition-colors">
+                                    {r.name}
+                                  </p>
                                   <div className="flex items-center space-x-1.5 text-[9px] font-mono text-gray-400">
                                     <span
                                       className={`px-1 py-0.2 rounded uppercase border ${
@@ -6294,7 +6582,7 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                                 </div>
                               </div>
 
-                              <div className="text-right">
+                              <div className="text-right flex flex-col items-end">
                                 <span className="text-xs font-mono font-bold text-emerald-400">
                                   {r.hp}/{r.maxHp} HP
                                 </span>
@@ -6304,6 +6592,9 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                                     style={{ width: `${Math.round((r.hp / r.maxHp) * 100)}%` }}
                                   />
                                 </div>
+                                <span className="text-[9px] font-mono text-cyan-400 uppercase font-bold mt-1 group-hover:underline">
+                                  Deploy ➔
+                                </span>
                               </div>
                             </button>
                           ))}
@@ -6450,6 +6741,14 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
               <div className="flex space-x-3 pt-4">
                 <button
                   onClick={() => {
+                    realtimeManagerRef.current?.leaveRoom();
+                    realtimeManagerRef.current = null;
+                    setIsRealtimeMatch(false);
+                    setOpponentTrainer(null);
+                    opponentTrainerRef.current = null;
+                    setIsMyReady(false);
+                    setIsOpponentReady(false);
+                    setBattleWinner(null);
                     setScreen("lobby");
                     setCurrentGymChallenge(null);
                     setCurrentTowerFloor(null);
@@ -7269,20 +7568,47 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                   </div>
 
                   {/* Active Blessings (if any) */}
-                  {towerRunState.activeBlessings.length > 0 && (
-                    <div className="space-y-1.5">
-                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-cyan-400">
-                        Active Gauntlet Blessings ({towerRunState.activeBlessings.length}):
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {towerRunState.activeBlessings.map((b, i) => (
-                          <div
-                            key={b.id + i}
-                            className="px-2 py-0.5 rounded-lg border border-cyan-400/30 bg-cyan-950/20 text-cyan-300 text-[10px] font-mono flex items-center space-x-1"
-                          >
-                            <span className="font-bold">{b.name}</span>
-                          </div>
-                        ))}
+                  {accumulatedBlessingStats.totalActiveCount > 0 && (
+                    <div className="space-y-1.5 p-2.5 rounded-xl bg-[#090d18] border border-cyan-500/25">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-mono font-bold uppercase tracking-wider text-cyan-400 flex items-center space-x-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>Active Blessings ({accumulatedBlessingStats.totalActiveCount})</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowBlessingSummaryModal(true)}
+                          className="text-[11px] font-mono font-bold text-cyan-300 hover:text-cyan-200 underline decoration-cyan-500/40"
+                        >
+                          View Stacked Bonuses &rarr;
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        {accumulatedBlessingStats.atkPct > 0 && (
+                          <span className="px-2 py-0.5 rounded-md bg-rose-500/15 border border-rose-400/40 text-rose-300 text-[10px] font-mono font-semibold">
+                            ATK +{accumulatedBlessingStats.atkPct}%
+                          </span>
+                        )}
+                        {accumulatedBlessingStats.defPct > 0 && (
+                          <span className="px-2 py-0.5 rounded-md bg-blue-500/15 border border-blue-400/40 text-blue-300 text-[10px] font-mono font-semibold">
+                            DEF +{accumulatedBlessingStats.defPct}%
+                          </span>
+                        )}
+                        {accumulatedBlessingStats.critRatePct > 0 && (
+                          <span className="px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-400/40 text-yellow-300 text-[10px] font-mono font-semibold">
+                            CR +{accumulatedBlessingStats.critRatePct}%
+                          </span>
+                        )}
+                        {accumulatedBlessingStats.barrierPct > 0 && (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[10px] font-mono font-semibold">
+                            Barrier +{accumulatedBlessingStats.barrierPct}%
+                          </span>
+                        )}
+                        {accumulatedBlessingStats.speedPct > 0 && (
+                          <span className="px-2 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 text-[10px] font-mono font-semibold">
+                            Speed +{accumulatedBlessingStats.speedPct}%
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}
@@ -7659,6 +7985,184 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
           )}
         </AnimatePresence>
 
+        {/* Tactical Blessings Summary Modal */}
+        <AnimatePresence>
+          {showBlessingSummaryModal && (
+            <div
+              className="fixed inset-0 z-[110] flex flex-col items-center justify-center p-3 sm:p-5 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-black/85 backdrop-blur-md select-none overflow-y-auto"
+              onClick={() => setShowBlessingSummaryModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-lg bg-[#0c1220] border border-purple-500/30 rounded-2xl shadow-2xl flex flex-col overflow-hidden my-auto"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-purple-500/20 bg-[#0a0f1d]">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-400/40 flex items-center justify-center text-purple-300">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm sm:text-base font-bold text-white font-mono uppercase tracking-wider">
+                        Accumulated Tactical Blessings
+                      </h3>
+                      <p className="text-[11px] font-mono text-gray-400">
+                        Permanent stacked combat multipliers active across all tower floors
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowBlessingSummaryModal(false)}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-4 sm:p-5 space-y-4 max-h-[70dvh] overflow-y-auto">
+                  {accumulatedBlessingStats.totalActiveCount === 0 ? (
+                    <div className="text-center py-8 space-y-2">
+                      <Sparkles className="w-8 h-8 text-gray-600 mx-auto" />
+                      <p className="text-xs font-mono text-gray-400">
+                        No permanent blessings drafted yet.
+                      </p>
+                      <p className="text-[11px] font-mono text-gray-600">
+                        Clear floors to draft damage, crit, barrier, and energy bonuses!
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Stat Breakdown Grid */}
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {/* ATK */}
+                        <div className="p-3 rounded-xl bg-[#090d18] border border-rose-500/30 flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Swords className="w-4 h-4 text-rose-400" />
+                            <span className="text-xs font-mono text-gray-300 font-bold">ATK / DMG</span>
+                          </div>
+                          <span className="text-sm font-mono font-black text-rose-300">
+                            +{accumulatedBlessingStats.atkPct.toFixed(1)}%
+                          </span>
+                        </div>
+
+                        {/* DEF */}
+                        <div className="p-3 rounded-xl bg-[#090d18] border border-blue-500/30 flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Shield className="w-4 h-4 text-blue-400" />
+                            <span className="text-xs font-mono text-gray-300 font-bold">DEF / Mitigation</span>
+                          </div>
+                          <span className="text-sm font-mono font-black text-blue-300">
+                            +{accumulatedBlessingStats.defPct.toFixed(1)}%
+                          </span>
+                        </div>
+
+                        {/* Crit Rate */}
+                        <div className="p-3 rounded-xl bg-[#090d18] border border-amber-500/30 flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Target className="w-4 h-4 text-amber-400" />
+                            <span className="text-xs font-mono text-gray-300 font-bold">Crit Rate (CR)</span>
+                          </div>
+                          <span className="text-sm font-mono font-black text-yellow-300">
+                            +{accumulatedBlessingStats.critRatePct.toFixed(1)}%
+                          </span>
+                        </div>
+
+                        {/* Crit DMG */}
+                        <div className="p-3 rounded-xl bg-[#090d18] border border-orange-500/30 flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Flame className="w-4 h-4 text-orange-400" />
+                            <span className="text-xs font-mono text-gray-300 font-bold">Crit DMG (CDMG)</span>
+                          </div>
+                          <span className="text-sm font-mono font-black text-orange-300">
+                            +{accumulatedBlessingStats.critDmgPct > 0 ? accumulatedBlessingStats.critDmgPct.toFixed(1) : "0.0"}%
+                          </span>
+                        </div>
+
+                        {/* Resonance Energy */}
+                        <div className="p-3 rounded-xl bg-[#090d18] border border-yellow-500/30 flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Zap className="w-4 h-4 text-yellow-400" />
+                            <span className="text-xs font-mono text-gray-300 font-bold">Resonance Energy</span>
+                          </div>
+                          <span className="text-sm font-mono font-black text-yellow-300">
+                            +{accumulatedBlessingStats.energyPct.toFixed(1)}%
+                          </span>
+                        </div>
+
+                        {/* Barrier */}
+                        <div className="p-3 rounded-xl bg-[#090d18] border border-emerald-500/30 flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Shield className="w-4 h-4 text-emerald-400" />
+                            <span className="text-xs font-mono text-gray-300 font-bold">Start Barrier</span>
+                          </div>
+                          <span className="text-sm font-mono font-black text-emerald-300">
+                            +{accumulatedBlessingStats.barrierPct.toFixed(1)}% Max HP
+                          </span>
+                        </div>
+
+                        {/* Speed */}
+                        <div className="p-3 rounded-xl bg-[#090d18] border border-cyan-500/30 flex items-center justify-between col-span-2">
+                          <div className="flex items-center space-x-2">
+                            <Activity className="w-4 h-4 text-cyan-400" />
+                            <span className="text-xs font-mono text-gray-300 font-bold">Movement / Action Speed</span>
+                          </div>
+                          <span className="text-sm font-mono font-black text-cyan-300">
+                            +{accumulatedBlessingStats.speedPct.toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Special Passives (if any) */}
+                      {accumulatedBlessingStats.passives.length > 0 && (
+                        <div className="space-y-2 pt-2 border-t border-white/10">
+                          <span className="text-xs font-mono font-bold uppercase tracking-wider text-purple-300">
+                            Unique Tactical Passives ({accumulatedBlessingStats.passives.length})
+                          </span>
+                          <div className="space-y-2">
+                            {accumulatedBlessingStats.passives.map((p) => (
+                              <div
+                                key={p.id}
+                                className="p-2.5 rounded-xl bg-purple-950/20 border border-purple-500/40 space-y-1"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-mono font-bold text-white">{p.name}</span>
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono uppercase bg-purple-500/30 text-purple-200">
+                                    {p.rarity}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] font-mono text-purple-200/70">{p.description}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="px-5 py-3 border-t border-purple-500/20 bg-[#0a0f1d] flex items-center justify-between">
+                  <span className="text-[11px] font-mono text-gray-400">
+                    Total: <strong className="text-purple-300">{accumulatedBlessingStats.totalActiveCount}</strong> buffs active
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowBlessingSummaryModal(false)}
+                    className="px-4 py-1.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/50 text-white text-xs font-mono font-bold transition-all"
+                  >
+                    Close
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
         {/* Party Picker Modal */}
         <AnimatePresence>
           {isPartyPickerOpen && (
@@ -7875,16 +8379,22 @@ export const PvPArenaModal: React.FC<PvPArenaModalProps> = ({
                     Keep Fighting
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       setShowExitConfirm(false);
                       if (isRealtimeMatch) {
-                        realtimeManagerRef.current?.sendAction({
-                          type: "forfeit",
-                          senderId: playerTrainer?.id || "",
-                        });
+                        try {
+                          await realtimeManagerRef.current?.sendAction({
+                            type: "forfeit",
+                            senderId: playerTrainer?.id || "",
+                          });
+                        } catch (e) {
+                          console.error("Forfeit broadcast error:", e);
+                        }
+                        await new Promise((r) => setTimeout(r, 200));
                         realtimeManagerRef.current?.leaveRoom();
+                        realtimeManagerRef.current = null;
                       }
-                      handleBattleEnd("opponent");
+                      handleBattleEnd("opponent", true);
                       closeAllSubModals();
                       clearPlayerSearch();
                     }}
