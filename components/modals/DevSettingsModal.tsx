@@ -14,22 +14,9 @@ import {
   Share,
   PlusSquare,
   HelpCircle,
-  Bell,
-  Trash2,
-  Send,
-  Plus,
-  Loader2,
-  AlertCircle,
+  Lock,
 } from "lucide-react";
 import { soundEngine } from "@/lib/audio/soundEngine";
-
-interface DiscordWebhookItem {
-  id: string;
-  url: string;
-  name: string;
-  is_active: boolean;
-  created_at: string;
-}
 
 interface DevSettingsModalProps {
   isOpen: boolean;
@@ -46,8 +33,10 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
   const [musicVol, setMusicVol] = useState<number>(() => Math.round(soundEngine.getMusicVolume() * 100));
   const [summonVol, setSummonVol] = useState<number>(() => Math.round(soundEngine.getSummonVolume() * 100));
 
-  // Fast Convene mode state
-  const [fastConvene, setFastConvene] = useState<boolean>(false);
+  // Convene Experience skipping states
+  const [skipMeteor, setSkipMeteor] = useState<boolean>(false);
+  const [skip3Star, setSkip3Star] = useState<boolean>(false);
+  const [skip4Star, setSkip4Star] = useState<boolean>(false);
 
   // Auto-Activate Sequences mode state (default: false / manual)
   const [autoActivate, setAutoActivate] = useState<boolean>(false);
@@ -57,20 +46,16 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showIOSGuide, setShowIOSGuide] = useState<boolean>(false);
 
-  // Discord Webhooks state
-  const [webhooks, setWebhooks] = useState<DiscordWebhookItem[]>([]);
-  const [isLoadingWebhooks, setIsLoadingWebhooks] = useState<boolean>(false);
-  const [testingWebhookId, setTestingWebhookId] = useState<string | null>(null);
-  const [deletingWebhookId, setDeletingWebhookId] = useState<string | null>(null);
-  const [isBroadcastingAll, setIsBroadcastingAll] = useState<boolean>(false);
-  const [webhookStatus, setWebhookStatus] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
-
   useEffect(() => {
     if (typeof window !== "undefined") {
-      setFastConvene(localStorage.getItem("wuwa_fast_convene") === "true");
+      setSkipMeteor(localStorage.getItem("wuwa_skip_meteor") === "true");
+
+      const storedSkip3 = localStorage.getItem("wuwa_skip_3star");
+      const storedSkip4 = localStorage.getItem("wuwa_skip_4star");
+      const legacyFast = localStorage.getItem("wuwa_fast_convene") === "true";
+
+      setSkip3Star(storedSkip3 !== null ? storedSkip3 === "true" : legacyFast);
+      setSkip4Star(storedSkip4 !== null ? storedSkip4 === "true" : legacyFast);
       setAutoActivate(localStorage.getItem("wuwa_auto_activate_sequences") === "true");
 
       const checkStandalone =
@@ -89,11 +74,30 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
     }
   }, [isOpen]);
 
-  const handleToggleFastConvene = (val: boolean) => {
+  const handleToggleSkipMeteor = (val: boolean) => {
     soundEngine.playClick();
-    setFastConvene(val);
+    setSkipMeteor(val);
     if (typeof window !== "undefined") {
-      localStorage.setItem("wuwa_fast_convene", String(val));
+      localStorage.setItem("wuwa_skip_meteor", String(val));
+      window.dispatchEvent(new Event("wuwa_convene_settings_changed"));
+    }
+  };
+
+  const handleToggleSkip3Star = (val: boolean) => {
+    soundEngine.playClick();
+    setSkip3Star(val);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("wuwa_skip_3star", String(val));
+      window.dispatchEvent(new Event("wuwa_convene_settings_changed"));
+    }
+  };
+
+  const handleToggleSkip4Star = (val: boolean) => {
+    soundEngine.playClick();
+    setSkip4Star(val);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("wuwa_skip_4star", String(val));
+      window.dispatchEvent(new Event("wuwa_convene_settings_changed"));
     }
   };
 
@@ -163,128 +167,6 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
     setSummonVol(val);
     soundEngine.setSummonVolume(val / 100);
   };
-
-  const fetchWebhooks = async () => {
-    setIsLoadingWebhooks(true);
-    try {
-      const res = await fetch("/api/webhooks");
-      const json = await res.json();
-      if (json.success && Array.isArray(json.webhooks)) {
-        setWebhooks(json.webhooks);
-      }
-    } catch (err) {
-      console.error("Failed to fetch webhooks:", err);
-    } finally {
-      setIsLoadingWebhooks(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      fetchWebhooks();
-    }
-  }, [isOpen]);
-
-
-  const handleToggleWebhook = async (id: string, currentActive: boolean) => {
-    soundEngine.playClick();
-    try {
-      const res = await fetch("/api/webhooks", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, is_active: !currentActive }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setWebhooks((prev) =>
-          prev.map((w) => (w.id === id ? { ...w, is_active: !currentActive } : w))
-        );
-      }
-    } catch (err) {
-      console.error("Failed to toggle webhook:", err);
-    }
-  };
-
-  const handleDeleteWebhook = async (id: string) => {
-    soundEngine.playClick();
-    setDeletingWebhookId(id);
-    try {
-      const res = await fetch(`/api/webhooks?id=${id}`, {
-        method: "DELETE",
-      });
-      const data = await res.json();
-      if (data.success) {
-        setWebhooks((prev) => prev.filter((w) => w.id !== id));
-      }
-    } catch (err) {
-      console.error("Failed to delete webhook:", err);
-    } finally {
-      setDeletingWebhookId(null);
-    }
-  };
-
-  const handleTestWebhook = async (id: string, url: string) => {
-    soundEngine.playClick();
-    setTestingWebhookId(id);
-    setWebhookStatus(null);
-    try {
-      const res = await fetch("/api/webhooks/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setWebhookStatus({
-          type: "success",
-          message: data.message || "Test banner notification sent to Discord!",
-        });
-      } else {
-        setWebhookStatus({
-          type: "error",
-          message: data.error || "Failed to send test notification.",
-        });
-      }
-    } catch (err: any) {
-      setWebhookStatus({
-        type: "error",
-        message: err.message || "Failed to send test notification.",
-      });
-    } finally {
-      setTestingWebhookId(null);
-    }
-  };
-
-  const handleBroadcastAll = async () => {
-    soundEngine.playClick();
-    setIsBroadcastingAll(true);
-    setWebhookStatus(null);
-    try {
-      const res = await fetch("/api/banner/broadcast?force=true", {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (data.success) {
-        setWebhookStatus({
-          type: "success",
-          message: data.message || `Broadcast completed (${data.dispatched} sent).`,
-        });
-      } else {
-        setWebhookStatus({
-          type: "error",
-          message: data.error || "Failed to broadcast to webhooks.",
-        });
-      }
-    } catch (err: any) {
-      setWebhookStatus({
-        type: "error",
-        message: err.message || "Failed to broadcast to webhooks.",
-      });
-    } finally {
-      setIsBroadcastingAll(false);
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -439,33 +321,97 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
                 </span>
               </div>
 
-              {/* Fast Convene Toggle */}
+              {/* Skip Summoning Animation (the meteor only) */}
               <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <div className="flex items-center space-x-2 text-white text-xs font-bold uppercase tracking-wide">
                       <Zap className="w-3.5 h-3.5 text-yellow-400" />
-                      <span>Skip Fodder Pulls</span>
+                      <span>Skip Summoning Animation (the meteor only)</span>
                     </div>
                     <p className="text-[11px] text-gray-400 font-mono">
-                      Instantly Skip 3★ and 4★ pulls
+                      Bypasses the initial meteor cutscene.
                     </p>
                   </div>
 
                   <button
                     type="button"
-                    onClick={() => handleToggleFastConvene(!fastConvene)}
+                    onClick={() => handleToggleSkipMeteor(!skipMeteor)}
                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      fastConvene ? "bg-yellow-400" : "bg-white/15"
+                      skipMeteor ? "bg-yellow-400" : "bg-white/15"
                     }`}
                   >
                     <span
                       className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-black shadow-lg ring-0 transition duration-200 ease-in-out ${
-                        fastConvene ? "translate-x-5" : "translate-x-0"
+                        skipMeteor ? "translate-x-5" : "translate-x-0"
                       }`}
                     />
                   </button>
                 </div>
+              </div>
+
+              {/* Skip 3 Stars */}
+              <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center space-x-2 text-white text-xs font-bold uppercase tracking-wide">
+                      <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Skip 3 Stars</span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 font-mono">
+                      Instantly bypass 3★ weapon reveal cards.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSkip3Star(!skip3Star)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      skip3Star ? "bg-yellow-400" : "bg-white/15"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-black shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        skip3Star ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* Skip 4 Stars */}
+              <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center space-x-2 text-white text-xs font-bold uppercase tracking-wide">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                      <span>Skip 4 Stars</span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 font-mono">
+                      Instantly bypass 4★ weapon reveals and character cutscenes.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSkip4Star(!skip4Star)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      skip4Star ? "bg-yellow-400" : "bg-white/15"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-black shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        skip4Star ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* 5-Star Unskippable Notice */}
+              <div className="p-2.5 rounded-lg bg-yellow-400/5 border border-yellow-400/20 text-[11px] font-mono text-yellow-300/90 flex items-center space-x-2">
+                <Lock className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
+                <span>5★ convene cutscenes and character animations are strictly unskippable.</span>
               </div>
 
               {/* Auto-Activate Sequences Toggle */}
@@ -499,181 +445,7 @@ export const DevSettingsModal: React.FC<DevSettingsModalProps> = ({
             </div>
 
             {/* ========================================================================= */}
-            {/* 3. DISCORD WEBHOOK NOTIFICATIONS */}
-            {/* ========================================================================= */}
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2 border-b border-white/10 pb-2">
-                <Bell className="w-4 h-4 text-yellow-400" />
-                <span className="text-xs font-mono font-bold uppercase tracking-widest text-yellow-400">
-                  Discord Webhooks
-                </span>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-3">
-                <div className="space-y-1">
-                  <div className="text-xs font-bold uppercase text-white tracking-wide">
-                    Banner Rotation Notifications
-                  </div>
-                  <p className="text-[11px] text-gray-400 font-mono">
-                    Broadcast current 5★ banner resonators & artwork to Discord every 30 minutes (:00, :30).
-                  </p>
-                </div>
-
-                {/* Status Message (success / error) */}
-                {webhookStatus && (
-                  <div
-                    className={`p-2.5 rounded-lg text-xs font-mono flex items-center space-x-2 ${
-                      webhookStatus.type === "success"
-                        ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
-                        : "bg-rose-500/10 border border-rose-500/30 text-rose-400"
-                    }`}
-                  >
-                    {webhookStatus.type === "success" ? (
-                      <Check className="w-3.5 h-3.5 flex-shrink-0" />
-                    ) : (
-                      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                    )}
-                    <span className="truncate">{webhookStatus.message}</span>
-                  </div>
-                )}
-
-                {/* Direct Database Management Notice */}
-                <div className="p-2.5 rounded-lg bg-black/40 border border-white/10 text-[11px] font-mono text-gray-400 flex items-center justify-between">
-                  <span>Webhooks are configured directly via Supabase SQL database (no duplicates).</span>
-                  <span className="text-[10px] text-yellow-400/90 bg-yellow-400/10 px-2 py-0.5 rounded border border-yellow-400/20 font-bold uppercase shrink-0 ml-2">
-                    Direct DB
-                  </span>
-                </div>
-
-                {/* Auto-Broadcast Schedule Banner & Manual Dispatch */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-yellow-400/5 border border-yellow-400/20 text-[11px] font-mono">
-                  <div className="flex items-center space-x-1.5 text-yellow-300">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>Auto-broadcasts every <strong>:00</strong> and <strong>:30</strong> (GMT+8)</span>
-                  </div>
-                  {webhooks.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleBroadcastAll}
-                      disabled={isBroadcastingAll}
-                      className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-yellow-400/20 hover:bg-yellow-400/30 text-yellow-300 border border-yellow-400/30 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50"
-                      title="Trigger banner broadcast to all active webhooks right now"
-                    >
-                      {isBroadcastingAll ? (
-                        <>
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                          <span>Sending...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Send className="w-3 h-3" />
-                          <span>Broadcast Now</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-                </div>
-
-                {/* List of Webhooks */}
-                <div className="space-y-2 pt-2 border-t border-white/5">
-                  {isLoadingWebhooks ? (
-                    <div className="flex items-center justify-center py-4 text-xs font-mono text-gray-500">
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      Loading webhooks...
-                    </div>
-                  ) : webhooks.length === 0 ? (
-                    <p className="text-[11px] text-gray-500 font-mono py-2 text-center">
-                      No webhooks configured. Add one above to receive banner notifications.
-                    </p>
-                  ) : (
-                    webhooks.map((hook) => {
-                      const isTesting = testingWebhookId === hook.id;
-                      const isDeleting = deletingWebhookId === hook.id;
-                      const maskedUrl =
-                        hook.url.length > 40
-                          ? `${hook.url.slice(0, 30)}...${hook.url.slice(-8)}`
-                          : hook.url;
-
-                      return (
-                        <div
-                          key={hook.id}
-                          className="flex items-center justify-between p-2.5 rounded-lg bg-black/30 border border-white/10 gap-2"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center space-x-2">
-                              <span className="text-xs font-bold text-white truncate">
-                                {hook.name}
-                              </span>
-                              <span
-                                className={`inline-block w-1.5 h-1.5 rounded-full ${
-                                  hook.is_active ? "bg-emerald-400" : "bg-gray-500"
-                                }`}
-                              />
-                            </div>
-                            <span className="text-[10px] text-gray-500 font-mono truncate block">
-                              {maskedUrl}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center space-x-1.5 flex-shrink-0">
-                            {/* Active Toggle */}
-                            <button
-                              type="button"
-                              onClick={() => handleToggleWebhook(hook.id, hook.is_active)}
-                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                hook.is_active ? "bg-yellow-400" : "bg-white/15"
-                              }`}
-                              title={hook.is_active ? "Disable Webhook" : "Enable Webhook"}
-                            >
-                              <span
-                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full ${
-                                  hook.is_active ? "bg-black" : "bg-white"
-                                } shadow ring-0 transition duration-200 ease-in-out ${
-                                  hook.is_active ? "translate-x-4" : "translate-x-0.5"
-                                }`}
-                              />
-                            </button>
-
-                            {/* Test Webhook Button */}
-                            <button
-                              type="button"
-                              onClick={() => handleTestWebhook(hook.id, hook.url)}
-                              disabled={isTesting}
-                              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/15 text-gray-300 hover:text-white border border-white/10 text-xs transition-colors cursor-pointer disabled:opacity-50"
-                              title="Send Test Notification"
-                            >
-                              {isTesting ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin text-yellow-400" />
-                              ) : (
-                                <Send className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-
-                            {/* Delete Webhook Button */}
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteWebhook(hook.id)}
-                              disabled={isDeleting}
-                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 hover:text-rose-300 border border-rose-500/20 text-xs transition-colors cursor-pointer disabled:opacity-50"
-                              title="Delete Webhook"
-                            >
-                              {isDeleting ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* ========================================================================= */}
-            {/* 4. APP & DEVICE (PWA ADD TO HOME SCREEN) */}
+            {/* 3. APP & DEVICE (PWA ADD TO HOME SCREEN) */}
             {/* ========================================================================= */}
             <div className="space-y-4">
               <div className="flex items-center space-x-2 border-b border-white/10 pb-2">

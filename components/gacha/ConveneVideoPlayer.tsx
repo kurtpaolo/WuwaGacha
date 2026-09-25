@@ -36,6 +36,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
   highestRarity,
   goldIndices,
   purpleIndices,
+  bannerType = "character_limited",
   onFinish,
 }) => {
   const isOnePull = results.length === 1;
@@ -54,42 +55,134 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     [availableCutscenes]
   );
 
-  // Initial phase determination:
-  // For 1-pulls: no summoning animation!
-  // - 3-star: straight to summary
-  // - 4-star: play cutscene if resonator, or reveal card if weapon
-  // - 5-star: play cutscene if resonator, or reveal card if weapon
-  // For 10-pulls: play initial meteor video
-  const [initialSetup] = useState(() => {
-    if (!isOnePull) {
-      return { phase: "video" as Phase, cutscene: null as string | null };
+  // User Convene Experience Settings
+  const [conveneSettings, setConveneSettings] = useState(() => {
+    if (typeof window === "undefined") {
+      return { skipMeteor: false, skip3Star: false, skip4Star: false };
     }
-    const single = results[0];
-    if (!single || single.rarity === 3) {
-      return { phase: "summary" as Phase, cutscene: null as string | null };
-    }
-    if (single.item.type === "resonator") {
-      const cutscene = getCutsceneUrlForResonator(single.item.id, getCachedCutscenesManifest());
-      if (cutscene) {
-        return {
-          phase: (single.rarity === 5 ? "cutscene_5star" : "cutscene_4star") as Phase,
-          cutscene,
-        };
+    const skipMeteor = localStorage.getItem("wuwa_skip_meteor") === "true";
+    const storedSkip3 = localStorage.getItem("wuwa_skip_3star");
+    const storedSkip4 = localStorage.getItem("wuwa_skip_4star");
+    const legacyFast = localStorage.getItem("wuwa_fast_convene") === "true";
+
+    return {
+      skipMeteor,
+      skip3Star: storedSkip3 !== null ? storedSkip3 === "true" : legacyFast,
+      skip4Star: storedSkip4 !== null ? storedSkip4 === "true" : legacyFast,
+    };
+  });
+
+  // Listen for settings change
+  useEffect(() => {
+    const handleSettingsChange = () => {
+      const skipMeteor = localStorage.getItem("wuwa_skip_meteor") === "true";
+      const storedSkip3 = localStorage.getItem("wuwa_skip_3star");
+      const storedSkip4 = localStorage.getItem("wuwa_skip_4star");
+      const legacyFast = localStorage.getItem("wuwa_fast_convene") === "true";
+      setConveneSettings({
+        skipMeteor,
+        skip3Star: storedSkip3 !== null ? storedSkip3 === "true" : legacyFast,
+        skip4Star: storedSkip4 !== null ? storedSkip4 === "true" : legacyFast,
+      });
+    };
+    window.addEventListener("wuwa_convene_settings_changed", handleSettingsChange);
+    return () => window.removeEventListener("wuwa_convene_settings_changed", handleSettingsChange);
+  }, []);
+
+  // Helper to find the next item index that is NOT skipped by user settings
+  // Note: 5-stars are NEVER skippable under any setting!
+  const getNextRevealIndex = useCallback(
+    (fromIdx: number): number => {
+      for (let i = fromIdx; i < results.length; i++) {
+        const item = results[i];
+        if (item.rarity === 5) return i; // 5-star is NEVER skippable
+        if (item.rarity === 3 && conveneSettings.skip3Star) continue;
+        if (item.rarity === 4 && conveneSettings.skip4Star) continue;
+        return i;
       }
+      return -1;
+    },
+    [results, conveneSettings.skip3Star, conveneSettings.skip4Star]
+  );
+
+  // Initial phase determination:
+  const [initialSetup] = useState(() => {
+    const skipMeteor =
+      typeof window !== "undefined" &&
+      localStorage.getItem("wuwa_skip_meteor") === "true";
+    const storedSkip3 = typeof window !== "undefined" ? localStorage.getItem("wuwa_skip_3star") : null;
+    const storedSkip4 = typeof window !== "undefined" ? localStorage.getItem("wuwa_skip_4star") : null;
+    const legacyFast = typeof window !== "undefined" && localStorage.getItem("wuwa_fast_convene") === "true";
+    const skip3 = storedSkip3 !== null ? storedSkip3 === "true" : legacyFast;
+    const skip4 = storedSkip4 !== null ? storedSkip4 === "true" : legacyFast;
+
+    if (isOnePull) {
+      const single = results[0];
+      if (!single || single.rarity === 3) {
+        return { phase: "summary" as Phase, cutscene: null as string | null, initialIndex: 0 };
+      }
+      if (single.rarity === 4 && skip4) {
+        return { phase: "summary" as Phase, cutscene: null as string | null, initialIndex: 0 };
+      }
+      if (single.item.type === "resonator") {
+        const cutscene = getCutsceneUrlForResonator(single.item.id, getCachedCutscenesManifest());
+        if (cutscene) {
+          return {
+            phase: (single.rarity === 5 ? "cutscene_5star" : "cutscene_4star") as Phase,
+            cutscene,
+            initialIndex: 0,
+          };
+        }
+      }
+      return { phase: "reveal_step" as Phase, cutscene: null as string | null, initialIndex: 0 };
     }
-    return { phase: "reveal_step" as Phase, cutscene: null as string | null };
+
+    // 10-pull: if skipMeteor is enabled, bypass initial meteor video immediately
+    if (skipMeteor) {
+      let firstIdx = -1;
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i].rarity;
+        if (r === 5) {
+          firstIdx = i;
+          break;
+        }
+        if (r === 3 && skip3) continue;
+        if (r === 4 && skip4) continue;
+        firstIdx = i;
+        break;
+      }
+
+      if (firstIdx === -1) {
+        return { phase: "summary" as Phase, cutscene: null as string | null, initialIndex: 0 };
+      }
+
+      const item = results[firstIdx];
+      if (item.item.type === "resonator") {
+        const cutscene = getCutsceneUrlForResonator(item.item.id, getCachedCutscenesManifest());
+        if (cutscene) {
+          return {
+            phase: (item.rarity === 5 ? "cutscene_5star" : "cutscene_4star") as Phase,
+            cutscene,
+            initialIndex: firstIdx,
+          };
+        }
+      }
+      return { phase: "reveal_step" as Phase, cutscene: null as string | null, initialIndex: firstIdx };
+    }
+
+    return { phase: "video" as Phase, cutscene: null as string | null, initialIndex: 0 };
   });
 
   const [phase, setPhase] = useState<Phase>(initialSetup.phase);
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
+  const [currentIndex, setCurrentIndex] = useState<number>(initialSetup.initialIndex);
 
   // Character Cutscene state
   const [cutsceneUrl, setCutsceneUrl] = useState<string | null>(initialSetup.cutscene);
   const [playedCutsceneIndices, setPlayedCutsceneIndices] = useState<Set<number>>(() => {
-    return initialSetup.cutscene ? new Set([0]) : new Set();
+    return initialSetup.cutscene ? new Set([initialSetup.initialIndex]) : new Set();
   });
 
-  const currentIndexRef = useRef<number>(0);
+  const currentIndexRef = useRef<number>(initialSetup.initialIndex);
   const isSkippingRef = useRef<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -302,7 +395,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     [results, getCutsceneUrlForItem, playedCutsceneIndices, playItemSound]
   );
 
-  // When character cutscene ends or is skipped:
+  // When character cutscene ends:
   // USER REQUIREMENT: No splashcard after the cutscene!
   // Immediately move to the next weapon / character pulled.
   // If it's another character with a cutscene, it will play their cutscene.
@@ -313,14 +406,10 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     const currIdx = currentIndexRef.current;
 
     if (isSkippingRef.current) {
-      // When fast-skipping, only unskippable 5-STAR cutscenes intercept
+      // When fast-skipping, only unskippable 5-STAR cutscenes/items intercept
       let nextFiveStarIdx = -1;
       for (let i = currIdx + 1; i < results.length; i++) {
-        if (
-          !playedCutsceneIndices.has(i) &&
-          results[i].rarity === 5 &&
-          getCutsceneUrlForItem(results[i])
-        ) {
+        if (!playedCutsceneIndices.has(i) && results[i].rarity === 5) {
           nextFiveStarIdx = i;
           break;
         }
@@ -335,13 +424,13 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
       return;
     }
 
-    const nextIdx = currIdx + 1;
-    if (nextIdx < results.length) {
+    const nextIdx = getNextRevealIndex(currIdx + 1);
+    if (nextIdx !== -1) {
       startRevealForIndex(nextIdx);
     } else {
       setPhase("summary");
     }
-  }, [results, playedCutsceneIndices, getCutsceneUrlForItem, startRevealForIndex]);
+  }, [results, playedCutsceneIndices, getNextRevealIndex, startRevealForIndex]);
 
   // Skip the current 4-star cutscene to the next pull
   const handleSkip4StarCutscene = useCallback(() => {
@@ -378,18 +467,14 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     [cutsceneUrl, handleCutsceneEnded]
   );
 
-  // Skip straight to summary (stopping ONLY if an unplayed 5-star cutscene is ahead)
+  // Skip straight to summary (stopping ONLY if an unplayed 5-star is ahead)
   const handleSkipToSummary = useCallback(() => {
     setCutsceneUrl(null);
     isSkippingRef.current = true;
     const currIdx = currentIndexRef.current;
     let nextFiveStarIdx = -1;
     for (let i = currIdx + 1; i < results.length; i++) {
-      if (
-        !playedCutsceneIndices.has(i) &&
-        results[i].rarity === 5 &&
-        getCutsceneUrlForItem(results[i])
-      ) {
+      if (!playedCutsceneIndices.has(i) && results[i].rarity === 5) {
         nextFiveStarIdx = i;
         break;
       }
@@ -401,42 +486,21 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
       isSkippingRef.current = false;
       setPhase("summary");
     }
-  }, [results, playedCutsceneIndices, getCutsceneUrlForItem, startRevealForIndex]);
+  }, [results, playedCutsceneIndices, startRevealForIndex]);
 
-  // Fast Convene / Skip check: jumps directly to first 5-star cutscene if present, otherwise summary
-  const advanceWithFastConveneOrFirst = useCallback(() => {
-    const isFastConvene =
-      typeof window !== "undefined" &&
-      localStorage.getItem("wuwa_fast_convene") === "true";
-
-    if (isFastConvene && !isOnePull) {
-      let firstFiveStarIdx = -1;
-      for (let i = 0; i < results.length; i++) {
-        if (
-          !playedCutsceneIndices.has(i) &&
-          results[i].rarity === 5 &&
-          getCutsceneUrlForItem(results[i])
-        ) {
-          firstFiveStarIdx = i;
-          break;
-        }
-      }
-
-      if (firstFiveStarIdx !== -1) {
-        isSkippingRef.current = true;
-        startRevealForIndex(firstFiveStarIdx);
-      } else {
-        setPhase("summary");
-      }
-      return;
+  // Fast Convene / Meteor advance helper
+  const advanceAfterMeteor = useCallback(() => {
+    const firstIdx = getNextRevealIndex(0);
+    if (firstIdx !== -1) {
+      startRevealForIndex(firstIdx);
+    } else {
+      setPhase("summary");
     }
-
-    startRevealForIndex(0);
-  }, [isOnePull, results, playedCutsceneIndices, getCutsceneUrlForItem, startRevealForIndex]);
+  }, [getNextRevealIndex, startRevealForIndex]);
 
   // Initial meteor video ended
   const handleInitialVideoEnded = () => {
-    advanceWithFastConveneOrFirst();
+    advanceAfterMeteor();
   };
 
   // Fallback to local meteor video if CDN load fails
@@ -450,35 +514,13 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
         return;
       }
     }
-    advanceWithFastConveneOrFirst();
-  }, [meteorVideoUrl, highestRarity, advanceWithFastConveneOrFirst]);
+    advanceAfterMeteor();
+  }, [meteorVideoUrl, highestRarity, advanceAfterMeteor]);
 
   // Skip logic
   const handleSkip = useCallback(() => {
     if (phase === "video") {
-      // Both Gacha Gold (5-star) and Gacha Purple (4-star) summon animations are strictly unskippable
-      if (highestRarity >= 4) {
-        return;
-      }
-
-      let firstFiveStarIdx = -1;
-      for (let i = 0; i < results.length; i++) {
-        if (
-          !playedCutsceneIndices.has(i) &&
-          results[i].rarity === 5 &&
-          getCutsceneUrlForItem(results[i])
-        ) {
-          firstFiveStarIdx = i;
-          break;
-        }
-      }
-
-      if (firstFiveStarIdx !== -1) {
-        isSkippingRef.current = true;
-        startRevealForIndex(firstFiveStarIdx);
-      } else {
-        setPhase("summary");
-      }
+      advanceAfterMeteor();
       return;
     }
 
@@ -488,12 +530,17 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     }
 
     if (phase === "cutscene_4star") {
-      // Skippable 4-star cutscene: skip to summary (or next 5-star if present)
-      handleSkipToSummary();
+      // Skippable 4-star cutscene: advance past it to next item or summary
+      handleSkip4StarCutscene();
       return;
     }
 
     if (phase === "reveal_step") {
+      const current = results[currentIndexRef.current];
+      if (current && current.rarity === 5) {
+        // 5-star card cannot be skipped to summary
+        return;
+      }
       handleSkipToSummary();
       return;
     }
@@ -505,23 +552,17 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     }
   }, [
     phase,
-    highestRarity,
     results,
-    playedCutsceneIndices,
-    getCutsceneUrlForItem,
-    startRevealForIndex,
+    advanceAfterMeteor,
     handleSkipToSummary,
+    handleSkip4StarCutscene,
     onFinish,
   ]);
 
   // Step-through advance
   const handleAdvance = useCallback(() => {
     if (phase === "video") {
-      // Both Gacha Gold (5-star) and Gacha Purple (4-star) summon animations are strictly unskippable
-      if (highestRarity >= 4) {
-        return;
-      }
-      startRevealForIndex(0);
+      advanceAfterMeteor();
       return;
     }
 
@@ -538,8 +579,8 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
 
     if (phase === "reveal_step") {
       isSkippingRef.current = false;
-      const nextIdx = currentIndexRef.current + 1;
-      if (nextIdx < results.length) {
+      const nextIdx = getNextRevealIndex(currentIndexRef.current + 1);
+      if (nextIdx !== -1) {
         startRevealForIndex(nextIdx);
       } else {
         setPhase("summary");
@@ -552,13 +593,13 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
       onFinish();
       return;
     }
-  }, [phase, highestRarity, results.length, startRevealForIndex, handleSkip4StarCutscene, onFinish]);
+  }, [phase, getNextRevealIndex, startRevealForIndex, handleSkip4StarCutscene, advanceAfterMeteor, onFinish]);
 
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (phase === "cutscene_5star" || (phase === "video" && highestRarity >= 4)) {
-        // Completely ignore keyboard during strictly unskippable video phases (5-star cutscene, gold/purple summon animations)
+      if (phase === "cutscene_5star") {
+        // Completely ignore keyboard during strictly unskippable 5-star cutscene
         return;
       }
 
@@ -572,7 +613,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [phase, highestRarity, handleAdvance, handleSkip]);
+  }, [phase, handleAdvance, handleSkip]);
 
   const currentResult = results[currentIndex] || results[0];
   const cutsceneFocalX = useMemo(() => {
@@ -616,12 +657,8 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
       {/* ========================================================================= */}
       {phase === "video" && (
         <div
-          className="relative w-full h-full flex items-center justify-center bg-black"
-          onClick={(e) => {
-            if (highestRarity >= 4) {
-              e.stopPropagation();
-            }
-          }}
+          className="relative w-full h-full flex items-center justify-center bg-black cursor-pointer"
+          onClick={handleAdvance}
         >
           <video
             ref={videoRef}
@@ -638,19 +675,17 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
             }`}
           />
 
-          {/* Top-Right In-Game Skip Button (Hidden for strictly unskippable Gold and Purple summon animations) */}
-          {highestRarity < 4 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleSkip();
-              }}
-              className="absolute top-6 right-8 z-50 flex items-center space-x-2 px-4 py-2 rounded-full bg-[#0a0e17]/90 hover:bg-[#121826] border border-white/20 text-xs font-display font-black tracking-widest text-white uppercase transition-all hover:scale-105 shadow-[0_0_15px_rgba(0,0,0,0.8)]"
-            >
-              <span>Skip</span>
-              <FastForward className="w-4 h-4 text-yellow-400" />
-            </button>
-          )}
+          {/* Top-Right In-Game Skip Button for Meteor */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSkip();
+            }}
+            className="absolute top-6 right-8 z-50 flex items-center space-x-2 px-4 py-2 rounded-full bg-[#0a0e17]/90 hover:bg-[#121826] border border-white/20 text-xs font-display font-black tracking-widest text-white uppercase transition-all hover:scale-105 shadow-[0_0_15px_rgba(0,0,0,0.8)]"
+          >
+            <span>Skip</span>
+            <FastForward className="w-4 h-4 text-yellow-400" />
+          </button>
         </div>
       )}
 
@@ -861,16 +896,18 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
               <span className="text-yellow-400 font-bold">{currentIndex + 1}</span> / {results.length}
             </div>
 
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleSkip();
-              }}
-              className="flex items-center space-x-2 px-4 py-2 rounded-full bg-[#0a0e17]/90 hover:bg-[#121826] border border-white/20 text-xs font-display font-black tracking-widest text-white uppercase transition-all hover:scale-105 shadow-[0_0_15px_rgba(0,0,0,0.8)]"
-            >
-              <span>Skip to Summary</span>
-              <FastForward className="w-4 h-4 text-yellow-400" />
-            </button>
+            {currentResult.rarity !== 5 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSkip();
+                }}
+                className="flex items-center space-x-2 px-4 py-2 rounded-full bg-[#0a0e17]/90 hover:bg-[#121826] border border-white/20 text-xs font-display font-black tracking-widest text-white uppercase transition-all hover:scale-105 shadow-[0_0_15px_rgba(0,0,0,0.8)]"
+              >
+                <span>Skip to Summary</span>
+                <FastForward className="w-4 h-4 text-yellow-400" />
+              </button>
+            )}
           </div>
 
           {/* Center Card Presentation */}
@@ -1029,6 +1066,7 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
               {results.map((res, idx) => {
                 const isGold = res.rarity === 5;
                 const isPurple = res.rarity === 4;
+                const isLost5050 = isGold && (res.is5050Lost === true || (!res.isFeaturedWon && bannerType !== "standard"));
 
                 return (
                   <motion.div
@@ -1053,11 +1091,18 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
                         <div className="w-5 h-5" />
                       )}
 
-                      {res.isNew && (
-                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-300 text-[9px] font-mono font-black uppercase border border-emerald-400/40">
-                          NEW
-                        </span>
-                      )}
+                      <div className="flex items-center space-x-1">
+                        {isLost5050 && (
+                          <span className="px-1.5 py-0.5 rounded bg-rose-500/30 text-rose-300 text-[9px] font-mono font-black uppercase border border-rose-500/50 shadow-[0_0_8px_rgba(244,63,94,0.35)]">
+                            LOST
+                          </span>
+                        )}
+                        {res.isNew && (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-300 text-[9px] font-mono font-black uppercase border border-emerald-400/40">
+                            NEW
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Thumbnail Art */}
@@ -1092,6 +1137,16 @@ export const ConveneVideoPlayer: React.FC<ConveneVideoPlayerProps> = ({
                         <AstriteIcon className="w-3 h-3" />
                         <span className="text-[10px] font-mono font-black text-yellow-300">
                           +800 Astrites
+                        </span>
+                      </div>
+                    )}
+
+                    {/* LOST badge for lost 50/50 5-star */}
+                    {isLost5050 && (
+                      <div className="mt-1.5 px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center space-x-1 shadow-[0_0_10px_rgba(244,63,94,0.25)]">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+                        <span className="text-[10px] font-mono font-black text-rose-300 uppercase tracking-wider">
+                          LOST 50/50
                         </span>
                       </div>
                     )}

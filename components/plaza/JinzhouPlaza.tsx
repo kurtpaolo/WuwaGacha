@@ -58,6 +58,7 @@ import {
   Navigation,
   X,
   SlidersHorizontal,
+  Gauge,
   Settings,
   LogOut,
   Infinity as InfinityIcon,
@@ -302,36 +303,60 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
     });
   }, [currentLobbyId, onlineCount]);
 
-  // Zoom Controls: Default is 1.25x. Presets: 0.75x (-0.50), 1.00x (-0.25), 1.25x (default), 1.50x (+0.25), 1.75x (+0.50)
-  const ZOOM_PRESETS = [0.75, 1.0, 1.25, 1.5, 1.75];
-  const BASE_MAP_ZOOM = 0.25;
-  const [zoomMultiplier, setZoomMultiplier] = useState<number>(1.25);
-  const zoomMultiplierRef = useRef<number>(1.25);
+  // Camera POV is kept standard (fixed 1.25x scale: 0.25 * 1.25 = 0.3125)
+  const CAMERA_POV_ZOOM = 0.25 * 1.25;
 
-  const handleZoomIn = useCallback(() => {
+  // Player Movement Speed Controls: Presets: 0.5x, 1x, 1.5x, 2x
+  const SPEED_PRESETS = [0.5, 1, 1.5, 2] as const;
+  const [moveSpeed, setMoveSpeed] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("wuwa_plaza_speed");
+      if (saved) {
+        const val = parseFloat(saved);
+        if (SPEED_PRESETS.some((s) => Math.abs(s - val) < 0.01)) return val;
+      }
+    }
+    return 1;
+  });
+  const moveSpeedRef = useRef<number>(moveSpeed);
+
+  const handleCycleSpeed = useCallback(() => {
     soundEngine.playClick();
-    setZoomMultiplier((prev) => {
-      const idx = ZOOM_PRESETS.findIndex((z) => Math.abs(z - prev) < 0.01);
-      const next = idx >= 0 && idx < ZOOM_PRESETS.length - 1 ? ZOOM_PRESETS[idx + 1] : prev;
-      zoomMultiplierRef.current = next;
+    setMoveSpeed((prev) => {
+      const idx = SPEED_PRESETS.findIndex((s) => Math.abs(s - prev) < 0.01);
+      const next = idx >= 0 && idx < SPEED_PRESETS.length - 1 ? SPEED_PRESETS[idx + 1] : SPEED_PRESETS[0];
+      moveSpeedRef.current = next;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("wuwa_plaza_speed", String(next));
+      }
       return next;
     });
   }, []);
 
-  const handleZoomOut = useCallback(() => {
+  const handleSpeedDown = useCallback(() => {
     soundEngine.playClick();
-    setZoomMultiplier((prev) => {
-      const idx = ZOOM_PRESETS.findIndex((z) => Math.abs(z - prev) < 0.01);
-      const next = idx > 0 ? ZOOM_PRESETS[idx - 1] : prev;
-      zoomMultiplierRef.current = next;
+    setMoveSpeed((prev) => {
+      const idx = SPEED_PRESETS.findIndex((s) => Math.abs(s - prev) < 0.01);
+      const next = idx > 0 ? SPEED_PRESETS[idx - 1] : prev;
+      moveSpeedRef.current = next;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("wuwa_plaza_speed", String(next));
+      }
       return next;
     });
   }, []);
 
-  const handleResetZoom = useCallback(() => {
+  const handleSpeedUp = useCallback(() => {
     soundEngine.playClick();
-    setZoomMultiplier(1.25);
-    zoomMultiplierRef.current = 1.25;
+    setMoveSpeed((prev) => {
+      const idx = SPEED_PRESETS.findIndex((s) => Math.abs(s - prev) < 0.01);
+      const next = idx >= 0 && idx < SPEED_PRESETS.length - 1 ? SPEED_PRESETS[idx + 1] : prev;
+      moveSpeedRef.current = next;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("wuwa_plaza_speed", String(next));
+      }
+      return next;
+    });
   }, []);
 
   // Minimap NPC Waypoint Tracking
@@ -1117,8 +1142,8 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
         setLocalPlayer((prev) => ({ ...prev, x: safe.x, y: safe.y, targetX: safe.x, targetY: safe.y }));
       }
 
-      // Smooth continuous movement speed (14 tiles per second)
-      const MOVE_SPEED_TILES_PER_SEC = 20;
+      // Smooth continuous movement speed scaled by speed multiplier (0.5x, 1x, 1.5x, 2x)
+      const MOVE_SPEED_TILES_PER_SEC = 20 * moveSpeedRef.current;
       const speedX = (MOVE_SPEED_TILES_PER_SEC / BINAN_GRID_COLS) * 100; // ~5% per sec
       const speedY = (MOVE_SPEED_TILES_PER_SEC / BINAN_GRID_ROWS) * 100; // ~7% per sec
 
@@ -1411,7 +1436,7 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
       // 4. Update Camera Viewport Tracking (Player-Centered Zoom Tracking)
       if (mapWorldRef.current) {
         const { worldWidth: wW, worldHeight: wH, viewportWidth: vW, viewportHeight: vH } = worldSizeRef.current;
-        const z = BASE_MAP_ZOOM * zoomMultiplierRef.current;
+        const z = CAMERA_POV_ZOOM;
 
         // Centered on player with zoom!
         const playerPxX = (playerPosRef.current.x / 100) * wW;
@@ -1806,31 +1831,32 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
 
 
 
-            {/* Zoom In/Out Controls */}
+            {/* Player Movement Speed Controls: 0.5x, 1x, 1.5x, 2x */}
             <div className="flex items-center space-x-1 bg-black/75 backdrop-blur-md border border-white/20 rounded-xl p-1 shadow-[0_4px_16px_rgba(0,0,0,0.8)]">
               <button
                 type="button"
-                onClick={handleZoomOut}
-                disabled={zoomMultiplier <= ZOOM_PRESETS[0]}
+                onClick={handleSpeedDown}
+                disabled={moveSpeed <= SPEED_PRESETS[0]}
                 className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white/5 hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed text-white flex items-center justify-center transition-all cursor-pointer active:scale-95"
-                title="Zoom Out (-)"
+                title="Decrease Speed"
               >
                 <Minus className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
-                onClick={handleResetZoom}
-                className="px-2 py-0.5 text-[11px] font-mono font-bold text-yellow-300 hover:text-yellow-200 transition-colors cursor-pointer"
-                title="Click to reset to 1.25x"
+                onClick={handleCycleSpeed}
+                className="px-2 sm:px-2.5 py-0.5 text-xs font-mono font-bold text-yellow-300 hover:text-yellow-200 transition-all cursor-pointer flex items-center space-x-1.5 active:scale-95"
+                title="Movement Speed (Click to cycle: 0.5x, 1x, 1.5x, 2x)"
               >
-                {zoomMultiplier.toFixed(2)}x
+                <Gauge className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
+                <span>{moveSpeed}x</span>
               </button>
               <button
                 type="button"
-                onClick={handleZoomIn}
-                disabled={zoomMultiplier >= ZOOM_PRESETS[ZOOM_PRESETS.length - 1]}
+                onClick={handleSpeedUp}
+                disabled={moveSpeed >= SPEED_PRESETS[SPEED_PRESETS.length - 1]}
                 className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white/5 hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed text-white flex items-center justify-center transition-all cursor-pointer active:scale-95"
-                title="Zoom In (+)"
+                title="Increase Speed"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -1889,7 +1915,7 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
             const rect = mapWorldRef.current.getBoundingClientRect();
             const clickPxX = e.clientX - rect.left;
             const clickPxY = e.clientY - rect.top;
-            const z = BASE_MAP_ZOOM * zoomMultiplierRef.current;
+            const z = CAMERA_POV_ZOOM;
             const pctX = (clickPxX / (BINAN_WORLD_WIDTH * z)) * 100;
             const pctY = (clickPxY / (BINAN_WORLD_HEIGHT * z)) * 100;
 

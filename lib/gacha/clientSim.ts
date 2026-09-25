@@ -18,6 +18,7 @@ export interface ClientRollResultItem {
   isGuaranteed: boolean;
   isNew: boolean;
   isFeaturedWon?: boolean;
+  is5050Lost?: boolean;
 }
 
 export interface ClientConveneResponse {
@@ -344,6 +345,7 @@ export function executeClientConvene(
         isGuaranteed: isGuaranteedRoll,
         isNew,
         isFeaturedWon: pulledItem.id === currentChar.id,
+        is5050Lost: is5050Win === false,
       });
 
       // Add to history
