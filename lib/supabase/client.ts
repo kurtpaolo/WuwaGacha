@@ -1,10 +1,13 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  "https://nrtsoyjikofwkyrusjnz.supabase.co";
+
 const supabaseAnonKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-  "";
+  "sb_publishable_qOQmXz15br_ibZQmiDl5Ww_KUjwu1ji";
 
 export const isSupabaseConfigured = (): boolean => {
   return Boolean(
