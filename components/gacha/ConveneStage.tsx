@@ -165,6 +165,13 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
   const [isSandboxGuest, setIsSandboxGuest] = useState<boolean>(true);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
 
+  // Guard against Plaza view while in Sandbox mode
+  useEffect(() => {
+    if (isSandboxGuest && activeView === "plaza") {
+      setActiveView("convene");
+    }
+  }, [isSandboxGuest, activeView]);
+
   // Hourly Banner Rotation & Free Astrites Idle Accumulator (GMT+8)
   const [rotationTimerText, setRotationTimerText] = useState<string>(
     () => getTimeUntilNextRotation().formattedText
@@ -382,23 +389,53 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
     return activeHourlyCharacters;
   }, [isSandboxGuest, activeHourlyCharacters]);
 
-  const handleExitSandbox = useCallback(() => {
+  const handleExitSandbox = useCallback(async () => {
     soundEngine.playClick();
-    setIsSandboxGuest(false);
-    setClientSimContext(null, false);
-    toggleClientSandbox(false);
-    setUserState(null);
-    setPityMap({});
-    setWinRateStats(DEFAULT_WIN_RATE);
-    const activeRotation = getHourlyRotatedCharacters();
-    const defaultChar = activeRotation[0] || "shorekeeper";
-    setSelectedCharId(defaultChar);
-    setClientSelectedChar(defaultChar, null, false);
-    const data = getClientStateData(null, false);
+    if (currentUser) {
+      setIsSandboxGuest(false);
+      setClientSimContext(currentUser.id, false);
+      toggleClientSandbox(false);
+      const prof = await fetchUserProfile(
+        currentUser.id,
+        currentUser.user_metadata?.username || currentUser.email?.split("@")[0] || "Player"
+      );
+      setUserProfile(prof);
+      if (prof) {
+        applyCloudProfileToClientState(prof, currentUser.id);
+      }
+      fetchState();
+      fetchUserInventory(currentUser.id).then(setInventoryList).catch(() => {});
+      setToastMessage("Returned to your cloud account.");
+      setTimeout(() => setToastMessage(null), 3500);
+    } else {
+      setIsLoginModalOpen(true);
+    }
+  }, [currentUser, fetchState]);
+
+  const handleEnterSandbox = useCallback(() => {
+    soundEngine.playClick();
+    setIsSandboxGuest(true);
+    setClientSimContext(null, true);
+    toggleClientSandbox(true);
+    const data = getClientStateData(null, true);
     if (data.user) setUserState(data.user);
     if (data.pity) setPityMap(data.pity as any);
-    setWinRateStats(get5050Stats(null, false));
+    setWinRateStats(get5050Stats(null, true));
+    if (data.user?.selectedLimitedChar) {
+      setSelectedCharId(data.user.selectedLimitedChar);
+    }
+    setToastMessage("Entered Sandbox Mode! Unlimited Astrites & all banners unlocked.");
+    setTimeout(() => setToastMessage(null), 4000);
   }, []);
+
+  const handleResetSandbox = useCallback(() => {
+    soundEngine.playClick();
+    resetClientSimState(null, true);
+    setPityMap({});
+    fetchState();
+    setToastMessage("Sandbox history, pity, and stats have been reset!");
+    setTimeout(() => setToastMessage(null), 3000);
+  }, [fetchState]);
 
   // Live ticker for hourly rotation countdown & Free Astrite accumulator
   useEffect(() => {
@@ -500,6 +537,8 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
 
   const handleLoginSuccess = useCallback((user: SupabaseUser, profile: UserProfile | null, isNewAccount: boolean = false) => {
     setIsLoggingIn(true);
+    setIsSandboxGuest(false);
+    toggleClientSandbox(false);
     setCurrentUser(user);
     setClientSimContext(user.id, false);
     setUserProfile(profile);
@@ -607,6 +646,13 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
     setWinRateStats(DEFAULT_WIN_RATE);
     setInventoryList([]);
     setCurrentAvatarId("shorekeeper");
+    setIsSandboxGuest(true);
+    setClientSimContext(null, true);
+    toggleClientSandbox(true);
+    const data = getClientStateData(null, true);
+    if (data.user) setUserState(data.user);
+    if (data.pity) setPityMap(data.pity as any);
+    setWinRateStats(get5050Stats(null, true));
     setTimeout(() => {
       setIsLoggingOut(false);
     }, 600);
@@ -1083,7 +1129,7 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
         currentAvatarId={currentAvatarId}
         userState={userState}
         isSandboxGuest={isSandboxGuest}
-        isVisible={activeView === "plaza"}
+        isVisible={activeView === "plaza" && !isSandboxGuest}
         onNavigate={(view) => {
             if (view === "convene") {
               soundEngine.playClick();
@@ -1190,22 +1236,24 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
             you a gacha addict
           </h1>
 
-          {/* Return to Plaza Hub Button */}
-          <button
-            onClick={() => {
-              soundEngine.playClick();
-              if (onReturnToPlaza) {
-                onReturnToPlaza();
-              } else {
-                setActiveView("plaza");
-              }
-            }}
-            className="hidden md:flex landscape:flex h-[38px] sm:h-[40px] px-2.5 sm:px-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/40 text-amber-300 hover:text-white text-[11px] sm:text-xs font-mono font-bold tracking-wider items-center space-x-1.5 transition-all shadow-sm hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
-            title="Return to Jinzhou Plaza Hub"
-          >
-            <Compass className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-amber-300" />
-            <span className="hidden sm:inline">Plaza Hub</span>
-          </button>
+          {/* Return to Plaza Hub Button (Hidden in Sandbox) */}
+          {!isSandboxGuest && (
+            <button
+              onClick={() => {
+                soundEngine.playClick();
+                if (onReturnToPlaza) {
+                  onReturnToPlaza();
+                } else {
+                  setActiveView("plaza");
+                }
+              }}
+              className="hidden md:flex landscape:flex h-[38px] sm:h-[40px] px-2.5 sm:px-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/40 text-amber-300 hover:text-white text-[11px] sm:text-xs font-mono font-bold tracking-wider items-center space-x-1.5 transition-all shadow-sm hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
+              title="Return to Jinzhou Plaza Hub"
+            >
+              <Compass className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-amber-300" />
+              <span className="hidden sm:inline">Plaza Hub</span>
+            </button>
+          )}
 
           {/* Update Log Button */}
           <button
@@ -1304,16 +1352,18 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
             </button>
           )}
 
-          {/* PvP Arena Button */}
-          <button
-            onClick={() => {
-              handleLaunchGameMode("gym", "Combat Arena");
-            }}
-            className="hidden sm:flex h-[38px] sm:h-[40px] w-[38px] sm:w-[40px] items-center justify-center rounded-xl bg-rose-500/15 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 hover:text-white transition-all shadow-[0_0_12px_rgba(244,63,94,0.2)] hover:scale-105 active:scale-95 cursor-pointer"
-            title="PvP Battle Arena"
-          >
-            <Swords className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-rose-400" />
-          </button>
+          {/* PvP Arena Button (Hidden in Sandbox) */}
+          {!isSandboxGuest && (
+            <button
+              onClick={() => {
+                handleLaunchGameMode("gym", "Combat Arena");
+              }}
+              className="hidden sm:flex h-[38px] sm:h-[40px] w-[38px] sm:w-[40px] items-center justify-center rounded-xl bg-rose-500/15 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 hover:text-white transition-all shadow-[0_0_12px_rgba(244,63,94,0.2)] hover:scale-105 active:scale-95 cursor-pointer"
+              title="PvP Battle Arena"
+            >
+              <Swords className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-rose-400" />
+            </button>
+          )}
 
           {/* Sandbox Guest Mode Controls or User Account Dropdown */}
           {isSandboxGuest ? (
@@ -1322,6 +1372,15 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
                 <InfinityIcon className="w-4 h-4" />
                 <span className="hidden sm:inline">SANDBOX</span>
               </div>
+              <button
+                type="button"
+                onClick={handleExitSandbox}
+                className="flex items-center space-x-1.5 h-[38px] sm:h-[40px] px-2.5 sm:px-3 rounded-xl bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 hover:text-white text-[11px] sm:text-xs font-mono font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                title="Exit Sandbox Mode"
+              >
+                <LogOut className="w-4 h-4 text-rose-400" />
+                <span>Exit</span>
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -1892,17 +1951,19 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
             <span className="hidden sm:inline">Inventory</span>
           </button>
 
-          <button
-            onClick={() => {
-              soundEngine.playClick();
-              setIsGamesMenuOpen(true);
-            }}
-            className="h-[38px] sm:h-[40px] px-2.5 sm:px-3.5 rounded-xl bg-gradient-to-r from-purple-600/20 to-rose-500/20 hover:from-purple-600/30 hover:to-rose-500/30 border border-purple-400/40 text-[11px] sm:text-xs font-display font-bold uppercase tracking-wider text-purple-200 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(168,85,247,0.25)] whitespace-nowrap cursor-pointer flex items-center space-x-1.5"
-            title="Game Modes & Battle"
-          >
-            <Gamepad2 className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-purple-400" />
-            <span className="hidden sm:inline">Games</span>
-          </button>
+          {!isSandboxGuest && (
+            <button
+              onClick={() => {
+                soundEngine.playClick();
+                setIsGamesMenuOpen(true);
+              }}
+              className="h-[38px] sm:h-[40px] px-2.5 sm:px-3.5 rounded-xl bg-gradient-to-r from-purple-600/20 to-rose-500/20 hover:from-purple-600/30 hover:to-rose-500/30 border border-purple-400/40 text-[11px] sm:text-xs font-display font-bold uppercase tracking-wider text-purple-200 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(168,85,247,0.25)] whitespace-nowrap cursor-pointer flex items-center space-x-1.5"
+              title="Game Modes & Battle"
+            >
+              <Gamepad2 className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-purple-400" />
+              <span className="hidden sm:inline">Games</span>
+            </button>
+          )}
         </div>
 
         {/* Right: Exact Dual Pill-shaped Convene Buttons with Astrite */}
@@ -2008,6 +2069,10 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
       <DevSettingsModal
         isOpen={isDevOpen}
         onClose={() => setIsDevOpen(false)}
+        isSandbox={isSandboxGuest}
+        onExitSandbox={handleExitSandbox}
+        onResetSandbox={handleResetSandbox}
+        onEnterSandbox={handleEnterSandbox}
       />
 
       <InventoryModal
