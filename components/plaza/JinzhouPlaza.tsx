@@ -660,7 +660,8 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
           launchMinigameWithAgeGate("blackjack");
           break;
         case "minigame_dice":
-          launchMinigameWithAgeGate("dice");
+        case "minigame_roulette":
+          launchMinigameWithAgeGate("roulette");
           break;
         case "minigame_wheel":
           launchMinigameWithAgeGate("wheel");
@@ -2634,27 +2635,35 @@ export const JinzhouPlaza: React.FC<JinzhouPlazaProps> = ({
                       <input
                         type="number"
                         min="0"
-                        max={isSandboxGuest ? 999999 : (userState?.astrite ?? 0)}
+                        max={Math.min(250000, isSandboxGuest ? 250000 : (userState?.astrite ?? 0))}
                         value={customBetInput}
                         onChange={(e) => {
                           const val = e.target.value;
                           setCustomBetInput(val);
                           const parsed = parseInt(val, 10);
                           if (!isNaN(parsed) && parsed >= 0) {
-                            setSelectedBet(parsed);
+                            setSelectedBet(Math.min(parsed, 250000));
                           }
                         }}
-                        placeholder="Enter Astrite amount..."
+                        onBlur={() => {
+                          const parsed = parseInt(customBetInput, 10);
+                          if (!isNaN(parsed) && parsed > 250000) {
+                            setSelectedBet(250000);
+                            setCustomBetInput("250000");
+                          }
+                        }}
+                        placeholder="Enter Astrite amount (Max 250k)..."
                         className="w-full bg-transparent text-white text-xs font-mono outline-none"
                       />
                       <button
                         type="button"
                         onClick={() => {
-                          const max = isSandboxGuest ? 16000 : (userState?.astrite ?? 0);
+                          const max = Math.min(250000, isSandboxGuest ? 250000 : (userState?.astrite ?? 0));
                           setSelectedBet(max);
                           setCustomBetInput(String(max));
                         }}
                         className="px-2 py-0.5 rounded bg-yellow-400/20 text-yellow-300 text-[10px] font-bold hover:bg-yellow-400/30 cursor-pointer"
+                        title="Max Bet (up to 250,000 Astrites)"
                       >
                         MAX
                       </button>

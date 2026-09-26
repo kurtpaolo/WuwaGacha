@@ -10,6 +10,7 @@ import {
   RotateCcw,
   Trophy,
   Dices,
+  Disc,
   CircleDot,
   Ticket,
   Shield,
@@ -23,7 +24,7 @@ import {
 import { soundEngine } from "@/lib/audio/soundEngine";
 import { AstriteIcon } from "@/components/ui/GameIcons";
 
-export type MinigameId = "coinflip" | "slots" | "blackjack" | "dice" | "wheel" | "scratch";
+export type MinigameId = "coinflip" | "slots" | "blackjack" | "dice" | "roulette" | "wheel" | "scratch";
 
 interface PlazaMinigamesModalProps {
   isOpen: boolean;
@@ -76,8 +77,13 @@ export const MINIGAME_HOSTS: Record<
   },
   dice: {
     name: "Cantarella",
-    title: "Dice Ladder",
-    tag: "1-20 Ladder",
+    title: "European Roulette",
+    tag: "36x Roulette",
+  },
+  roulette: {
+    name: "Cantarella",
+    title: "European Roulette",
+    tag: "36x Roulette",
   },
   wheel: {
     name: "Phoebe",
@@ -87,10 +93,11 @@ export const MINIGAME_HOSTS: Record<
   scratch: {
     name: "Lupa",
     title: "Mystery Scratchcards",
-    tag: "5x5 Match 3",
+    tag: "5x5 4-Strike",
   },
 };
 
+export const MAX_BET_LIMIT = 250000; // 250,000 Astrites limit per bet on every minigame
 const BET_PRESETS = [100, 500, 1000];
 
 // ============================================================================
@@ -177,28 +184,51 @@ const BetSelector: React.FC<BetSelectorProps> = ({
   const [customText, setCustomText] = useState(() => (![100, 500, 1000].includes(bet) ? bet.toString() : ""));
 
   const handlePreset = (amt: number) => {
-    if (amt > astriteBalance) {
+    const capped = Math.min(amt, MAX_BET_LIMIT);
+    if (capped > astriteBalance) {
       soundEngine.playInsufficient();
-      onInsufficient?.(amt);
+      onInsufficient?.(capped);
       return;
     }
     soundEngine.playClick();
     setIsCustom(false);
-    setBet(amt);
+    setBet(capped);
   };
 
   const handleCustomInput = (val: string) => {
-    setCustomText(val);
-    const parsed = parseInt(val.replace(/\D/g, ""), 10);
+    const cleanDigits = val.replace(/\D/g, "");
+    setCustomText(cleanDigits);
+    const parsed = parseInt(cleanDigits, 10);
     if (!isNaN(parsed) && parsed > 0) {
-      setBet(Math.min(parsed, astriteBalance));
+      setBet(Math.min(parsed, astriteBalance, MAX_BET_LIMIT));
     }
   };
+
+  const handleCustomBlur = () => {
+    const parsed = parseInt(customText.replace(/\D/g, ""), 10);
+    if (!isNaN(parsed)) {
+      if (parsed > MAX_BET_LIMIT) {
+        const clamped = Math.min(MAX_BET_LIMIT, astriteBalance);
+        setCustomText(clamped.toString());
+        setBet(clamped);
+      } else if (parsed > astriteBalance) {
+        setCustomText(astriteBalance.toString());
+        setBet(astriteBalance);
+      }
+    }
+  };
+
+  const isExceedingCap = parseInt(customText.replace(/\D/g, ""), 10) > MAX_BET_LIMIT;
 
   return (
     <div className="space-y-2 w-full pt-1">
       <div className="flex items-center justify-between text-xs font-mono text-gray-400">
-        <span>Choose Bet:</span>
+        <span className="flex items-center space-x-1.5">
+          <span>Choose Bet:</span>
+          <span className="text-[9.5px] font-mono font-bold text-amber-300/80 px-1.5 py-0.5 rounded bg-amber-400/10 border border-amber-400/30">
+            MAX 250k
+          </span>
+        </span>
         <span className="font-bold text-white flex items-center space-x-1">
           <span>{bet.toLocaleString()} Astrites</span>
           <AstriteIcon className="w-3.5 h-3.5 inline ml-1" />
@@ -244,37 +274,47 @@ const BetSelector: React.FC<BetSelectorProps> = ({
       </div>
 
       {isCustom && (
-        <div className="flex items-center gap-2 pt-1 animate-fade-in">
-          <div className="relative flex-1">
-            <input
-              type="text"
+        <div className="space-y-1 pt-1 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                disabled={disabled}
+                value={customText}
+                placeholder="Enter bet amount (Max 250,000)..."
+                onChange={(e) => handleCustomInput(e.target.value)}
+                onBlur={handleCustomBlur}
+                className="w-full px-3 py-1.5 rounded-lg bg-black/60 border border-amber-400/60 text-white font-mono text-xs focus:outline-none focus:border-amber-400 shadow-inner"
+              />
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-gray-500">
+                ✦
+              </span>
+            </div>
+            <button
+              type="button"
               disabled={disabled}
-              value={customText}
-              placeholder="Enter bet amount..."
-              onChange={(e) => handleCustomInput(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-lg bg-black/60 border border-amber-400/60 text-white font-mono text-xs focus:outline-none focus:border-amber-400 shadow-inner"
-            />
-            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-gray-500">
-              ✦
-            </span>
+              onClick={() => {
+                if (astriteBalance <= 0) {
+                  soundEngine.playInsufficient();
+                  onInsufficient?.(100);
+                  return;
+                }
+                soundEngine.playClick();
+                const maxBet = Math.min(astriteBalance, MAX_BET_LIMIT);
+                setCustomText(maxBet.toString());
+                setBet(maxBet);
+              }}
+              className="px-3 py-1.5 rounded-lg border border-rose-400/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 font-mono text-xs font-bold transition-all cursor-pointer"
+              title="Max Bet (up to 250,000 Astrites)"
+            >
+              MAX
+            </button>
           </div>
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => {
-              if (astriteBalance <= 0) {
-                soundEngine.playInsufficient();
-                onInsufficient?.(100);
-                return;
-              }
-              soundEngine.playClick();
-              setCustomText(astriteBalance.toString());
-              setBet(astriteBalance);
-            }}
-            className="px-3 py-1.5 rounded-lg border border-rose-400/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 font-mono text-xs font-bold transition-all cursor-pointer"
-          >
-            MAX
-          </button>
+          {isExceedingCap && (
+            <div className="text-[10px] font-mono text-amber-400 text-left pl-1">
+              Bet limit is 250,000 ✦. Wager capped to max.
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -516,13 +556,13 @@ export const PlazaMinigamesModal = React.memo<PlazaMinigamesModalProps>(({
                 { id: "coinflip", label: "Brant", icon: Coins },
                 { id: "slots", label: "Carlotta", icon: Sparkles },
                 { id: "blackjack", label: "Yinlin", icon: Layers },
-                { id: "dice", label: "Cantarella", icon: Dices },
+                { id: "roulette", label: "Cantarella", icon: Disc },
                 { id: "wheel", label: "Phoebe", icon: CircleDot },
                 { id: "scratch", label: "Lupa", icon: Ticket },
               ] as const
             ).map((t) => {
               const Icon = t.icon;
-              const isSelected = activeGame === t.id;
+              const isSelected = activeGame === t.id || (t.id === "roulette" && activeGame === "dice");
               return (
                 <button
                   key={t.id}
@@ -556,8 +596,8 @@ export const PlazaMinigamesModal = React.memo<PlazaMinigamesModalProps>(({
           {activeGame === "blackjack" && (
             <BlackjackGame astriteBalance={astriteBalance} onUpdateAstrites={onUpdateAstrites} />
           )}
-          {activeGame === "dice" && (
-            <DiceLadderGame astriteBalance={astriteBalance} onUpdateAstrites={onUpdateAstrites} />
+          {(activeGame === "roulette" || activeGame === "dice") && (
+            <RouletteGame astriteBalance={astriteBalance} onUpdateAstrites={onUpdateAstrites} />
           )}
           {activeGame === "wheel" && (
             <WheelGame astriteBalance={astriteBalance} onUpdateAstrites={onUpdateAstrites} />
@@ -597,14 +637,15 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
   const handleStartFlip = () => {
     if (isFlipping) return;
 
-    if (bet <= 0 || bet > astriteBalance) {
+    const effectiveBet = Math.min(bet, MAX_BET_LIMIT);
+    if (effectiveBet <= 0 || effectiveBet > astriteBalance) {
       soundEngine.playInsufficient();
-      setInsufficientNeeded(bet);
+      setInsufficientNeeded(effectiveBet);
       return;
     }
 
     soundEngine.playClick();
-    onUpdateAstrites(-bet);
+    onUpdateAstrites(-effectiveBet);
     setIsFlipping(true);
     setOutcomeModal(null);
 
@@ -628,9 +669,10 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
     // 400ms suspense delay so user sees the landed coin before the popup appears
     setTimeout(() => {
       const won = pendingOutcome === side;
+      const effectiveBet = Math.min(bet, MAX_BET_LIMIT);
       if (won) {
         // True Double or Nothing (2.0x gross payout)
-        const payout = bet * 2;
+        const payout = effectiveBet * 2;
         onUpdateAstrites(payout);
         setStreak((s) => s + 1);
         soundEngine.playAstriteGain();
@@ -642,7 +684,7 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
           landedIcon: pendingOutcome === "heads" ? "🪙" : "🛡️",
           landedColor: pendingOutcome === "heads" ? "#facc15" : "#c084fc",
           betTitle: "Your Call",
-          betValue: `${side.toUpperCase()} (${bet.toLocaleString()} ✦)`,
+          betValue: `${side.toUpperCase()} (${effectiveBet.toLocaleString()} ✦)`,
           deltaAmount: payout,
           multiplier: "2.0x Payout",
         });
@@ -657,8 +699,8 @@ const CoinflipGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstri
           landedIcon: pendingOutcome === "heads" ? "🪙" : "🛡️",
           landedColor: pendingOutcome === "heads" ? "#facc15" : "#c084fc",
           betTitle: "Your Call",
-          betValue: `${side.toUpperCase()} (${bet.toLocaleString()} ✦)`,
-          deltaAmount: -bet,
+          betValue: `${side.toUpperCase()} (${effectiveBet.toLocaleString()} ✦)`,
+          deltaAmount: -effectiveBet,
         });
       }
     }, 400);
@@ -878,14 +920,15 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
   const handleSpin = () => {
     if (isSpinning) return;
 
-    if (bet <= 0 || bet > astriteBalance) {
+    const effectiveBet = Math.min(bet, MAX_BET_LIMIT);
+    if (effectiveBet <= 0 || effectiveBet > astriteBalance) {
       soundEngine.playInsufficient();
-      setInsufficientNeeded(bet);
+      setInsufficientNeeded(effectiveBet);
       return;
     }
 
     soundEngine.playClick();
-    onUpdateAstrites(-bet);
+    onUpdateAstrites(-effectiveBet);
     setIsSpinning(true);
     setOutcomeModal(null);
 
@@ -993,11 +1036,12 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
       // 450ms delay so player clearly inspects all 3 stopped reels before popup appears
       setTimeout(() => {
         // Payout Calculation: ONLY 3-of-a-kind pays!
+        const effectiveBet = Math.min(bet, MAX_BET_LIMIT);
         if (final1.id === final2.id && final2.id === final3.id) {
           const mult = final1.mult;
           if (final1.isRefund) {
             // Push / Refund: Get what you bet back!
-            onUpdateAstrites(bet);
+            onUpdateAstrites(effectiveBet);
             soundEngine.playAstriteGain();
             setOutcomeModal({
               type: "push",
@@ -1005,13 +1049,13 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
               landedTitle: "Result",
               landedValue: `${final1.symbol} ${final2.symbol} ${final3.symbol}`,
               betTitle: "Bet",
-              betValue: `${bet.toLocaleString()} ✦`,
+              betValue: `${effectiveBet.toLocaleString()} ✦`,
               deltaAmount: 0,
               multiplier: "1.0x Refund",
             });
           } else {
             // Bet winnings is strictly multiplier * bet!
-            const payout = bet * mult;
+            const payout = effectiveBet * mult;
             onUpdateAstrites(payout);
             soundEngine.playAstriteGain();
             setOutcomeModal({
@@ -1020,7 +1064,7 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
               landedTitle: "Result",
               landedValue: `${final1.symbol} ${final2.symbol} ${final3.symbol}`,
               betTitle: "Bet",
-              betValue: `${bet.toLocaleString()} ✦`,
+              betValue: `${effectiveBet.toLocaleString()} ✦`,
               deltaAmount: payout,
               multiplier: `${mult}x`,
             });
@@ -1034,8 +1078,8 @@ const SlotsGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
             landedTitle: "Result",
             landedValue: `${final1.symbol} ${final2.symbol} ${final3.symbol}`,
             betTitle: "Bet",
-            betValue: `${bet.toLocaleString()} ✦`,
-            deltaAmount: -bet,
+            betValue: `${effectiveBet.toLocaleString()} ✦`,
+            deltaAmount: -effectiveBet,
           });
         }
       }, 450);
@@ -1181,14 +1225,15 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
   const dealerScore = useMemo(() => calculateHandScore(dealerCards), [dealerCards]);
 
   const handleDeal = () => {
-    if (bet <= 0 || bet > astriteBalance) {
+    const effectiveBet = Math.min(bet, MAX_BET_LIMIT);
+    if (effectiveBet <= 0 || effectiveBet > astriteBalance) {
       soundEngine.playInsufficient();
-      setInsufficientNeeded(bet);
+      setInsufficientNeeded(effectiveBet);
       return;
     }
 
     soundEngine.playClick();
-    onUpdateAstrites(-bet);
+    onUpdateAstrites(-effectiveBet);
     setOutcomeModal(null);
 
     const freshDeck = createDeck();
@@ -1210,7 +1255,7 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
       setGameState("done");
       setTimeout(() => {
         if (dScore === 21) {
-          onUpdateAstrites(bet);
+          onUpdateAstrites(effectiveBet);
           setOutcomeModal({
             type: "push",
             title: "PUSH! BOTH HIT 21",
@@ -1221,7 +1266,7 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
             deltaAmount: 0,
           });
         } else {
-          const payout = Math.floor(bet * 2.5);
+          const payout = Math.floor(effectiveBet * 2.5);
           onUpdateAstrites(payout);
           soundEngine.playAstriteGain();
           setOutcomeModal({
@@ -1254,6 +1299,7 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
     if (score > 21) {
       setGameState("done");
       soundEngine.playMissWhoosh();
+      const effectiveBet = Math.min(bet, MAX_BET_LIMIT);
       setTimeout(() => {
         setOutcomeModal({
           type: "loss",
@@ -1262,8 +1308,8 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
           landedValue: `${score} (Bust)`,
           landedSub: newHand.map((c) => c.value + c.suit).join(" "),
           betTitle: "Wager Lost",
-          betValue: `${bet.toLocaleString()} Astrites`,
-          deltaAmount: -bet,
+          betValue: `${effectiveBet.toLocaleString()} Astrites`,
+          deltaAmount: -effectiveBet,
         });
       }, 450);
     }
@@ -1288,9 +1334,10 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
     setGameState("done");
 
     const pScore = calculateHandScore(playerCards);
+    const effectiveBet = Math.min(bet, MAX_BET_LIMIT);
     setTimeout(() => {
       if (dScore > 21) {
-        const payout = bet * 2;
+        const payout = effectiveBet * 2;
         onUpdateAstrites(payout);
         soundEngine.playAstriteGain();
         setOutcomeModal({
@@ -1306,7 +1353,7 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
           multiplier: "2.0x Return",
         });
       } else if (pScore > dScore) {
-        const payout = bet * 2;
+        const payout = effectiveBet * 2;
         onUpdateAstrites(payout);
         soundEngine.playAstriteGain();
         setOutcomeModal({
@@ -1332,10 +1379,10 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
           betTitle: "Your Score",
           betValue: `${pScore}`,
           betSub: playerCards.map((c) => c.value + c.suit).join(" "),
-          deltaAmount: -bet,
+          deltaAmount: -effectiveBet,
         });
       } else {
-        onUpdateAstrites(bet);
+        onUpdateAstrites(effectiveBet);
         setOutcomeModal({
           type: "push",
           title: "PUSH (TIE)",
@@ -1485,280 +1532,466 @@ const BlackjackGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstr
 };
 
 // ============================================================================
-// SUB-GAME 4: DICE LADDER (1 to 20) - Cantarella
-// Number 1-20, Dynamic Conditional Odds, Fair Cash Out, Tie Push
 // ============================================================================
-const LADDER_STEPS_20 = [0.5, 1.5, 2.4, 4.2, 8.5, 18.0, 40.0];
+// SUB-GAME 4: EUROPEAN ROULETTE (0 - 36) - Cantarella
+// 37 Pockets (Single 0), Red/Black/Even/Odd/High/Low (2.0x), Dozens (3.0x), Single (36.0x)
+// Strict 97.30% RTP (2.70% House Edge), Cryptographic RNG, Suspense Deceleration Wheel
+// ============================================================================
+const ROULETTE_NUMBERS_ORDER = [
+  0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
+];
 
-const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites }) => {
+const RED_NUMBERS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+
+function getRoulettePocketColor(num: number): "green" | "red" | "black" {
+  if (num === 0) return "green";
+  return RED_NUMBERS.has(num) ? "red" : "black";
+}
+
+const OUTSIDE_BETS = [
+  { id: "red", label: "RED", mult: 2, bg: "bg-rose-600/80 hover:bg-rose-500 border-rose-400/60 text-white" },
+  { id: "black", label: "BLACK", mult: 2, bg: "bg-zinc-800 hover:bg-zinc-700 border-zinc-500/60 text-white" },
+  { id: "even", label: "EVEN", mult: 2, bg: "bg-white/5 hover:bg-white/10 border-white/15 text-gray-200" },
+  { id: "odd", label: "ODD", mult: 2, bg: "bg-white/5 hover:bg-white/10 border-white/15 text-gray-200" },
+  { id: "low", label: "1 - 18", mult: 2, bg: "bg-white/5 hover:bg-white/10 border-white/15 text-gray-200" },
+  { id: "high", label: "19 - 36", mult: 2, bg: "bg-white/5 hover:bg-white/10 border-white/15 text-gray-200" },
+];
+
+const DOZEN_BETS = [
+  { id: "dozen1", label: "1st 12 (1-12)", mult: 3 },
+  { id: "dozen2", label: "2nd 12 (13-24)", mult: 3 },
+  { id: "dozen3", label: "3rd 12 (25-36)", mult: 3 },
+];
+
+const RouletteGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites }) => {
   const [bet, setBet] = useState(100);
-  const [currentNum, setCurrentNum] = useState<number>(10);
-  const [stepIndex, setStepIndex] = useState(-1);
-  const [isRolling, setIsRolling] = useState(false);
+  const [selectedBet, setSelectedBet] = useState<string>("red");
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [winningPocket, setWinningPocket] = useState<number | null>(null);
+  const [recentHistory, setRecentHistory] = useState<number[]>([17, 32, 0, 7, 21]);
   const [outcomeModal, setOutcomeModal] = useState<MinigameOutcomeData | null>(null);
   const [insufficientNeeded, setInsufficientNeeded] = useState<number | null>(null);
 
-  const handleStartRun = () => {
-    if (bet <= 0 || bet > astriteBalance) {
+  // Wheel carousel animation state
+  const [translateX, setTranslateX] = useState<number>(0);
+  const wheelContainerRef = useRef<HTMLDivElement>(null);
+
+  // Build repeated tape (5 copies = 185 pockets)
+  const repeatedPockets = useMemo(() => {
+    return [
+      ...ROULETTE_NUMBERS_ORDER,
+      ...ROULETTE_NUMBERS_ORDER,
+      ...ROULETTE_NUMBERS_ORDER,
+      ...ROULETTE_NUMBERS_ORDER,
+      ...ROULETTE_NUMBERS_ORDER,
+    ];
+  }, []);
+
+  const pocketWidth = 56; // 56px per pocket
+
+  // Initialize wheel center on pocket 0 of 2nd set
+  useEffect(() => {
+    if (wheelContainerRef.current) {
+      const containerW = wheelContainerRef.current.clientWidth || 360;
+      const initialIdx = 37 * 2; // 0 pocket
+      const targetCenter = initialIdx * pocketWidth + pocketWidth / 2;
+      setTranslateX(-(targetCenter - containerW / 2));
+    }
+  }, []);
+
+  // Compute selected bet descriptor
+  const activeBetInfo = useMemo(() => {
+    if (selectedBet.startsWith("num_")) {
+      const num = parseInt(selectedBet.replace("num_", ""), 10);
+      const color = getRoulettePocketColor(num);
+      return {
+        label: `Number ${num} (${color.toUpperCase()})`,
+        mult: 36,
+        category: "Straight-Up (36.0x)",
+      };
+    }
+    const outside = OUTSIDE_BETS.find((b) => b.id === selectedBet);
+    if (outside) {
+      return { label: outside.label, mult: outside.mult, category: "Outside (2.0x)" };
+    }
+    const dozen = DOZEN_BETS.find((b) => b.id === selectedBet);
+    if (dozen) {
+      return { label: dozen.label, mult: dozen.mult, category: "Dozen (3.0x)" };
+    }
+    return { label: selectedBet.toUpperCase(), mult: 2, category: "Bet" };
+  }, [selectedBet]);
+
+  const handleSpin = () => {
+    if (isSpinning) return;
+    const effectiveBet = Math.min(bet, MAX_BET_LIMIT);
+    if (effectiveBet <= 0 || effectiveBet > astriteBalance) {
       soundEngine.playInsufficient();
-      setInsufficientNeeded(bet);
+      setInsufficientNeeded(effectiveBet);
       return;
     }
 
     soundEngine.playClick();
-    onUpdateAstrites(-bet);
+    onUpdateAstrites(-effectiveBet);
+    setIsSpinning(true);
     setOutcomeModal(null);
 
-    // Initial roll: random number between 7 and 14 for a balanced starting point
-    const initial = getCryptoRandomInt(7, 14);
-    setCurrentNum(initial);
-    setStepIndex(0);
-  };
+    // Pick winning number cryptographically
+    const landedNum = getCryptoRandomInt(0, 36);
+    const landedColor = getRoulettePocketColor(landedNum);
 
-  const handleGuess = (guess: "higher" | "lower") => {
-    if (isRolling || stepIndex < 0) return;
-    soundEngine.playClick();
-    setIsRolling(true);
+    // Find landed index in 3rd repetition
+    const landedIndexInSet = ROULETTE_NUMBERS_ORDER.indexOf(landedNum);
+    const targetIdx = 37 * 3 + landedIndexInSet;
 
-    // Rolling animation rapid cycling 1 to 20
-    const interval = setInterval(() => {
-      setCurrentNum(getCryptoRandomInt(1, 20));
-    }, 60);
+    const containerW = wheelContainerRef.current?.clientWidth || 360;
+    const targetCenter = targetIdx * pocketWidth + pocketWidth / 2;
+    // Add subtle randomized jitter within pocket (-12px to +12px)
+    const jitter = Math.floor(getCryptoRandomFloat() * 24) - 12;
+    setTranslateX(-(targetCenter + jitter - containerW / 2));
 
+    // Audio clicks during spin
+    let tickCount = 0;
+    const totalTicks = 24;
+    const tickInterval = setInterval(() => {
+      soundEngine.playClick();
+      tickCount++;
+      if (tickCount >= totalTicks) {
+        clearInterval(tickInterval);
+      }
+    }, 130);
+
+    // Animation lasts 3.4 seconds
     setTimeout(() => {
-      clearInterval(interval);
-      const nextNum = getCryptoRandomInt(1, 20);
-      setCurrentNum(nextNum);
-      setIsRolling(false);
+      clearInterval(tickInterval);
+      setIsSpinning(false);
+      setWinningPocket(landedNum);
+      setRecentHistory((prev) => [landedNum, ...prev.slice(0, 7)]);
 
-      // Check for exact tie roll:
-      // At step 0: treat as Push (bet refunded!)
-      // At step > 0: hold streak without penalty!
-      if (nextNum === currentNum) {
-        setTimeout(() => {
-          if (stepIndex === 0) {
-            onUpdateAstrites(bet);
-            soundEngine.playAstriteGain();
-            setStepIndex(-1);
-            setOutcomeModal({
-              type: "push",
-              title: "TIE ROLL! BET RETURNED",
-              landedTitle: "Rolled Number",
-              landedValue: `${nextNum} (Tie)`,
-              betTitle: "Your Call",
-              betValue: `${guess.toUpperCase()} (Was: ${currentNum})`,
-              deltaAmount: 0,
-              multiplier: "1.0x Push",
-            });
-          } else {
-            soundEngine.playClick();
-          }
-        }, 450);
-        return;
+      // Check win condition:
+      let isWin = false;
+      let multiplier = activeBetInfo.mult;
+
+      if (landedNum === 0) {
+        // Only straight-up bet on 0 wins; all outside and dozen bets lose
+        isWin = selectedBet === "num_0";
+      } else {
+        if (selectedBet.startsWith("num_")) {
+          const pickedNum = parseInt(selectedBet.replace("num_", ""), 10);
+          isWin = pickedNum === landedNum;
+        } else if (selectedBet === "red") {
+          isWin = landedColor === "red";
+        } else if (selectedBet === "black") {
+          isWin = landedColor === "black";
+        } else if (selectedBet === "even") {
+          isWin = landedNum > 0 && landedNum % 2 === 0;
+        } else if (selectedBet === "odd") {
+          isWin = landedNum > 0 && landedNum % 2 !== 0;
+        } else if (selectedBet === "low") {
+          isWin = landedNum >= 1 && landedNum <= 18;
+        } else if (selectedBet === "high") {
+          isWin = landedNum >= 19 && landedNum <= 36;
+        } else if (selectedBet === "dozen1") {
+          isWin = landedNum >= 1 && landedNum <= 12;
+        } else if (selectedBet === "dozen2") {
+          isWin = landedNum >= 13 && landedNum <= 24;
+        } else if (selectedBet === "dozen3") {
+          isWin = landedNum >= 25 && landedNum <= 36;
+        }
       }
 
-      let correct = false;
-      if (guess === "higher" && nextNum > currentNum) correct = true;
-      if (guess === "lower" && nextNum < currentNum) correct = true;
-
-      // 450ms inspection delay
-      setTimeout(() => {
-        if (correct) {
-          soundEngine.playAstriteGain();
-          const nextStep = stepIndex + 1;
-          if (nextStep >= LADDER_STEPS_20.length - 1) {
-            const mult = LADDER_STEPS_20[LADDER_STEPS_20.length - 1];
-            const payout = Math.floor(bet * mult);
-            onUpdateAstrites(payout);
-            setStepIndex(-1);
-            setOutcomeModal({
-              type: "win",
-              title: "MAX LADDER ASCENT!",
-              landedTitle: "Final Number",
-              landedValue: `${nextNum} (1-20)`,
-              betTitle: "Ascent Reached",
-              betValue: `${mult}x Top Step`,
-              deltaAmount: payout,
-              multiplier: `${mult}x Payout`,
-            });
-          } else {
-            setStepIndex(nextStep);
-          }
-        } else {
-          soundEngine.playMissWhoosh();
-          setStepIndex(-1);
-          setOutcomeModal({
-            type: "loss",
-            title: "BUSTED ON LADDER",
-            landedTitle: "Rolled Number",
-            landedValue: `${nextNum} (1-20)`,
-            betTitle: "Your Call",
-            betValue: `${guess.toUpperCase()} (Was: ${currentNum})`,
-            deltaAmount: -bet,
-          });
-        }
-      }, 450);
-    }, 600);
-  };
-
-  const handleCashOut = () => {
-    if (stepIndex < 0) return;
-    soundEngine.playClick();
-    const mult = LADDER_STEPS_20[stepIndex];
-    const payout = Math.floor(bet * mult);
-    onUpdateAstrites(payout);
-    setStepIndex(-1);
-    soundEngine.playAstriteGain();
-
-    if (mult < 1.0) {
-      setOutcomeModal({
-        type: "loss",
-        title: "EARLY CASH OUT",
-        landedTitle: "Cashed Out At",
-        landedValue: `${mult}x Base Step`,
-        betTitle: "Initial Stake",
-        betValue: `${bet.toLocaleString()} Astrites`,
-        deltaAmount: payout - bet,
-        multiplier: `${mult}x Forfeit`,
-      });
-    } else if (mult === 1.0) {
-      setOutcomeModal({
-        type: "push",
-        title: "BREAK-EVEN CASH OUT!",
-        landedTitle: "Cashed Out At",
-        landedValue: "1.0x Base Step",
-        betTitle: "Initial Stake",
-        betValue: `${bet.toLocaleString()} Astrites`,
-        deltaAmount: 0,
-        multiplier: "1.0x Refund",
-      });
-    } else {
-      setOutcomeModal({
-        type: "win",
-        title: "SUCCESSFUL CASH OUT!",
-        landedTitle: "Cashed Out At",
-        landedValue: `${mult}x Step`,
-        betTitle: "Initial Stake",
-        betValue: `${bet.toLocaleString()} Astrites`,
-        deltaAmount: payout,
-        multiplier: `${mult}x Return`,
-      });
-    }
+      if (isWin) {
+        const payout = effectiveBet * multiplier;
+        onUpdateAstrites(payout);
+        soundEngine.playAstriteGain();
+        setOutcomeModal({
+          type: "win",
+          title: "WINNER!",
+          landedTitle: "Landed Pocket",
+          landedValue: `${landedNum} (${landedColor.toUpperCase()})`,
+          landedColor: landedColor === "green" ? "#10b981" : landedColor === "red" ? "#f43f5e" : "#94a3b8",
+          betTitle: "Your Bet",
+          betValue: `${activeBetInfo.label} (${multiplier}.0x)`,
+          deltaAmount: payout,
+          multiplier: `${multiplier}.0x`,
+        });
+      } else {
+        soundEngine.playMissWhoosh();
+        setOutcomeModal({
+          type: "loss",
+          title: "HOUSE WINS",
+          landedTitle: "Landed Pocket",
+          landedValue: `${landedNum} (${landedColor.toUpperCase()})`,
+          landedColor: landedColor === "green" ? "#10b981" : landedColor === "red" ? "#f43f5e" : "#94a3b8",
+          betTitle: "Your Bet",
+          betValue: `${activeBetInfo.label} (${multiplier}.0x)`,
+          deltaAmount: -effectiveBet,
+        });
+      }
+    }, 3400);
   };
 
   return (
-    <div className="max-w-xl mx-auto flex flex-col items-center space-y-4 text-center relative">
-      <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-xs font-mono text-cyan-200/90 w-full flex items-center justify-between">
+    <div className="max-w-xl mx-auto flex flex-col items-center space-y-4 text-center select-none">
+      {/* Host Intro Banner */}
+      <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs font-mono text-purple-200/90 w-full flex items-center justify-between">
         <div className="flex items-center space-x-2 text-left">
-          <Dices className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+          <Disc className="w-4 h-4 text-purple-400 flex-shrink-0 animate-spin-slow" />
           <span>
-            <strong>Cantarella:</strong> "Roll 1 to 20. Guess Higher or Lower to climb the ladder!"
+            <strong>Cantarella:</strong> "European Roulette! Single 0, strict 97.30% RTP. Place your bets!"
           </span>
         </div>
-        <span className="text-[10px] font-mono text-cyan-300 font-bold uppercase">
-          40x Top Step
+        <span className="text-[10px] font-mono text-purple-300 font-bold uppercase flex-shrink-0">
+          37 Pockets • 36x Max
         </span>
       </div>
 
-      {/* Multiplier Ladder Progress Bar */}
-      <div className="flex items-center justify-between gap-1 w-full p-2 rounded-xl bg-black/40 border border-white/10">
-        {LADDER_STEPS_20.map((m, idx) => {
-          const isPassed = stepIndex >= idx;
-          const isCurrent = stepIndex === idx;
-          return (
-            <div
-              key={idx}
-              className={`flex-1 py-1.5 rounded-lg font-mono text-[10px] sm:text-xs font-bold transition-all ${
-                isCurrent
-                  ? "bg-amber-400 text-black shadow-[0_0_12px_rgba(250,204,21,0.5)] scale-105"
-                  : isPassed
-                  ? "bg-emerald-500/20 border border-emerald-400/40 text-emerald-300"
-                  : "bg-white/5 text-gray-500"
+      {/* Roulette Wheel Tape / Carousel */}
+      <div className="w-full p-4 rounded-2xl bg-[#0d111d] border-2 border-purple-500/40 shadow-2xl relative overflow-hidden flex flex-col items-center">
+        {/* Top Gold Indicator Pointer */}
+        <div className="flex flex-col items-center z-10 mb-1">
+          <span className="text-amber-400 text-sm font-black animate-bounce">▼</span>
+        </div>
+
+        {/* Carousel Window */}
+        <div
+          ref={wheelContainerRef}
+          className="w-full h-16 rounded-xl bg-black/80 border border-white/10 relative overflow-hidden flex items-center shadow-inner"
+        >
+          {/* Center line */}
+          <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-amber-400/60 z-10 pointer-events-none -translate-x-1/2" />
+
+          {/* Scrolling Pockets Strip */}
+          <div
+            className="flex items-center absolute left-0"
+            style={{
+              transform: `translateX(${translateX}px)`,
+              transition: isSpinning
+                ? "transform 3.4s cubic-bezier(0.12, 0.8, 0.25, 1)"
+                : "none",
+              willChange: "transform",
+            }}
+          >
+            {repeatedPockets.map((num, i) => {
+              const color = getRoulettePocketColor(num);
+              return (
+                <div
+                  key={`${num}-${i}`}
+                  style={{ width: `${pocketWidth}px` }}
+                  className={`h-12 flex-shrink-0 flex flex-col items-center justify-center font-mono font-black border-r border-white/10 transition-colors ${
+                    color === "green"
+                      ? "bg-emerald-600/90 text-white"
+                      : color === "red"
+                      ? "bg-rose-600/90 text-white"
+                      : "bg-zinc-800 text-gray-200"
+                  }`}
+                >
+                  <span className="text-base sm:text-lg">{num}</span>
+                  <span className="text-[8px] uppercase tracking-tighter opacity-70">
+                    {color}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Recent History Badges */}
+        <div className="flex items-center space-x-1.5 mt-3 text-xs font-mono">
+          <span className="text-[11px] text-gray-400 font-bold uppercase mr-1">History:</span>
+          {recentHistory.map((num, idx) => {
+            const color = getRoulettePocketColor(num);
+            return (
+              <span
+                key={idx}
+                className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-sm ${
+                  color === "green"
+                    ? "bg-emerald-600 border border-emerald-400"
+                    : color === "red"
+                    ? "bg-rose-600 border border-rose-400"
+                    : "bg-zinc-800 border border-zinc-600"
+                }`}
+              >
+                {num}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Betting Board */}
+      <div className="w-full p-4 rounded-2xl bg-black/40 border border-white/10 space-y-3">
+        {/* Outside Bets (2x Multiplier) */}
+        <div>
+          <div className="flex items-center justify-between text-[11px] font-mono text-gray-400 mb-1.5">
+            <span className="font-bold uppercase text-yellow-300">Outside Bets (2.0x Payout)</span>
+            <span>1:1 Net Return</span>
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+            {OUTSIDE_BETS.map((b) => {
+              const isSelected = selectedBet === b.id;
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  disabled={isSpinning}
+                  onClick={() => {
+                    soundEngine.playClick();
+                    setSelectedBet(b.id);
+                  }}
+                  className={`py-2 px-1 rounded-xl font-mono text-xs font-black uppercase transition-all border cursor-pointer ${
+                    isSelected
+                      ? "ring-2 ring-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.4)] scale-102 " + b.bg
+                      : b.bg + " opacity-85 hover:opacity-100"
+                  }`}
+                >
+                  {b.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Dozens Bets (3x Multiplier) */}
+        <div>
+          <div className="flex items-center justify-between text-[11px] font-mono text-gray-400 mb-1.5">
+            <span className="font-bold uppercase text-yellow-300">Dozens (3.0x Payout)</span>
+            <span>2:1 Net Return</span>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {DOZEN_BETS.map((b) => {
+              const isSelected = selectedBet === b.id;
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  disabled={isSpinning}
+                  onClick={() => {
+                    soundEngine.playClick();
+                    setSelectedBet(b.id);
+                  }}
+                  className={`py-2 px-2 rounded-xl font-mono text-xs font-black uppercase transition-all border cursor-pointer ${
+                    isSelected
+                      ? "bg-purple-600/40 text-purple-200 border-purple-400 ring-2 ring-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.4)] scale-102"
+                      : "bg-white/5 hover:bg-white/10 text-gray-300 border-white/10"
+                  }`}
+                >
+                  {b.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Straight-Up Numbers (0-36) (36x Multiplier) */}
+        <div>
+          <div className="flex items-center justify-between text-[11px] font-mono text-gray-400 mb-1.5">
+            <span className="font-bold uppercase text-yellow-300">Straight-Up Numbers (36.0x Payout)</span>
+            <span>Select Any Single Number</span>
+          </div>
+
+          {/* 0 (Single Green Pocket) */}
+          <div className="mb-1.5">
+            <button
+              type="button"
+              disabled={isSpinning}
+              onClick={() => {
+                soundEngine.playClick();
+                setSelectedBet("num_0");
+              }}
+              className={`w-full py-1.5 rounded-xl font-mono font-black text-xs uppercase transition-all border cursor-pointer ${
+                selectedBet === "num_0"
+                  ? "bg-emerald-600 text-white border-emerald-300 ring-2 ring-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.5)] scale-101"
+                  : "bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border-emerald-500/40"
               }`}
             >
-              {m}x
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Cyber D20 Visualizer */}
-      <div className="p-6 rounded-2xl bg-[#0a1224] border-2 border-cyan-500/40 shadow-inner flex flex-col items-center space-y-3 w-full">
-        <div
-          className={`w-28 h-28 rounded-3xl bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-600 text-black border-4 border-white flex flex-col items-center justify-center font-mono font-black text-4xl sm:text-5xl shadow-[0_0_30px_rgba(6,182,212,0.4)] ${
-            isRolling ? "animate-spin" : ""
-          }`}
-        >
-          <span>{currentNum}</span>
-          <span className="text-[10px] font-bold tracking-widest text-cyan-950 uppercase -mt-1">
-            D20 DIE
-          </span>
-        </div>
-        <div className="text-xs font-mono text-gray-400">
-          Will the next roll (1 to 20) be Higher or Lower than <strong className="text-cyan-300">{currentNum}</strong>?
-        </div>
-      </div>
-
-      {/* Controls: Higher or Lower Only */}
-      {stepIndex < 0 ? (
-        <div className="w-full space-y-2">
-          <BetSelector
-            bet={bet}
-            setBet={setBet}
-            astriteBalance={astriteBalance}
-            onInsufficient={(needed) => setInsufficientNeeded(needed)}
-          />
-          <button
-            type="button"
-            onClick={handleStartRun}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-black font-black uppercase text-sm tracking-wider transition-all shadow-[0_0_20px_rgba(6,182,212,0.35)] cursor-pointer"
-          >
-            START RUN ({bet.toLocaleString()} ASTRITES)
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-3 w-full">
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              disabled={isRolling}
-              onClick={() => handleGuess("higher")}
-              className="py-3.5 rounded-xl bg-emerald-600/40 hover:bg-emerald-600/60 border-2 border-emerald-400 text-emerald-200 font-mono font-black text-sm uppercase flex items-center justify-center space-x-2 cursor-pointer shadow-lg active:scale-95"
-            >
-              <ArrowUp className="w-5 h-5 text-emerald-400" />
-              <span>HIGHER (&gt; {currentNum})</span>
-            </button>
-            <button
-              type="button"
-              disabled={isRolling}
-              onClick={() => handleGuess("lower")}
-              className="py-3.5 rounded-xl bg-rose-600/40 hover:bg-rose-600/60 border-2 border-rose-400 text-rose-200 font-mono font-black text-sm uppercase flex items-center justify-center space-x-2 cursor-pointer shadow-lg active:scale-95"
-            >
-              <ArrowDown className="w-5 h-5 text-rose-400" />
-              <span>LOWER (&lt; {currentNum})</span>
+              0 (ZERO - 36.0x)
             </button>
           </div>
 
-          <button
-            type="button"
-            disabled={isRolling}
-            onClick={handleCashOut}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-black uppercase text-xs tracking-wider transition-all shadow-[0_0_15px_rgba(250,204,21,0.4)] hover:scale-101 active:scale-98 cursor-pointer"
-          >
-            {LADDER_STEPS_20[stepIndex] < 1.0
-              ? `CASH OUT ${Math.floor(bet * LADDER_STEPS_20[stepIndex]).toLocaleString()} ASTRITES (${LADDER_STEPS_20[stepIndex]}x FORFEIT)`
-              : LADDER_STEPS_20[stepIndex] === 1.0
-              ? `CASH OUT ${bet.toLocaleString()} ASTRITES (1.0x BREAK-EVEN REFUND)`
-              : `CASH OUT ${Math.floor(bet * LADDER_STEPS_20[stepIndex]).toLocaleString()} ASTRITES (${LADDER_STEPS_20[stepIndex]}x)`}
-          </button>
+          {/* 1 - 36 Grid */}
+          <div className="grid grid-cols-6 sm:grid-cols-12 gap-1">
+            {Array.from({ length: 36 }, (_, i) => i + 1).map((n) => {
+              const color = getRoulettePocketColor(n);
+              const isSelected = selectedBet === `num_${n}`;
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  disabled={isSpinning}
+                  onClick={() => {
+                    soundEngine.playClick();
+                    setSelectedBet(`num_${n}`);
+                  }}
+                  className={`py-1.5 rounded-lg font-mono text-xs font-black transition-all border cursor-pointer ${
+                    isSelected
+                      ? "ring-2 ring-amber-400 scale-105 z-10 " +
+                        (color === "red"
+                          ? "bg-rose-600 text-white border-rose-300 shadow-[0_0_12px_rgba(244,63,94,0.6)]"
+                          : "bg-zinc-700 text-white border-zinc-300 shadow-[0_0_12px_rgba(255,255,255,0.4)]")
+                      : color === "red"
+                      ? "bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border-rose-500/30"
+                      : "bg-zinc-900/80 hover:bg-zinc-800 text-gray-300 border-zinc-700/50"
+                  }`}
+                >
+                  {n}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      )}
+
+        {/* Selected Bet Details Bar */}
+        <div className="p-2.5 rounded-xl bg-purple-950/30 border border-purple-500/30 flex items-center justify-between text-xs font-mono">
+          <div className="flex items-center space-x-1.5 text-left">
+            <span className="text-gray-400">Bet:</span>
+            <span className="text-white font-bold">{activeBetInfo.label}</span>
+            <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 text-[10px] font-black border border-purple-400/40">
+              {activeBetInfo.mult}.0x
+            </span>
+          </div>
+          <div className="text-right">
+            <span className="text-gray-400 mr-1.5">Potential Win:</span>
+            <span className="text-yellow-400 font-black">
+              {Math.floor(bet * activeBetInfo.mult).toLocaleString()} ✦
+            </span>
+          </div>
+        </div>
+
+        {/* Bet Selector */}
+        <BetSelector
+          bet={bet}
+          setBet={setBet}
+          disabled={isSpinning}
+          astriteBalance={astriteBalance}
+          onInsufficient={setInsufficientNeeded}
+        />
+
+        {/* Spin Button */}
+        <button
+          type="button"
+          disabled={isSpinning || bet <= 0 || bet > astriteBalance}
+          onClick={handleSpin}
+          className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 text-white font-mono font-black text-sm uppercase tracking-wider shadow-[0_0_20px_rgba(168,85,247,0.4)] transition-all active:scale-98 cursor-pointer flex items-center justify-center space-x-2"
+        >
+          {isSpinning ? (
+            <>
+              <Disc className="w-4 h-4 animate-spin" />
+              <span>SPINNING WHEEL...</span>
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-4 h-4" />
+              <span>SPIN ROULETTE ({bet.toLocaleString()} ✦)</span>
+            </>
+          )}
+        </button>
+      </div>
 
       <MinigameOutcomeModal
         outcome={outcomeModal}
         onPlayAgain={() => {
           setOutcomeModal(null);
-          handleStartRun();
+          handleSpin();
         }}
         onClose={() => setOutcomeModal(null)}
       />
@@ -1774,7 +2007,6 @@ const DiceLadderGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAst
   );
 };
 
-// ============================================================================
 // SUB-GAME 5: PHILIPPINE PERYA COLOR GAME (2-Dice) - Phoebe
 // 6 Colors, 2 Six-Sided Color Dice, 1 Match = 2x Win, 2 Matches = 3x Double Win
 // ============================================================================
@@ -1809,14 +2041,15 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
   const handleRollDice = () => {
     if (isRolling) return;
 
-    if (bet <= 0 || bet > astriteBalance) {
+    const effectiveBet = Math.min(bet, MAX_BET_LIMIT);
+    if (effectiveBet <= 0 || effectiveBet > astriteBalance) {
       soundEngine.playInsufficient();
-      setInsufficientNeeded(bet);
+      setInsufficientNeeded(effectiveBet);
       return;
     }
 
     soundEngine.playClick();
-    onUpdateAstrites(-bet);
+    onUpdateAstrites(-effectiveBet);
     setIsRolling(true);
     setOutcomeModal(null);
 
@@ -1845,7 +2078,7 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
 
         if (matches === 2) {
           // Double Match: Win 4.2x! (Authentic 95.00% RTP perya combinatorics)
-          const payout = Math.floor(bet * 4.2);
+          const payout = Math.floor(effectiveBet * 4.2);
           onUpdateAstrites(payout);
           soundEngine.playAstriteGain();
           setOutcomeModal({
@@ -1855,13 +2088,13 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
             landedValue: `${finalDie1.emoji} ${finalDie2.emoji}`,
             landedColor: chosen.hex,
             betTitle: "Bet",
-            betValue: `${chosen.name} (${bet.toLocaleString()} ✦)`,
+            betValue: `${chosen.name} (${effectiveBet.toLocaleString()} ✦)`,
             deltaAmount: payout,
             multiplier: "4.2x Double",
           });
         } else if (matches === 1) {
           // Single Match: Win 3.0x!
-          const payout = Math.floor(bet * 3.0);
+          const payout = Math.floor(effectiveBet * 3.0);
           onUpdateAstrites(payout);
           soundEngine.playAstriteGain();
           setOutcomeModal({
@@ -1871,12 +2104,12 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
             landedValue: `${finalDie1.emoji} ${finalDie2.emoji}`,
             landedColor: chosen.hex,
             betTitle: "Bet",
-            betValue: `${chosen.name} (${bet.toLocaleString()} ✦)`,
+            betValue: `${chosen.name} (${effectiveBet.toLocaleString()} ✦)`,
             deltaAmount: payout,
             multiplier: "3.0x Win",
           });
         } else {
-          // 0 Matches: Loss (-bet)
+          // 0 Matches: Loss (-effectiveBet)
           soundEngine.playMissWhoosh();
           setOutcomeModal({
             type: "loss",
@@ -1884,8 +2117,8 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
             landedTitle: "Dice",
             landedValue: `${finalDie1.emoji} ${finalDie2.emoji}`,
             betTitle: "Bet",
-            betValue: `${chosen.name} (${bet.toLocaleString()} ✦)`,
-            deltaAmount: -bet,
+            betValue: `${chosen.name} (${effectiveBet.toLocaleString()} ✦)`,
+            deltaAmount: -effectiveBet,
           });
         }
       }, 450);
@@ -2024,10 +2257,12 @@ const WheelGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites
 };
 
 // ============================================================================
-// SUB-GAME 6: MYSTERY SCRATCHCARDS (5×5 Grid) - Lupa
-// 25 Panels (16 Misses, 9 Winning Symbols), First to 3 Matches Wins, Exact 95% RTP
 // ============================================================================
-type MultiplierType = "20x" | "10x" | "5x" | "2x" | "1x" | "miss";
+// SUB-GAME 6: MYSTERY SCRATCHCARDS (5×5 4-STRIKE BUST) - Lupa
+// 25 Panels: Exactly 3 of 20x, 3 of 10x, 3 of 5x, 3 of 2x (12 prizes) + 13 Misses
+// Match 3 = Win that multiplier! 4 Misses = Bust / Lose! Custom Bet Pricing
+// ============================================================================
+type MultiplierType = "20x" | "10x" | "5x" | "2x" | "miss";
 
 interface ScratchIconInfo {
   type: MultiplierType;
@@ -2042,32 +2277,25 @@ const MULTIPLIER_DEFS: Record<MultiplierType, ScratchIconInfo> = {
   "10x": { type: "10x", label: "10x Boss", mult: 10, icon: "👑", color: "#c084fc" },
   "5x": { type: "5x", label: "5x Win", mult: 5, icon: "⭐", color: "#38bdf8" },
   "2x": { type: "2x", label: "2x Win", mult: 2, icon: "💎", color: "#34d399" },
-  "1x": { type: "1x", label: "1x Refund", mult: 1, icon: "🍒", color: "#fb7185" },
   miss: { type: "miss", label: "Miss", mult: 0, icon: "❌", color: "#f43f5e" },
 };
 
-const SCRATCH_CARD_TIERS = [
-  { id: "tier100", name: "100 ✦ Ticket", cost: 100, maxWin: 2000 },
-  { id: "tier500", name: "500 ✦ Ticket", cost: 500, maxWin: 10000 },
-  { id: "tier1000", name: "1000 ✦ Ticket", cost: 1000, maxWin: 20000 },
-];
-
 const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAstrites }) => {
-  const [selectedTier, setSelectedTier] = useState(SCRATCH_CARD_TIERS[0]);
+  const [bet, setBet] = useState(100);
   const [hasBought, setHasBought] = useState(false);
   const [scratched, setScratched] = useState<boolean[]>(Array(25).fill(false));
   const [gridPanels, setGridPanels] = useState<MultiplierType[]>(Array(25).fill("miss"));
+  const [isGameOver, setIsGameOver] = useState(false);
   const [outcomeModal, setOutcomeModal] = useState<MinigameOutcomeData | null>(null);
   const [insufficientNeeded, setInsufficientNeeded] = useState<number | null>(null);
 
-  // Live count of revealed multipliers
-  const revealedCounts = useMemo(() => {
+  // Live counts of revealed multipliers and misses
+  const revealedStats = useMemo(() => {
     const counts: Record<MultiplierType, number> = {
       "20x": 0,
       "10x": 0,
       "5x": 0,
       "2x": 0,
-      "1x": 0,
       miss: 0,
     };
     gridPanels.forEach((p, idx) => {
@@ -2078,54 +2306,34 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
     return counts;
   }, [gridPanels, scratched]);
 
-  const handleBuyTicket = (tier = selectedTier) => {
-    if (tier.cost > astriteBalance) {
+  const effectiveBet = Math.min(bet, MAX_BET_LIMIT);
+
+  const handleBuyCard = () => {
+    if (effectiveBet <= 0 || effectiveBet > astriteBalance) {
       soundEngine.playInsufficient();
-      setInsufficientNeeded(tier.cost);
+      setInsufficientNeeded(effectiveBet);
       return;
     }
 
     soundEngine.playClick();
-    onUpdateAstrites(-tier.cost);
-    setSelectedTier(tier);
+    onUpdateAstrites(-effectiveBet);
     setHasBought(true);
+    setIsGameOver(false);
     setScratched(Array(25).fill(false));
     setOutcomeModal(null);
 
-    // Predetermine winning symbol (Calibrated to exact 95.00% RTP):
-    // 1.0% 20x (EV: 0.20), 2.5% 10x (EV: 0.25), 5.0% 5x (EV: 0.25), 7.5% 2x (EV: 0.15), 10.0% 1x (EV: 0.10), 74.0% Miss
-    const rand = getCryptoRandomFloat();
-    let winner: MultiplierType = "miss";
-    if (rand < 0.010) winner = "20x";
-    else if (rand < 0.035) winner = "10x";
-    else if (rand < 0.085) winner = "5x";
-    else if (rand < 0.160) winner = "2x";
-    else if (rand < 0.260) winner = "1x";
-    else winner = "miss";
-
-    // 25 total positions: 16 losses (❌), 9 symbols
-    const nineSymbols: MultiplierType[] = [];
-    const prizeTypes: MultiplierType[] = ["20x", "10x", "5x", "2x", "1x"];
-
-    if (winner !== "miss") {
-      // 3 of winning prize
-      nineSymbols.push(winner, winner, winner);
-      // 6 fillers from other prizes with max 2 of any
-      const otherTypes = prizeTypes.filter((t) => t !== winner);
-      nineSymbols.push(otherTypes[0], otherTypes[0]);
-      nineSymbols.push(otherTypes[1], otherTypes[1]);
-      nineSymbols.push(otherTypes[2], otherTypes[3] || otherTypes[2]);
-    } else {
-      // Loss: 9 symbols with NONE reaching 3 (e.g. 2, 2, 2, 2, 1)
-      nineSymbols.push(prizeTypes[0], prizeTypes[0]);
-      nineSymbols.push(prizeTypes[1], prizeTypes[1]);
-      nineSymbols.push(prizeTypes[2], prizeTypes[2]);
-      nineSymbols.push(prizeTypes[3], prizeTypes[3]);
-      nineSymbols.push(prizeTypes[4]);
-    }
-
-    // Build 25 panels: 16 misses and 9 symbols
-    const fullGrid: MultiplierType[] = Array(16).fill("miss").concat(nineSymbols);
+    // Build the 25 panels:
+    // Exactly 3 of every multiplier: 3x 20x, 3x 10x, 3x 5x, 3x 2x (12 prizes)
+    // Left spots filled by miss: 13x miss
+    const fullGrid: MultiplierType[] = [
+      "20x", "20x", "20x",
+      "10x", "10x", "10x",
+      "5x", "5x", "5x",
+      "2x", "2x", "2x",
+      "miss", "miss", "miss", "miss", "miss",
+      "miss", "miss", "miss", "miss", "miss",
+      "miss", "miss", "miss",
+    ];
 
     // Cryptographic Fisher-Yates shuffle
     for (let i = fullGrid.length - 1; i > 0; i--) {
@@ -2136,176 +2344,251 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
     setGridPanels(fullGrid);
   };
 
-  const checkWinner = (updatedScratched: boolean[], panels: MultiplierType[]) => {
+  const evaluateGrid = (updatedScratched: boolean[], panels: MultiplierType[]) => {
     const counts: Record<MultiplierType, number> = {
       "20x": 0,
       "10x": 0,
       "5x": 0,
       "2x": 0,
-      "1x": 0,
       miss: 0,
     };
+
     for (let i = 0; i < 25; i++) {
       if (updatedScratched[i]) {
         const type = panels[i];
         counts[type]++;
-        if (type !== "miss" && counts[type] >= 3) {
-          // Found first 3-of-a-kind prize!
-          const def = MULTIPLIER_DEFS[type];
 
-          // 450ms inspection delay
+        // 1. Check for 4 misses -> BUST LOSE!
+        if (counts.miss >= 4) {
+          setIsGameOver(true);
+          // Reveal full board
+          setScratched(Array(25).fill(true));
           setTimeout(() => {
-            if (def.mult > 1) {
-              const payout = selectedTier.cost * def.mult;
-              onUpdateAstrites(payout);
-              soundEngine.playAstriteGain();
-              setOutcomeModal({
-                type: "win",
-                title: "WIN!",
-                landedTitle: "Result",
-                landedValue: `${def.icon} ${def.mult}x`,
-                landedColor: def.color,
-                betTitle: "Ticket",
-                betValue: `${selectedTier.cost.toLocaleString()} ✦`,
-                deltaAmount: payout,
-                multiplier: `${def.mult}x`,
-              });
-            } else if (def.mult === 1) {
-              onUpdateAstrites(selectedTier.cost);
-              soundEngine.playAstriteGain();
-              setOutcomeModal({
-                type: "push",
-                title: "REFUND",
-                landedTitle: "Result",
-                landedValue: `${def.icon} 1.0x`,
-                landedColor: def.color,
-                betTitle: "Ticket",
-                betValue: `${selectedTier.cost.toLocaleString()} ✦`,
-                deltaAmount: 0,
-                multiplier: "1.0x Refund",
-              });
-            }
-          }, 450);
+            soundEngine.playMissWhoosh();
+            setOutcomeModal({
+              type: "loss",
+              title: "STRUCK OUT! 4 MISSES",
+              landedTitle: "Result",
+              landedValue: "❌ 4 Misses (Bust)",
+              landedColor: "#f43f5e",
+              betTitle: "Ticket Wager",
+              betValue: `${effectiveBet.toLocaleString()} ✦`,
+              deltaAmount: -effectiveBet,
+            });
+          }, 350);
+          return true;
+        }
+
+        // 2. Check for 3 matching multipliers -> WIN!
+        if (type !== "miss" && counts[type] >= 3) {
+          const def = MULTIPLIER_DEFS[type];
+          const payout = effectiveBet * def.mult;
+          setIsGameOver(true);
+          // Reveal full board
+          setScratched(Array(25).fill(true));
+          setTimeout(() => {
+            onUpdateAstrites(payout);
+            soundEngine.playAstriteGain();
+            setOutcomeModal({
+              type: "win",
+              title: "3-MATCH WINNER!",
+              landedTitle: "Winning Match",
+              landedValue: `${def.icon} ${def.mult}x Match!`,
+              landedColor: def.color,
+              betTitle: "Ticket Wager",
+              betValue: `${effectiveBet.toLocaleString()} ✦`,
+              deltaAmount: payout,
+              multiplier: `${def.mult}x`,
+            });
+          }, 350);
           return true;
         }
       }
-    }
-
-    // If all 25 panels scratched and no prize reached 3: Loss
-    const allRevealed = updatedScratched.every((s) => s);
-    if (allRevealed) {
-      setTimeout(() => {
-        soundEngine.playMissWhoosh();
-        setOutcomeModal({
-          type: "loss",
-          title: "LOSE",
-          landedTitle: "Result",
-          landedValue: "❌ No 3-Match",
-          landedColor: "#f43f5e",
-          betTitle: "Ticket",
-          betValue: `${selectedTier.cost.toLocaleString()} ✦`,
-          deltaAmount: -selectedTier.cost,
-        });
-      }, 450);
-      return true;
     }
 
     return false;
   };
 
   const handleScratchPanel = (index: number) => {
-    if (!hasBought || scratched[index] || outcomeModal) return;
+    if (!hasBought || scratched[index] || isGameOver || outcomeModal) return;
     soundEngine.playClick();
     const updated = [...scratched];
     updated[index] = true;
     setScratched(updated);
-    checkWinner(updated, gridPanels);
+    evaluateGrid(updated, gridPanels);
   };
 
   const handleScratchAll = () => {
-    if (!hasBought || outcomeModal) return;
+    if (!hasBought || isGameOver || outcomeModal) return;
     soundEngine.playClick();
-    const allScratched = Array(25).fill(true);
-    setScratched(allScratched);
-    checkWinner(allScratched, gridPanels);
+
+    // Sequentially scratch until 4 misses or 3-match is encountered
+    const updated = [...scratched];
+    const counts: Record<MultiplierType, number> = {
+      "20x": 0,
+      "10x": 0,
+      "5x": 0,
+      "2x": 0,
+      miss: 0,
+    };
+
+    // First account for already scratched
+    for (let i = 0; i < 25; i++) {
+      if (updated[i]) {
+        counts[gridPanels[i]]++;
+      }
+    }
+
+    // Now step through remaining
+    for (let i = 0; i < 25; i++) {
+      if (!updated[i]) {
+        updated[i] = true;
+        const type = gridPanels[i];
+        counts[type]++;
+
+        if (counts.miss >= 4 || (type !== "miss" && counts[type] >= 3)) {
+          break;
+        }
+      }
+    }
+
+    setScratched(updated);
+    evaluateGrid(updated, gridPanels);
   };
 
   return (
-    <div className="max-w-xl mx-auto flex flex-col items-center space-y-4 text-center relative">
-      <div className="p-3 rounded-xl bg-orange-500/10 border border-orange-500/20 text-xs font-mono text-orange-200/90 w-full flex items-center justify-between">
+    <div className="max-w-xl mx-auto flex flex-col items-center space-y-4 text-center relative select-none">
+      {/* Host Intro Banner */}
+      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs font-mono text-amber-200/90 w-full flex items-center justify-between">
         <div className="flex items-center space-x-2 text-left">
-          <Ticket className="w-4 h-4 text-orange-400 flex-shrink-0" />
+          <Ticket className="w-4 h-4 text-amber-400 flex-shrink-0" />
           <span>
-            <strong>Lupa:</strong> "5×5 Card! 3 matching symbols of any tier wins that prize!"
+            <strong>Lupa:</strong> "5×5 Card! Match 3 of any multiplier to WIN! But watch out: 4 misses = BUST!"
           </span>
         </div>
-        <span className="text-[10px] font-mono text-orange-300 font-bold uppercase">
-          5×5 Match 3
+        <span className="text-[10px] font-mono text-amber-300 font-bold uppercase flex-shrink-0">
+          5×5 4-Strike
         </span>
       </div>
 
-      {/* Ticket Selection Tiers */}
-      {!hasBought && (
-        <div className="grid grid-cols-3 gap-2.5 w-full">
-          {SCRATCH_CARD_TIERS.map((tier) => (
-            <button
-              key={tier.id}
-              type="button"
-              onClick={() => handleBuyTicket(tier)}
-              className="p-3.5 rounded-xl border border-amber-400/40 bg-gradient-to-b from-amber-500/20 to-black/40 hover:from-amber-500/30 text-center space-y-1 transition-all hover:scale-102 active:scale-98 cursor-pointer"
-            >
-              <Ticket className="w-6 h-6 text-amber-300 mx-auto" />
-              <p className="text-xs font-mono font-bold text-white">{tier.name}</p>
-              <p className="text-sm font-mono font-black text-yellow-300">{tier.cost} Astrites</p>
-              <p className="text-[10px] font-mono text-gray-400">Win up to {tier.maxWin.toLocaleString()}</p>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Active 5×5 Scratchcard Arena */}
-      {hasBought && (
-        <div className="w-full p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-950/40 via-[#130f1e] to-black border-2 border-amber-400/50 shadow-2xl space-y-3.5">
-          <div className="flex items-center justify-between text-xs font-mono">
-            <span className="font-bold text-amber-300 uppercase">{selectedTier.name} (5×5)</span>
-            <button
-              type="button"
-              onClick={handleScratchAll}
-              className="px-3 py-1 rounded-lg bg-amber-400 hover:bg-yellow-300 text-black text-xs font-bold transition-all active:scale-95 cursor-pointer"
-            >
-              Scratch All Panels
-            </button>
+      {/* Buy Ticket Arena */}
+      {!hasBought ? (
+        <div className="w-full p-5 rounded-2xl bg-[#0e121d] border-2 border-amber-400/40 shadow-2xl space-y-4">
+          <div className="space-y-1">
+            <h3 className="text-base font-black font-mono text-white uppercase tracking-wider">
+              Purchase Mystery Scratchcard
+            </h3>
+            <p className="text-xs font-mono text-gray-400">
+              Customize your wager. Win up to <strong className="text-yellow-400">20x your bet</strong>! (Max: 250,000 ✦)
+            </p>
           </div>
 
-          {/* Live Multiplier Tracker Bar */}
-          <div className="grid grid-cols-5 gap-1.5 p-2 rounded-xl bg-black/60 border border-white/10 text-[10px] font-mono">
-            {(["20x", "10x", "5x", "2x", "1x"] as MultiplierType[]).map((type) => {
+          {/* Potential Payouts Preview */}
+          <div className="grid grid-cols-4 gap-2 p-2.5 rounded-xl bg-black/60 border border-white/10 text-xs font-mono">
+            {(["20x", "10x", "5x", "2x"] as MultiplierType[]).map((type) => {
               const def = MULTIPLIER_DEFS[type];
-              const count = revealedCounts[type];
               return (
-                <div key={type} className="flex flex-col items-center p-1 rounded bg-white/5">
-                  <div className="flex items-center space-x-1 font-bold" style={{ color: def.color }}>
-                    <span>{def.icon}</span>
-                    <span>{def.mult}x</span>
-                  </div>
-                  <div className="flex space-x-1 mt-1">
-                    {[0, 1, 2].map((i) => (
-                      <span
-                        key={i}
-                        className={`w-2 h-2 rounded-full border ${
-                          i < count
-                            ? "bg-yellow-400 border-yellow-300 shadow-[0_0_6px_rgba(250,204,21,0.8)]"
-                            : "bg-white/10 border-white/20"
-                        }`}
-                      />
-                    ))}
-                  </div>
+                <div key={type} className="p-2 rounded-lg bg-white/5 flex flex-col items-center">
+                  <span className="text-lg">{def.icon}</span>
+                  <span className="font-black text-sm" style={{ color: def.color }}>
+                    {def.mult}x
+                  </span>
+                  <span className="text-[10px] text-gray-400">
+                    {Math.floor(effectiveBet * def.mult).toLocaleString()} ✦
+                  </span>
                 </div>
               );
             })}
           </div>
 
-          {/* 5×5 Grid (25 Panels: 16 Misses, 9 Symbols) */}
+          <BetSelector
+            bet={bet}
+            setBet={setBet}
+            astriteBalance={astriteBalance}
+            onInsufficient={setInsufficientNeeded}
+          />
+
+          <button
+            type="button"
+            disabled={effectiveBet <= 0 || effectiveBet > astriteBalance}
+            onClick={handleBuyCard}
+            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-black font-mono font-black text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all active:scale-95 cursor-pointer flex items-center justify-center space-x-2"
+          >
+            <Ticket className="w-4 h-4" />
+            <span>BUY SCRATCHCARD ({effectiveBet.toLocaleString()} ✦)</span>
+          </button>
+        </div>
+      ) : (
+        /* Active 5×5 Scratchcard Arena */
+        <div className="w-full p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-950/40 via-[#130f1e] to-black border-2 border-amber-400/50 shadow-2xl space-y-3.5">
+          {/* Top Bar with Strikes Meter and Scratch All */}
+          <div className="flex items-center justify-between flex-wrap gap-2 text-xs font-mono">
+            {/* Strikes Meter: 4 Misses = Bust */}
+            <div className="flex items-center space-x-2 p-1.5 px-3 rounded-xl bg-black/60 border border-white/10">
+              <span className="text-gray-400 text-[11px] font-bold uppercase">Strikes:</span>
+              <div className="flex items-center space-x-1.5">
+                {[0, 1, 2, 3].map((strikeIdx) => {
+                  const isStruck = revealedStats.miss > strikeIdx;
+                  return (
+                    <div
+                      key={strikeIdx}
+                      className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs border transition-all ${
+                        isStruck
+                          ? "bg-rose-500/25 border-rose-500 text-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.5)] scale-105"
+                          : "bg-white/5 border-white/20 text-gray-600"
+                      }`}
+                    >
+                      {isStruck ? "❌" : "⚪"}
+                    </div>
+                  );
+                })}
+              </div>
+              <span className={`text-[11px] font-bold ${revealedStats.miss >= 3 ? "text-rose-400 animate-pulse" : "text-gray-400"}`}>
+                ({revealedStats.miss}/4)
+              </span>
+            </div>
+
+            {!isGameOver && (
+              <button
+                type="button"
+                onClick={handleScratchAll}
+                className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-yellow-300 text-black text-xs font-black uppercase transition-all shadow-[0_0_12px_rgba(251,191,36,0.3)] active:scale-95 cursor-pointer"
+              >
+                Scratch All
+              </button>
+            )}
+          </div>
+
+          {/* Multiplier Progress Tracker Bar */}
+          <div className="grid grid-cols-4 gap-1.5 p-2 rounded-xl bg-black/60 border border-white/10 text-[10px] font-mono">
+            {(["20x", "10x", "5x", "2x"] as MultiplierType[]).map((type) => {
+              const def = MULTIPLIER_DEFS[type];
+              const count = revealedStats[type];
+              return (
+                <div key={type} className="flex flex-col items-center p-1.5 rounded-lg bg-white/5">
+                  <div className="flex items-center space-x-1 font-black text-xs" style={{ color: def.color }}>
+                    <span>{def.icon}</span>
+                    <span>{def.mult}x</span>
+                  </div>
+                  <div className="flex space-x-1 mt-1.5">
+                    {[0, 1, 2].map((i) => (
+                      <span
+                        key={i}
+                        className={`w-2.5 h-2.5 rounded-full border ${
+                          i < count
+                            ? "bg-yellow-400 border-yellow-300 shadow-[0_0_8px_rgba(250,204,21,0.9)] scale-110"
+                            : "bg-white/10 border-white/20"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-[9px] text-gray-400 mt-0.5">{count}/3</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 5×5 Grid (25 Panels: Exactly 3 of each mult + 13 misses) */}
           <div className="grid grid-cols-5 gap-2 max-w-sm sm:max-w-md mx-auto">
             {gridPanels.map((type, idx) => {
               const isRevealed = scratched[idx];
@@ -2318,19 +2601,19 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
                     isRevealed
                       ? type === "miss"
                         ? "bg-[#180a0f] border-rose-500/40 text-rose-400 shadow-inner"
-                        : "bg-[#0c1424] border-amber-400/40 shadow-inner"
-                      : "bg-gradient-to-br from-amber-400 via-yellow-600 to-amber-700 border-yellow-200 text-amber-950 shadow-md hover:brightness-110 active:scale-95"
+                        : "bg-[#0c1424] border-amber-400/50 shadow-inner"
+                      : "bg-gradient-to-br from-amber-400 via-yellow-600 to-amber-700 border-yellow-200 text-amber-950 shadow-md hover:brightness-115 hover:scale-102 active:scale-95"
                   }`}
                 >
                   {isRevealed ? (
-                    <div className="flex flex-col items-center">
-                      <span className="text-xl sm:text-2xl">{def.icon}</span>
+                    <div className="flex flex-col items-center animate-fade-in">
+                      <span className="text-xl sm:text-2xl drop-shadow">{def.icon}</span>
                       <span className="text-[10px] font-mono font-black" style={{ color: def.color }}>
                         {def.mult > 0 ? `${def.mult}x` : "MISS"}
                       </span>
                     </div>
                   ) : (
-                    <span className="text-[10px] font-mono font-black tracking-wider uppercase drop-shadow">
+                    <span className="text-xs font-mono font-black tracking-wider uppercase drop-shadow text-amber-950/80">
                       ✦
                     </span>
                   )}
@@ -2339,12 +2622,13 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
             })}
           </div>
 
+          {/* Action Button: Buy Another Card */}
           <button
             type="button"
             onClick={() => setHasBought(false)}
             className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-mono text-xs font-bold transition-all cursor-pointer"
           >
-            Buy Another Card
+            {isGameOver ? "Play Another Scratchcard" : "Change Wager / New Card"}
           </button>
         </div>
       )}
@@ -2353,7 +2637,7 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
         outcome={outcomeModal}
         onPlayAgain={() => {
           setOutcomeModal(null);
-          handleBuyTicket(selectedTier);
+          handleBuyCard();
         }}
         onClose={() => setOutcomeModal(null)}
       />
@@ -2368,3 +2652,4 @@ const ScratchcardGame: React.FC<GameCommonProps> = ({ astriteBalance, onUpdateAs
     </div>
   );
 };
+

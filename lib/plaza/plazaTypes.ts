@@ -45,6 +45,7 @@ export interface PlazaNpcAction {
     | "minigame_slots"
     | "minigame_blackjack"
     | "minigame_dice"
+    | "minigame_roulette"
     | "minigame_wheel"
     | "minigame_scratch";
   variant?: "primary" | "secondary" | "accent";

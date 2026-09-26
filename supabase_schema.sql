@@ -54,6 +54,8 @@ alter table public.profiles add column if not exists pvp_points integer not null
 alter table public.profiles add column if not exists tower_run_state jsonb;
 alter table public.profiles add column if not exists birthday text;
 alter table public.profiles add column if not exists birthday_last_changed_at timestamptz;
+alter table public.profiles add column if not exists daily_received_astrite integer not null default 0;
+alter table public.profiles add column if not exists last_gift_received_date text not null default '';
 alter table public.profiles drop constraint if exists profiles_astrite_check;
 alter table public.profiles add constraint profiles_astrite_check check (astrite >= 0);
 
@@ -710,5 +712,95 @@ grant execute on function public.save_user_security_question(uuid, text, text) t
 grant execute on function public.grant_vip(text) to authenticated, anon;
 grant execute on function public.revoke_vip(text) to authenticated, anon;
 grant execute on function public.save_player_tower_state(uuid, jsonb) to authenticated, anon;
+
+-- Securely sends an Astrite gift to another player with a strict 67,000 daily receiving cap
+create or replace function public.send_player_gift(
+  p_sender_id uuid,
+  p_receiver_username text,
+  p_amount integer
+) returns jsonb language plpgsql security definer as $$
+declare
+  v_sender_astrite integer;
+  v_receiver_id uuid;
+  v_receiver_astrite integer;
+  v_daily_received integer;
+  v_last_gift_date text;
+  v_today text;
+  v_remaining_limit integer;
+  v_daily_cap constant integer := 67000;
+begin
+  if p_amount <= 0 then
+    return jsonb_build_object('success', false, 'error', 'Gift amount must be greater than 0.');
+  end if;
+
+  v_today := to_char(now() at time zone 'UTC', 'YYYY-MM-DD');
+
+  -- Verify sender
+  select astrite into v_sender_astrite
+  from public.profiles
+  where id = p_sender_id;
+
+  if not found then
+    return jsonb_build_object('success', false, 'error', 'Sender profile not found.');
+  end if;
+
+  if v_sender_astrite < p_amount then
+    return jsonb_build_object('success', false, 'error', 'Insufficient Astrites.');
+  end if;
+
+  -- Verify receiver
+  select id, astrite, coalesce(daily_received_astrite, 0), coalesce(last_gift_received_date, '')
+  into v_receiver_id, v_receiver_astrite, v_daily_received, v_last_gift_date
+  from public.profiles
+  where lower(username) = lower(trim(p_receiver_username));
+
+  if not found then
+    return jsonb_build_object('success', false, 'error', 'Receiver not found.');
+  end if;
+
+  if v_receiver_id = p_sender_id then
+    return jsonb_build_object('success', false, 'error', 'You cannot gift Astrites to yourself.');
+  end if;
+
+  -- Calculate remaining daily limit
+  if v_last_gift_date <> v_today then
+    v_daily_received := 0;
+  end if;
+
+  v_remaining_limit := v_daily_cap - v_daily_received;
+
+  if v_remaining_limit <= 0 then
+    return jsonb_build_object('success', false, 'error', 'This player has already reached their daily gift limit of 67,000 Astrites for today.');
+  end if;
+
+  if p_amount > v_remaining_limit then
+    return jsonb_build_object('success', false, 'error', format('This player can only receive up to %s more Astrites today (daily cap: 67,000).', v_remaining_limit));
+  end if;
+
+  -- Transfer astrites
+  update public.profiles
+  set astrite = astrite - p_amount,
+      updated_at = now()
+  where id = p_sender_id;
+
+  update public.profiles
+  set astrite = astrite + p_amount,
+      daily_received_astrite = v_daily_received + p_amount,
+      last_gift_received_date = v_today,
+      updated_at = now()
+  where id = v_receiver_id;
+
+  return jsonb_build_object(
+    'success', true,
+    'sender_new_astrite', v_sender_astrite - p_amount,
+    'receiver_username', p_receiver_username,
+    'amount', p_amount,
+    'daily_received_now', v_daily_received + p_amount,
+    'remaining_today', v_remaining_limit - p_amount
+  );
+end;
+$$;
+
+grant execute on function public.send_player_gift(uuid, text, integer) to authenticated, anon;
 
 

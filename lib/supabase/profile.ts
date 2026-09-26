@@ -31,6 +31,8 @@ export interface UserProfile {
   tower_run_state?: any;
   birthday?: string;
   birthday_last_changed_at?: string;
+  daily_received_astrite?: number;
+  last_gift_received_date?: string;
 }
 
 export const DEFAULT_PROFILE: UserProfile = {
@@ -388,4 +390,182 @@ export async function saveUserTowerState(userId: string, state: any): Promise<bo
     console.warn("Exception saving tower state to cloud:", err);
     return false;
   }
+}
+
+/**
+ * Daily gift receiving limit (67k Astrites max per player per UTC day).
+ */
+export const DAILY_GIFT_RECEIVE_LIMIT = 67000;
+
+export interface DailyGiftStatus {
+  receivedToday: number;
+  remainingAllowance: number;
+  date: string;
+}
+
+/**
+ * Returns how many Astrites a player has received today, and how much they can still receive.
+ */
+export async function getPlayerDailyGiftStatus(username: string): Promise<DailyGiftStatus> {
+  const today = new Date().toISOString().split("T")[0];
+  const defaultStatus: DailyGiftStatus = {
+    receivedToday: 0,
+    remainingAllowance: DAILY_GIFT_RECEIVE_LIMIT,
+    date: today,
+  };
+
+  const cleanName = username.trim().toLowerCase();
+  if (!cleanName) return defaultStatus;
+
+  // 1. Try Supabase cloud
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("daily_received_astrite, last_gift_received_date")
+        .eq("username", cleanName)
+        .maybeSingle();
+
+      if (!error && data) {
+        const isToday = data.last_gift_received_date === today;
+        const receivedToday = isToday ? Number(data.daily_received_astrite || 0) : 0;
+        return {
+          receivedToday,
+          remainingAllowance: Math.max(0, DAILY_GIFT_RECEIVE_LIMIT - receivedToday),
+          date: today,
+        };
+      }
+    } catch (err) {
+      console.debug("Could not query daily gift status from cloud, checking local:", err);
+    }
+  }
+
+  // 2. Local fallback
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem(`wuwa_daily_gift_${cleanName}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.date === today) {
+          const receivedToday = Number(parsed.received || 0);
+          return {
+            receivedToday,
+            remainingAllowance: Math.max(0, DAILY_GIFT_RECEIVE_LIMIT - receivedToday),
+            date: today,
+          };
+        }
+      }
+    } catch {}
+  }
+
+  return defaultStatus;
+}
+
+/**
+ * Sends an Astrite gift from sender to receiver.
+ * Strictly enforces that receiver cannot exceed 67,000 Astrites received per day.
+ */
+export async function sendPlayerGift(
+  senderId: string,
+  senderUsername: string,
+  receiverUsername: string,
+  amount: number,
+  senderCurrentAstrite: number
+): Promise<{ success: boolean; error?: string; remainingAllowance?: number }> {
+  if (amount <= 0) {
+    return { success: false, error: "Gift amount must be at least 1 Astrite." };
+  }
+
+  if (senderCurrentAstrite < amount) {
+    return { success: false, error: "You do not have enough Astrites." };
+  }
+
+  const cleanReceiver = receiverUsername.trim().toLowerCase();
+  const cleanSender = senderUsername.trim().toLowerCase();
+
+  if (cleanReceiver === cleanSender) {
+    return { success: false, error: "You cannot gift Astrites to yourself." };
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+
+  // Check receiver's current allowance
+  const status = await getPlayerDailyGiftStatus(cleanReceiver);
+  if (amount > status.remainingAllowance) {
+    return {
+      success: false,
+      error: `This player can only receive up to ${status.remainingAllowance.toLocaleString()} more Astrites today (daily limit: 67,000 ✦).`,
+      remainingAllowance: status.remainingAllowance,
+    };
+  }
+
+  // Execute transaction
+  if (isSupabaseConfigured() && senderId) {
+    try {
+      // First attempt: RPC function if present
+      const { data: rpcData, error: rpcError } = await supabase.rpc("send_player_gift", {
+        p_sender_id: senderId,
+        p_receiver_username: cleanReceiver,
+        p_amount: amount,
+      });
+
+      if (!rpcError && rpcData) {
+        if (!rpcData.success) {
+          return { success: false, error: rpcData.error || "Failed to send gift." };
+        }
+        // Sync local cache
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            `wuwa_daily_gift_${cleanReceiver}`,
+            JSON.stringify({ date: today, received: status.receivedToday + amount })
+          );
+        }
+        return {
+          success: true,
+          remainingAllowance: Math.max(0, status.remainingAllowance - amount),
+        };
+      }
+
+      // Fallback: direct updates on profiles table
+      const { data: recData } = await supabase
+        .from("profiles")
+        .select("id, astrite")
+        .eq("username", cleanReceiver)
+        .maybeSingle();
+
+      if (recData) {
+        // Deduct from sender
+        await supabase
+          .from("profiles")
+          .update({ astrite: senderCurrentAstrite - amount, updated_at: new Date().toISOString() })
+          .eq("id", senderId);
+
+        // Credit to receiver & update daily gift tracker
+        await supabase
+          .from("profiles")
+          .update({
+            astrite: (recData.astrite || 0) + amount,
+            daily_received_astrite: status.receivedToday + amount,
+            last_gift_received_date: today,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", recData.id);
+      }
+    } catch (e: any) {
+      console.warn("Cloud gift transfer failed, applying local fallback:", e);
+    }
+  }
+
+  // Update local tracker
+  if (typeof window !== "undefined") {
+    localStorage.setItem(
+      `wuwa_daily_gift_${cleanReceiver}`,
+      JSON.stringify({ date: today, received: status.receivedToday + amount })
+    );
+  }
+
+  return {
+    success: true,
+    remainingAllowance: Math.max(0, status.remainingAllowance - amount),
+  };
 }

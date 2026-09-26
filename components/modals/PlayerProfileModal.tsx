@@ -22,6 +22,7 @@ import {
   Camera,
   Swords,
   Trophy,
+  Gift,
 } from "lucide-react";
 import { soundEngine } from "@/lib/audio/soundEngine";
 import { RESONATORS } from "@/lib/data/items";
@@ -44,6 +45,12 @@ import {
   UserInventoryItem,
   MAX_WAVEBAND_COUNT,
 } from "@/lib/supabase/inventory";
+import {
+  DAILY_GIFT_RECEIVE_LIMIT,
+  getPlayerDailyGiftStatus,
+  sendPlayerGift,
+  DailyGiftStatus,
+} from "@/lib/supabase/profile";
 import { TitlePickerModal } from "@/components/modals/TitlePickerModal";
 import {
   PlayerTitle,
@@ -84,6 +91,7 @@ interface PlayerProfileModalProps {
   loginStreak?: number;
   maxLoginStreak?: number;
   onOpenPvpArena?: (targetUsername?: string) => void;
+  onSendGift?: (amount: number) => void;
 }
 
 export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
@@ -109,10 +117,20 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
   loginStreak = 1,
   maxLoginStreak = 1,
   onOpenPvpArena,
+  onSendGift,
 }) => {
   // Modal View Tab: 'profile' (viewing a profile) or 'visit' (searching other players)
   const [activeTab, setActiveTab] = useState<"profile" | "visit">("profile");
   const [navSource, setNavSource] = useState<"profile" | "visit">("profile");
+
+  // Gifting State
+  const [isGiftModalOpen, setIsGiftModalOpen] = useState(false);
+  const [giftAmount, setGiftAmount] = useState<number>(1000);
+  const [giftCustomText, setGiftCustomText] = useState<string>("1000");
+  const [giftLoading, setGiftLoading] = useState(false);
+  const [giftSuccessMsg, setGiftSuccessMsg] = useState<string | null>(null);
+  const [giftErrorMsg, setGiftErrorMsg] = useState<string | null>(null);
+  const [receiverGiftStatus, setReceiverGiftStatus] = useState<DailyGiftStatus | null>(null);
 
   // Search State
   const [searchInput, setSearchInput] = useState("");
@@ -413,6 +431,86 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
       if (res.rewardAstrite > 0 && onAstriteClaimed) {
         onAstriteClaimed(res.rewardAstrite);
       }
+    }
+  };
+
+  // Gifting Handlers
+  useEffect(() => {
+    if (isGiftModalOpen && activeUsername && !isViewingSelf) {
+      getPlayerDailyGiftStatus(activeUsername).then(setReceiverGiftStatus);
+    }
+  }, [isGiftModalOpen, activeUsername, isViewingSelf]);
+
+  const handleOpenGiftModal = () => {
+    soundEngine.playClick();
+    setGiftErrorMsg(null);
+    setGiftSuccessMsg(null);
+    setGiftAmount(1000);
+    setGiftCustomText("1000");
+    setIsGiftModalOpen(true);
+    if (activeUsername) {
+      getPlayerDailyGiftStatus(activeUsername).then(setReceiverGiftStatus);
+    }
+  };
+
+  const handleSendGiftSubmit = async () => {
+    if (giftLoading) return;
+    setGiftErrorMsg(null);
+    setGiftSuccessMsg(null);
+
+    const val = giftAmount;
+    if (val <= 0) {
+      setGiftErrorMsg("Gift amount must be at least 1 Astrite.");
+      return;
+    }
+
+    if (val > (astrite ?? 0)) {
+      setGiftErrorMsg(`You do not have enough Astrites (Balance: ${(astrite ?? 0).toLocaleString()} ✦).`);
+      return;
+    }
+
+    if (receiverGiftStatus && val > receiverGiftStatus.remainingAllowance) {
+      setGiftErrorMsg(
+        `This player can only receive up to ${receiverGiftStatus.remainingAllowance.toLocaleString()} more Astrites today (daily limit: 67,000 ✦).`
+      );
+      return;
+    }
+
+    setGiftLoading(true);
+    try {
+      const res = await sendPlayerGift(
+        currentUserId || "",
+        currentUsername,
+        activeUsername,
+        val,
+        astrite ?? 0
+      );
+
+      if (!res.success) {
+        setGiftErrorMsg(res.error || "Failed to send gift.");
+        if (res.remainingAllowance !== undefined && receiverGiftStatus) {
+          setReceiverGiftStatus((prev) => (prev ? { ...prev, remainingAllowance: res.remainingAllowance! } : prev));
+        }
+      } else {
+        soundEngine.playAstriteGain();
+        setGiftSuccessMsg(`🎉 Successfully sent ${val.toLocaleString()} ✦ to @${activeUsername}!`);
+        onSendGift?.(val);
+        if (res.remainingAllowance !== undefined) {
+          setReceiverGiftStatus({
+            receivedToday: DAILY_GIFT_RECEIVE_LIMIT - res.remainingAllowance,
+            remainingAllowance: res.remainingAllowance,
+            date: new Date().toISOString().split("T")[0],
+          });
+        }
+        setTimeout(() => {
+          setIsGiftModalOpen(false);
+          setGiftSuccessMsg(null);
+        }, 1800);
+      }
+    } catch (err: any) {
+      setGiftErrorMsg(err.message || "Failed to send gift.");
+    } finally {
+      setGiftLoading(false);
     }
   };
 
@@ -1058,19 +1156,31 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                     </div>
                   )}
 
-                  {!isViewingSelf && onOpenPvpArena && (
+                  {!isViewingSelf && (
                     <div className="flex items-center space-x-1.5 sm:space-x-2 flex-shrink-0">
+                      {onOpenPvpArena && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            soundEngine.playClick();
+                            onOpenPvpArena(activeUsername);
+                          }}
+                          className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/50 text-rose-200 hover:text-white flex items-center space-x-1.5 transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)] active:scale-95 cursor-pointer font-mono font-bold text-xs"
+                          title={`Challenge @${activeUsername} to PvP Battle`}
+                        >
+                          <Swords className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                          <span>PvP</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
-                        onClick={() => {
-                          soundEngine.playClick();
-                          onOpenPvpArena(activeUsername);
-                        }}
-                        className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/50 text-rose-200 hover:text-white flex items-center space-x-1.5 transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)] active:scale-95 cursor-pointer font-mono font-bold text-xs"
-                        title={`Challenge @${activeUsername} to PvP Battle`}
+                        onClick={handleOpenGiftModal}
+                        className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/50 text-emerald-200 hover:text-white flex items-center space-x-1.5 transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] active:scale-95 cursor-pointer font-mono font-bold text-xs"
+                        title={`Gift Astrites to @${activeUsername}`}
                       >
-                        <Swords className="w-4 h-4 text-rose-400 flex-shrink-0" />
-                        <span>PvP</span>
+                        <Gift className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                        <span>Gift</span>
                       </button>
                     </div>
                   )}
@@ -1745,6 +1855,245 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
           claimedTitleIds={claimedTitles}
           onClaimTitle={handleClaimTitle}
         />
+      )}
+
+      {/* ========================================================================= */}
+      {/* Send Gift Modal (67,000 Astrites Daily Limit)                             */}
+      {/* ========================================================================= */}
+      {isGiftModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md select-none"
+          onClick={() => {
+            if (!giftLoading) setIsGiftModalOpen(false);
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.94, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.94, y: 15 }}
+            transition={{ type: "spring", stiffness: 350, damping: 25 }}
+            className="relative w-full max-w-lg bg-[#0c1017] border border-emerald-500/40 rounded-3xl shadow-[0_0_50px_rgba(16,185,129,0.2)] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-white/10 bg-emerald-950/20 flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shadow-[0_0_12px_rgba(16,185,129,0.3)]">
+                  <Gift className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black uppercase tracking-wider text-white">
+                    Send Astrites Gift
+                  </h3>
+                  <p className="text-[11px] font-mono text-gray-400">
+                    Gifting to <span className="text-emerald-400 font-bold">@{activeUsername}</span>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!giftLoading) setIsGiftModalOpen(false);
+                }}
+                disabled={giftLoading}
+                className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all cursor-pointer"
+                title="Close"
+              >
+                <X className="w-4 h-4 stroke-[2.5]" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4">
+              {/* Daily Allowance Status Card */}
+              {(() => {
+                const remainingAllowance = receiverGiftStatus ? receiverGiftStatus.remainingAllowance : DAILY_GIFT_RECEIVE_LIMIT;
+                const receivedToday = receiverGiftStatus ? receiverGiftStatus.receivedToday : 0;
+                const percentFilled = Math.min(100, Math.max(0, (receivedToday / DAILY_GIFT_RECEIVE_LIMIT) * 100));
+
+                return (
+                  <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-gray-400 flex items-center space-x-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
+                        <span>Recipient Daily Cap</span>
+                      </span>
+                      <span className="text-emerald-400 font-bold">
+                        {remainingAllowance.toLocaleString()} ✦ remaining
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full h-2.5 bg-black/60 rounded-full overflow-hidden border border-white/10 relative">
+                      <motion.div
+                        className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${percentFilled}%` }}
+                        transition={{ duration: 0.5 }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] font-mono text-gray-400">
+                      <span>Received today: {receivedToday.toLocaleString()} / 67,000 ✦</span>
+                      <span>{percentFilled.toFixed(0)}%</span>
+                    </div>
+
+                    {remainingAllowance <= 0 && (
+                      <div className="mt-1 p-2 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-mono flex items-center space-x-2">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>@{activeUsername} has reached their 67,000 ✦ limit for today.</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Amount Selection */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-gray-300 font-bold uppercase tracking-wider">Amount</span>
+                  <span className="text-gray-400">
+                    Your balance: <span className="text-yellow-400 font-bold">{(astrite ?? 0).toLocaleString()} ✦</span>
+                  </span>
+                </div>
+
+                {/* Preset Chips */}
+                {(() => {
+                  const remainingAllowance = receiverGiftStatus ? receiverGiftStatus.remainingAllowance : DAILY_GIFT_RECEIVE_LIMIT;
+                  const maxAllowed = Math.max(0, Math.min(astrite ?? 0, remainingAllowance));
+                  const presets = [500, 1000, 5000, 10000, 25000];
+
+                  return (
+                    <div className="grid grid-cols-6 gap-1.5">
+                      {presets.map((preset) => {
+                        const isSelected = giftAmount === preset;
+                        const isOverLimit = preset > remainingAllowance || preset > (astrite ?? 0);
+                        return (
+                          <button
+                            key={preset}
+                            type="button"
+                            disabled={giftLoading || isOverLimit}
+                            onClick={() => {
+                              soundEngine.playClick();
+                              setGiftAmount(preset);
+                              setGiftCustomText(preset.toString());
+                              setGiftErrorMsg(null);
+                            }}
+                            className={`py-1.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer ${
+                              isSelected
+                                ? "bg-emerald-500 text-black shadow-[0_0_12px_rgba(16,185,129,0.5)] scale-[1.02]"
+                                : isOverLimit
+                                ? "bg-white/[0.02] text-gray-600 border border-white/5 cursor-not-allowed opacity-40"
+                                : "bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10"
+                            }`}
+                          >
+                            {preset >= 1000 ? `${preset / 1000}k` : preset}
+                          </button>
+                        );
+                      })}
+
+                      {/* MAX Button */}
+                      <button
+                        type="button"
+                        disabled={giftLoading || maxAllowed <= 0}
+                        onClick={() => {
+                          soundEngine.playClick();
+                          setGiftAmount(maxAllowed);
+                          setGiftCustomText(maxAllowed.toString());
+                          setGiftErrorMsg(null);
+                        }}
+                        className={`py-1.5 rounded-xl text-xs font-mono font-black uppercase transition-all cursor-pointer ${
+                          giftAmount === maxAllowed && maxAllowed > 0
+                            ? "bg-amber-400 text-black shadow-[0_0_12px_rgba(251,191,36,0.5)] scale-[1.02]"
+                            : maxAllowed <= 0
+                            ? "bg-white/[0.02] text-gray-600 border border-white/5 cursor-not-allowed opacity-40"
+                            : "bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/40"
+                        }`}
+                      >
+                        MAX
+                      </button>
+                    </div>
+                  );
+                })()}
+
+                {/* Custom Input */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Enter custom amount..."
+                    value={giftCustomText}
+                    onChange={(e) => {
+                      const clean = e.target.value.replace(/[^0-9]/g, "");
+                      setGiftCustomText(clean);
+                      const num = parseInt(clean, 10);
+                      setGiftAmount(isNaN(num) ? 0 : num);
+                      setGiftErrorMsg(null);
+                    }}
+                    className="w-full px-4 py-2.5 pr-12 rounded-xl bg-black/60 border border-white/15 text-sm font-mono font-bold text-white placeholder-gray-500 focus:outline-none focus:border-emerald-400 transition-colors"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-yellow-400 font-bold font-mono text-sm pointer-events-none">
+                    ✦
+                  </span>
+                </div>
+              </div>
+
+              {/* Status Message Banners */}
+              {giftErrorMsg && (
+                <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-mono flex items-start space-x-2">
+                  <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+                  <span>{giftErrorMsg}</span>
+                </div>
+              )}
+
+              {giftSuccessMsg && (
+                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-mono flex items-center space-x-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                  <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 stroke-[3]" />
+                  <span>{giftSuccessMsg}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Buttons */}
+            {(() => {
+              const remainingAllowance = receiverGiftStatus ? receiverGiftStatus.remainingAllowance : DAILY_GIFT_RECEIVE_LIMIT;
+              const isInvalidAmount = giftAmount <= 0 || giftAmount > (astrite ?? 0) || giftAmount > remainingAllowance || remainingAllowance <= 0;
+
+              return (
+                <div className="px-5 py-3 border-t border-white/10 bg-white/[0.02] flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setIsGiftModalOpen(false)}
+                    disabled={giftLoading}
+                    className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-mono font-bold text-gray-300 hover:text-white cursor-pointer transition-all"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={giftLoading || isInvalidAmount}
+                    onClick={handleSendGiftSubmit}
+                    className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:pointer-events-none text-white font-mono font-black text-xs uppercase tracking-wider flex items-center space-x-2 shadow-[0_0_20px_rgba(16,185,129,0.4)] cursor-pointer active:scale-95 transition-all"
+                  >
+                    {giftLoading ? (
+                      <>
+                        <Sparkles className="w-4 h-4 animate-spin" />
+                        <span>Sending...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Gift className="w-4 h-4" />
+                        <span>Send {giftAmount > 0 ? `${giftAmount.toLocaleString()} ✦` : "Gift"}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              );
+            })()}
+          </motion.div>
+        </div>
       )}
     </AnimatePresence>
   );

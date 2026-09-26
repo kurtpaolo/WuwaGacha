@@ -270,18 +270,18 @@ export const BINAN_GUIDE_NPCS: PlazaNpc[] = [
     ],
   },
   {
-    // CANTARELLA: Tacet Dice Multiplier Ladder - Far North Terrace Overlook
+    // CANTARELLA: European Roulette - Far North Terrace Overlook
     id: "npc_cantarella",
     name: "Cantarella",
     spriteId: "cantarella",
-    title: "Dice Ladder",
-    service: "1-20 Dice Ladder",
+    title: "Roulette",
+    service: "European Roulette",
     x: ((140 + 0.5) / BINAN_GRID_COLS) * 100,
     y: ((35 + 0.5) / BINAN_GRID_ROWS) * 100,
     facing: "left",
-    greeting: "Roll the cyber dice from 1 to 20 and guess Higher or Lower. Climb the ladder up to 40x!",
+    greeting: "Step up to the wheel, Rover! Place your bets on Red, Black, Dozens, or test fate on a lucky number for 36x!",
     actions: [
-      { label: "PLAY DICE LADDER", actionId: "minigame_dice", variant: "primary" },
+      { label: "PLAY ROULETTE", actionId: "minigame_roulette", variant: "primary" },
     ],
   },
   {

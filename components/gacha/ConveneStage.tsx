@@ -1247,7 +1247,7 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
                   setActiveView("plaza");
                 }
               }}
-              className="hidden md:flex landscape:flex h-[38px] sm:h-[40px] px-2.5 sm:px-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/40 text-amber-300 hover:text-white text-[11px] sm:text-xs font-mono font-bold tracking-wider items-center space-x-1.5 transition-all shadow-sm hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
+              className="flex h-[38px] sm:h-[40px] px-2.5 sm:px-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/40 text-amber-300 hover:text-white text-[11px] sm:text-xs font-mono font-bold tracking-wider items-center space-x-1.5 transition-all shadow-sm hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
               title="Return to Jinzhou Plaza Hub"
             >
               <Compass className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-amber-300" />
@@ -2156,6 +2156,19 @@ export const ConveneStage: React.FC<ConveneStageProps> = ({ onReturnToPlaza }) =
         onOpenPvpArena={(targetUsername) => {
           setIsPlayerProfileOpen(false);
           handleLaunchGameMode("search", "Player Challenge", targetUsername);
+        }}
+        onSendGift={(giftAmount) => {
+          const updated = grantClientCurrency(-giftAmount, currentUser?.id, isSandboxGuest);
+          if (currentUser && !isSandboxGuest) {
+            updateUserProfile(currentUser.id, {
+              astrite: updated.astrite,
+            }).catch(() => {});
+          }
+          setUserState((prev: any) => ({
+            ...prev,
+            astrite: updated.astrite,
+          }));
+          fetchState();
         }}
       />
 
